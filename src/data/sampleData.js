@@ -125,8 +125,6 @@ export const datasetLibrary = {
   }
 };
 
-export const relationalKeys = ['customer', 'department', 'salesOwner'];
-
 export const widgetCatalog = [
   { type: 'line', label: 'Line', dataset: 'monthlyBusiness', title: 'Revenue Trend' },
   { type: 'bar', label: 'Bar', dataset: 'regionalPerformance', title: 'Regional Performance' },

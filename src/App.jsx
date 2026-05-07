@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import WidgetRenderer from './components/WidgetRenderer';
-import { datasetLibrary, relationalKeys, widgetCatalog } from './data/sampleData';
+import { datasetLibrary, widgetCatalog } from './data/sampleData';
 
 const MIN_GRID_COLS = 12;
 const GRID_ROW_HEIGHT = 72;
@@ -10,8 +10,6 @@ const MIN_H = 2;
 const MIN_CANVAS_ROWS = 20;
 const CANVAS_GROWTH_PADDING = 8;
 
-const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
-
 const getFieldGroups = (dataset) => {
   const fields = dataset?.fields || [];
   const numericFields = fields.filter((field) => field.type === 'number');
@@ -20,20 +18,12 @@ const getFieldGroups = (dataset) => {
   return { numericFields, dimensionFields };
 };
 
-const getFieldMap = (dataset) => Object.fromEntries((dataset?.fields || []).map((field) => [field.key, field]));
-
-const getJoinableFields = (dataset) =>
-  (dataset?.fields || []).filter((field) => relationalKeys.includes(field.key));
-
-const getRelatableFields = (dataset) =>
-  (dataset?.fields || []).filter((field) => field.type !== 'number');
-
 const isDatasetCompatible = (widgetType, dataset) => {
   if (!dataset) return false;
 
   const { numericFields, dimensionFields } = getFieldGroups(dataset);
 
-  if (widgetType === 'line' || widgetType === 'bar' || widgetType === 'pie' || widgetType === 'treemap') {
+  if (['line', 'bar', 'pie', 'treemap'].includes(widgetType)) {
     return numericFields.length > 0 && dimensionFields.length > 0;
   }
 
@@ -83,56 +73,17 @@ const buildDefaultMapping = (widgetType, dataset) => {
   return {};
 };
 
-const buildDefaultRelation = (baseDatasetId, targetDatasetId) => {
-  const baseDataset = datasetLibrary[baseDatasetId];
-  const targetDataset = datasetLibrary[targetDatasetId];
-
-  const baseRelatable = getRelatableFields(baseDataset);
-  const targetRelatableMap = getFieldMap(targetDataset);
-  const matchedField = baseRelatable.find((field) => targetRelatableMap[field.key]);
-
-  return {
-    baseField: matchedField?.key || '',
-    targetField: matchedField?.key || '',
-    sourceRole: matchedField?.key || '',
-    targetRole: matchedField?.key || ''
-  };
-};
-
-const buildDefaultSemanticMapping = (dataset) => {
-  const datasetFieldMap = getFieldMap(dataset);
-
-  return relationalKeys.reduce((acc, relationKey) => {
-    acc[relationKey] = datasetFieldMap[relationKey] ? relationKey : '';
-    return acc;
-  }, {});
-};
-
-const createSourceAssignment = (widgetType, datasetId) => {
-  const dataset = datasetLibrary[datasetId];
-
-  return {
-    sourceId: crypto.randomUUID(),
-    datasetId,
-    semanticMap: buildDefaultSemanticMapping(dataset),
-    mapping: {
-      ...buildDefaultMapping(widgetType, dataset),
-      relations: []
-    }
-  };
-};
-
 const createWidget = (prev, template, x, y, overrides = {}) => {
   const index = prev.filter((item) => item.type === template.type).length + 1;
   const isTextWidget = template.type === 'label' || template.type === 'date';
-  const datasetId = overrides.dataset ?? template.dataset ?? '';
-  const sources = overrides.sources || (datasetId ? [createSourceAssignment(template.type, datasetId)] : []);
+  const dataset = datasetLibrary[overrides.dataset || template.dataset];
 
   return {
     id: crypto.randomUUID(),
     type: template.type,
     title: overrides.titleLabel?.trim() || `${template.title} ${index}`,
-    sources,
+    dataset: overrides.dataset || template.dataset || '',
+    mapping: overrides.mapping || buildDefaultMapping(template.type, dataset),
     preview: overrides.preview || false,
     fontSize: overrides.fontSize || 28,
     x,
@@ -142,9 +93,9 @@ const createWidget = (prev, template, x, y, overrides = {}) => {
   };
 };
 
-const lineTemplate = widgetCatalog.find((w) => w.type === 'line');
-const barTemplate = widgetCatalog.find((w) => w.type === 'bar');
-const tableTemplate = widgetCatalog.find((w) => w.type === 'table');
+const lineTemplate = widgetCatalog.find((widget) => widget.type === 'line');
+const barTemplate = widgetCatalog.find((widget) => widget.type === 'bar');
+const tableTemplate = widgetCatalog.find((widget) => widget.type === 'table');
 
 const initialWidgets = [
   createWidget([], lineTemplate, 0, 0, {
@@ -197,13 +148,7 @@ export default function App() {
   const canvasContentWidth = canvasCols * cellWidth;
   const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
-  const activeConfigSources = activeConfigWidget
-    ? activeConfigWidget.sources.map((source) => ({
-        ...source,
-        dataset: datasetLibrary[source.datasetId]
-      }))
-    : [];
-  const activeConfigBaseSource = activeConfigSources[0] || null;
+  const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -231,14 +176,18 @@ export default function App() {
           if (item.id !== action.id) return item;
 
           if (action.kind === 'move') {
-            const x = Math.max(0, action.origin.x + snapX);
-            const y = Math.max(0, action.origin.y + snapY);
-            return { ...item, x, y };
+            return {
+              ...item,
+              x: Math.max(0, action.origin.x + snapX),
+              y: Math.max(0, action.origin.y + snapY)
+            };
           }
 
-          const nextW = Math.max(MIN_W, action.origin.w + snapX);
-          const nextH = Math.max(MIN_H, action.origin.h + snapY);
-          return { ...item, w: nextW, h: nextH };
+          return {
+            ...item,
+            w: Math.max(MIN_W, action.origin.w + snapX),
+            h: Math.max(MIN_H, action.origin.h + snapY)
+          };
         })
       );
     };
@@ -285,9 +234,10 @@ export default function App() {
 
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.floor((event.clientX - rect.left) / cellWidth));
-    const y = Math.max(0, Math.floor((event.clientY - rect.top) / GRID_ROW_HEIGHT));
-    setHoverGrid({ x, y });
+    setHoverGrid({
+      x: Math.max(0, Math.floor((event.clientX - rect.left) / cellWidth)),
+      y: Math.max(0, Math.floor((event.clientY - rect.top) / GRID_ROW_HEIGHT))
+    });
   };
 
   const onCanvasDrop = (event) => {
@@ -311,82 +261,24 @@ export default function App() {
     setWidgets((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
-  const updateWidgetSourceMapping = (widgetId, sourceId, patch) => {
+  const updateWidgetMapping = (id, patch) => {
     if (readOnly) return;
-
     setWidgets((prev) =>
       prev.map((item) =>
-        item.id === widgetId
+        item.id === id
           ? {
               ...item,
-              sources: item.sources.map((source) =>
-                source.sourceId === sourceId
-                  ? {
-                      ...source,
-                      mapping: {
-                        ...source.mapping,
-                        ...patch
-                      }
-                    }
-                  : source
-              )
+              mapping: {
+                ...item.mapping,
+                ...patch
+              }
             }
           : item
       )
     );
   };
 
-  const updateWidgetSourceSemanticMap = (widgetId, sourceId, semanticKey, fieldKey) => {
-    if (readOnly) return;
-
-    setWidgets((prev) =>
-      prev.map((item) =>
-        item.id === widgetId
-          ? {
-              ...item,
-              sources: item.sources.map((source) =>
-                source.sourceId === sourceId
-                  ? {
-                      ...source,
-                      semanticMap: {
-                        ...(source.semanticMap || {}),
-                        [semanticKey]: fieldKey
-                      }
-                    }
-                  : source
-              )
-            }
-          : item
-      )
-    );
-  };
-
-  const updateWidgetSourceRelations = (widgetId, sourceId, relations) => {
-    if (readOnly) return;
-
-    setWidgets((prev) =>
-      prev.map((item) =>
-        item.id === widgetId
-          ? {
-              ...item,
-              sources: item.sources.map((source) =>
-                source.sourceId === sourceId
-                  ? {
-                      ...source,
-                      mapping: {
-                        ...source.mapping,
-                        relations
-                      }
-                    }
-                  : source
-              )
-            }
-          : item
-      )
-    );
-  };
-
-  const addDatasourceToWidget = (widgetId, datasetId) => {
+  const assignDatasourceToWidget = (widgetId, datasetId) => {
     const dataset = datasetLibrary[datasetId];
 
     setWidgets((prev) =>
@@ -394,40 +286,17 @@ export default function App() {
         if (item.id !== widgetId) return item;
         if (!isDatasetCompatible(item.type, dataset)) return item;
 
-        const baseDatasetId = item.sources[0]?.datasetId;
-        const defaultRelation = baseDatasetId
-          ? buildDefaultRelation(baseDatasetId, datasetId)
-          : null;
-        const nextSource = createSourceAssignment(item.type, datasetId);
-        nextSource.mapping.relations =
-          defaultRelation?.baseField && defaultRelation?.targetField ? [defaultRelation] : [];
-
         return {
           ...item,
-          sources: [...item.sources, nextSource]
+          dataset: datasetId,
+          mapping: buildDefaultMapping(item.type, dataset)
         };
       })
     );
   };
 
-  const removeWidgetSource = (widgetId, sourceId) => {
-    if (readOnly) return;
-
-    setWidgets((prev) =>
-      prev.map((item) =>
-        item.id === widgetId
-          ? {
-              ...item,
-              sources: item.sources.filter((source) => source.sourceId !== sourceId)
-            }
-          : item
-      )
-    );
-  };
-
   const toggleWidgetPreview = (id) => {
     if (readOnly) return;
-
     setWidgets((prev) =>
       prev.map((item) => (item.id === id ? { ...item, preview: !item.preview } : item))
     );
@@ -438,33 +307,22 @@ export default function App() {
     setWidgets((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const renderSourceMappingControls = (widget, source, baseSource) => {
-    const dataset = datasetLibrary[source.datasetId];
+  const renderMappingControls = (widget, dataset) => {
     if (!dataset || !hasDatasetTarget(widget.type)) return null;
 
     const { numericFields, dimensionFields } = getFieldGroups(dataset);
-    const semanticMap = source.semanticMap || {};
-    const baseSemanticMap = baseSource?.semanticMap || {};
-    const baseDataset = baseSource ? datasetLibrary[baseSource.datasetId] : null;
-    const baseRelatableFields = getRelatableFields(baseDataset);
-    const targetRelatableFields = getRelatableFields(dataset);
-    const relationDefaults =
-      baseSource && baseSource.sourceId !== source.sourceId
-        ? buildDefaultRelation(baseSource.datasetId, source.datasetId)
-        : null;
 
-    const semanticSection = (
-      <div className="semantic-grid">
-        {relationalKeys.map((semanticKey) => (
-          <label key={semanticKey}>
-            <span>{semanticKey}</span>
+    if (widget.type === 'line' || widget.type === 'bar') {
+      const yFields = widget.mapping?.yFields || [];
+
+      return (
+        <div className="mapping-grid">
+          <label>
+            <span>X-Axis</span>
             <select
-              value={semanticMap[semanticKey] || ''}
-              onChange={(event) =>
-                updateWidgetSourceSemanticMap(widget.id, source.sourceId, semanticKey, event.target.value)
-              }
+              value={widget.mapping?.xField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { xField: event.target.value })}
             >
-              <option value="">Not mapped</option>
               {dimensionFields.map((field) => (
                 <option key={field.key} value={field.key}>
                   {field.label}
@@ -472,387 +330,154 @@ export default function App() {
               ))}
             </select>
           </label>
-        ))}
-      </div>
-    );
 
-    const relationBlock =
-      baseSource && baseSource.sourceId !== source.sourceId ? (
-        (() => {
-          const relations = source.mapping?.relations?.length
-            ? source.mapping.relations
-            : relationDefaults?.baseField
-              ? [relationDefaults]
-              : [];
-          const boardHeight = Math.max(baseRelatableFields.length, targetRelatableFields.length) * 38 + 68;
+          <div className="mapping-group">
+            <span>Y-Axis Series</span>
+            <div className="checkbox-list">
+              {numericFields.map((field) => {
+                const checked = yFields.includes(field.key);
 
-          const assignRelationFields = (baseField, targetField) => {
-            const matchedRole = relationalKeys.find(
-              (role) => baseSemanticMap[role] === baseField && semanticMap[role] === targetField
-            );
+                return (
+                  <label key={field.key} className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => {
+                        const nextFields = event.target.checked
+                          ? [...yFields, field.key]
+                          : yFields.filter((key) => key !== field.key);
 
-            const currentRelations = source.mapping?.relations || [];
-            const exists = currentRelations.some(
-              (relation) => relation.baseField === baseField && relation.targetField === targetField
-            );
-            if (exists) return;
-
-            updateWidgetSourceRelations(widget.id, source.sourceId, [
-              ...currentRelations,
-              {
-                baseField,
-                targetField,
-                sourceRole: matchedRole || '',
-                targetRole: matchedRole || ''
-              }
-            ]);
-          };
-
-          const onFieldDragStart = (event, side, fieldKey) => {
-            event.dataTransfer.setData(
-              'relation/field',
-              JSON.stringify({ widgetId: widget.id, sourceId: source.sourceId, side, fieldKey })
-            );
-            event.dataTransfer.effectAllowed = 'move';
-          };
-
-          const onFieldDrop = (event, side, fieldKey) => {
-            const raw = event.dataTransfer.getData('relation/field');
-            if (!raw) return;
-
-            const payload = JSON.parse(raw);
-            if (payload.widgetId !== widget.id || payload.sourceId !== source.sourceId) return;
-
-            event.preventDefault();
-
-            if (payload.side === side) return;
-
-            if (side === 'base') {
-              assignRelationFields(fieldKey, payload.fieldKey);
-            } else {
-              assignRelationFields(payload.fieldKey, fieldKey);
-            }
-          };
-
-          return (
-            <>
-              <div className="relation-grid">
-                <label>
-                  <span>Composite Relationship</span>
-                  <select value="" disabled>
-                    <option value="">Drag multiple column pairs to create AND conditions</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Match Rule</span>
-                  <select value="" disabled>
-                    <option value="">All linked pairs must match</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className="er-board" style={{ height: `${boardHeight}px` }}>
-                {relations.length ? (
-                  <svg className="er-connector" viewBox={`0 0 600 ${boardHeight}`} preserveAspectRatio="none">
-                    {relations.map((relation) => {
-                      const baseIndex = baseRelatableFields.findIndex((field) => field.key === relation.baseField);
-                      const targetIndex = targetRelatableFields.findIndex((field) => field.key === relation.targetField);
-                      if (baseIndex < 0 || targetIndex < 0) return null;
-
-                      return (
-                        <path
-                          key={`${relation.baseField}:${relation.targetField}`}
-                          d={`M 225 ${58 + baseIndex * 38} C 290 ${58 + baseIndex * 38}, 310 ${58 + targetIndex * 38}, 375 ${58 + targetIndex * 38}`}
-                          fill="none"
-                          stroke="#0ea5e9"
-                          strokeWidth="3"
-                          strokeDasharray="6 4"
-                        />
-                      );
-                    })}
-                  </svg>
-                ) : null}
-
-                <div className="er-card">
-                  <div className="er-card-header">
-                    <strong>{baseSource.dataset?.label}</strong>
-                    <span>Base datasource</span>
-                  </div>
-                  <div className="er-field-list">
-                    {baseRelatableFields.map((field) => (
-                      <button
-                        key={field.key}
-                        type="button"
-                        className={`er-field ${
-                          relations.some((relation) => relation.baseField === field.key) ? 'active' : ''
-                        }`}
-                        draggable
-                        onDragStart={(event) => onFieldDragStart(event, 'base', field.key)}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => onFieldDrop(event, 'base', field.key)}
-                      >
-                        {field.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="er-center-label">
-                  <span>ER Relation Builder</span>
-                  <small>Drag a column from one side to the matching column on the other side</small>
-                </div>
-
-                <div className="er-card">
-                  <div className="er-card-header">
-                    <strong>{dataset.label}</strong>
-                    <span>Linked datasource</span>
-                  </div>
-                  <div className="er-field-list">
-                    {targetRelatableFields.map((field) => (
-                      <button
-                        key={field.key}
-                        type="button"
-                        className={`er-field ${
-                          relations.some((relation) => relation.targetField === field.key) ? 'active' : ''
-                        }`}
-                        draggable
-                        onDragStart={(event) => onFieldDragStart(event, 'target', field.key)}
-                        onDragOver={(event) => event.preventDefault()}
-                        onDrop={(event) => onFieldDrop(event, 'target', field.key)}
-                      >
-                        {field.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {relations.length ? (
-                <div className="relation-pair-list">
-                  {relations.map((relation) => (
-                    <div key={`${relation.baseField}:${relation.targetField}`} className="relation-pair-item">
-                      <span>
-                        {relation.baseField} = {relation.targetField}
-                      </span>
-                      <button
-                        type="button"
-                        className="remove-source-button"
-                        onClick={() =>
-                          updateWidgetSourceRelations(
-                            widget.id,
-                            source.sourceId,
-                            relations.filter(
-                              (item) =>
-                                !(
-                                  item.baseField === relation.baseField &&
-                                  item.targetField === relation.targetField
-                                )
-                            )
-                          )
-                        }
-                      >
-                        Remove Link
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          );
-        })()
-      ) : null;
-
-    if (widget.type === 'line' || widget.type === 'bar') {
-      const yFields = source.mapping?.yFields || [];
-
-      return (
-        <>
-          {semanticSection}
-          {relationBlock}
-
-          <div className="mapping-grid">
-            <label>
-              <span>X-Axis</span>
-              <select
-                value={source.mapping?.xField || ''}
-                onChange={(event) =>
-                  updateWidgetSourceMapping(widget.id, source.sourceId, { xField: event.target.value })
-                }
-              >
-                {dimensionFields.map((field) => (
-                  <option key={field.key} value={field.key}>
-                    {field.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="mapping-group">
-              <span>Y-Axis Series</span>
-              <div className="checkbox-list">
-                {numericFields.map((field) => {
-                  const checked = yFields.includes(field.key);
-
-                  return (
-                    <label key={field.key} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const nextFields = event.target.checked
-                            ? [...yFields, field.key]
-                            : yFields.filter((key) => key !== field.key);
-
-                          updateWidgetSourceMapping(widget.id, source.sourceId, {
-                            yFields: nextFields.length ? nextFields : [field.key]
-                          });
-                        }}
-                      />
-                      <span>{field.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
+                        updateWidgetMapping(widget.id, {
+                          yFields: nextFields.length ? nextFields : [field.key]
+                        });
+                      }}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
-        </>
+        </div>
       );
     }
 
-    if (widget.type === 'pie' || widget.type === 'treemap' || widget.type === 'table') {
-      if (widget.type === 'pie') {
-        return (
-          <>
-            {semanticSection}
-            {relationBlock}
-            <div className="mapping-grid">
-              <label>
-                <span>Label Field</span>
-                <select
-                  value={source.mapping?.labelField || ''}
-                  onChange={(event) =>
-                    updateWidgetSourceMapping(widget.id, source.sourceId, { labelField: event.target.value })
-                  }
-                >
-                  {dimensionFields.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Value Field</span>
-                <select
-                  value={source.mapping?.valueField || ''}
-                  onChange={(event) =>
-                    updateWidgetSourceMapping(widget.id, source.sourceId, { valueField: event.target.value })
-                  }
-                >
-                  {numericFields.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </>
-        );
-      }
+    if (widget.type === 'pie') {
+      return (
+        <div className="mapping-grid">
+          <label>
+            <span>Label Field</span>
+            <select
+              value={widget.mapping?.labelField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { labelField: event.target.value })}
+            >
+              {dimensionFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      if (widget.type === 'treemap') {
-        return (
-          <>
-            {semanticSection}
-            {relationBlock}
-            <div className="mapping-grid">
-              <label>
-                <span>Group Field</span>
-                <select
-                  value={source.mapping?.groupField || ''}
-                  onChange={(event) =>
-                    updateWidgetSourceMapping(widget.id, source.sourceId, { groupField: event.target.value })
-                  }
-                >
-                  <option value="">No Group</option>
-                  {dimensionFields.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Label Field</span>
-                <select
-                  value={source.mapping?.labelField || ''}
-                  onChange={(event) =>
-                    updateWidgetSourceMapping(widget.id, source.sourceId, { labelField: event.target.value })
-                  }
-                >
-                  {dimensionFields.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                <span>Value Field</span>
-                <select
-                  value={source.mapping?.valueField || ''}
-                  onChange={(event) =>
-                    updateWidgetSourceMapping(widget.id, source.sourceId, { valueField: event.target.value })
-                  }
-                >
-                  {numericFields.map((field) => (
-                    <option key={field.key} value={field.key}>
-                      {field.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </>
-        );
-      }
+          <label>
+            <span>Value Field</span>
+            <select
+              value={widget.mapping?.valueField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
+            >
+              {numericFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      );
+    }
+
+    if (widget.type === 'treemap') {
+      return (
+        <div className="mapping-grid">
+          <label>
+            <span>Group Field</span>
+            <select
+              value={widget.mapping?.groupField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { groupField: event.target.value })}
+            >
+              <option value="">No Group</option>
+              {dimensionFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Label Field</span>
+            <select
+              value={widget.mapping?.labelField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { labelField: event.target.value })}
+            >
+              {dimensionFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Value Field</span>
+            <select
+              value={widget.mapping?.valueField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
+            >
+              {numericFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      );
+    }
+
+    if (widget.type === 'table') {
+      const visibleColumns = widget.mapping?.columns || [];
 
       return (
-        <>
-          {semanticSection}
-          {relationBlock}
-          <div className="mapping-grid">
-            <div className="mapping-group">
-              <span>Visible Columns</span>
-              <div className="checkbox-list">
-                {dataset.fields.map((field) => {
-                  const visibleColumns = source.mapping?.columns || [];
-                  const checked = visibleColumns.includes(field.key);
+        <div className="mapping-grid">
+          <div className="mapping-group">
+            <span>Visible Columns</span>
+            <div className="checkbox-list">
+              {dataset.fields.map((field) => {
+                const checked = visibleColumns.includes(field.key);
 
-                  return (
-                    <label key={field.key} className="checkbox-item">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(event) => {
-                          const nextColumns = event.target.checked
-                            ? [...visibleColumns, field.key]
-                            : visibleColumns.filter((key) => key !== field.key);
+                return (
+                  <label key={field.key} className="checkbox-item">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => {
+                        const nextColumns = event.target.checked
+                          ? [...visibleColumns, field.key]
+                          : visibleColumns.filter((key) => key !== field.key);
 
-                          updateWidgetSourceMapping(widget.id, source.sourceId, {
-                            columns: nextColumns.length ? nextColumns : [field.key]
-                          });
-                        }}
-                      />
-                      <span>{field.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
+                        updateWidgetMapping(widget.id, {
+                          columns: nextColumns.length ? nextColumns : [field.key]
+                        });
+                      }}
+                    />
+                    <span>{field.label}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
-        </>
+        </div>
       );
     }
 
@@ -864,7 +489,7 @@ export default function App() {
       <header className="topbar">
         <div>
           <h1>Dashboard Builder Prototype</h1>
-          <p>ลาก widget ลง canvas แล้วลาก datasource หลายชุดเข้า widget พร้อมตั้ง relation ด้วย customer, department หรือ salesOwner</p>
+          <p>Drag widgets to the canvas, then attach one datasource and map fields per widget.</p>
         </div>
         <div className="topbar-actions">
           <button
@@ -923,7 +548,7 @@ export default function App() {
             <div className="palette-section-header">
               <div>
                 <h3>Datasources</h3>
-                {!datasourceCollapsed ? <p>ลาก datasource ไปใส่ widget แล้วเชื่อมด้วย field ร่วม</p> : null}
+                {!datasourceCollapsed ? <p>ลาก datasource ไปใส่ widget ได้ 1 ชุดต่อ widget</p> : null}
               </div>
               <button
                 type="button"
@@ -981,17 +606,9 @@ export default function App() {
           ) : null}
 
           {widgets.map((widget) => {
+            const dataset = datasetLibrary[widget.dataset];
             const compatibleDatasets = getCompatibleDatasets(widget.type);
             const isWidgetPreview = readOnly || widget.preview;
-            const assignedSources = widget.sources.map((source) => ({
-              ...source,
-              dataset: datasetLibrary[source.datasetId]
-            }));
-            const baseSource = assignedSources[0] || null;
-            const enrichedSources = assignedSources.map((source) => ({
-              ...source,
-              baseSemanticMap: baseSource?.semanticMap || {}
-            }));
 
             return (
               <section
@@ -1009,6 +626,10 @@ export default function App() {
                   if (readOnly || !hasDatasetTarget(widget.type)) return;
                   if (!Array.from(event.dataTransfer.types).includes('datasource/id')) return;
 
+                  const datasourceId = event.dataTransfer.getData('datasource/id');
+                  const droppedDataset = datasetLibrary[datasourceId];
+                  if (!droppedDataset || !isDatasetCompatible(widget.type, droppedDataset)) return;
+
                   event.preventDefault();
                   setDropTargetWidgetId(widget.id);
                 }}
@@ -1023,7 +644,7 @@ export default function App() {
                   if (!droppedDataset || !isDatasetCompatible(widget.type, droppedDataset)) return;
 
                   event.preventDefault();
-                  addDatasourceToWidget(widget.id, datasourceId);
+                  assignDatasourceToWidget(widget.id, datasourceId);
                   setDropTargetWidgetId(null);
                 }}
               >
@@ -1054,7 +675,7 @@ export default function App() {
                       <div className="widget-title-block">
                         <small>{widget.type.toUpperCase()}</small>
                         <strong>{widget.title}</strong>
-                        <span className="widget-dataset-badge">{assignedSources.length} datasource(s)</span>
+                        {dataset ? <span className="widget-dataset-badge">{dataset.label}</span> : null}
                       </div>
                     ) : (
                       <>
@@ -1063,19 +684,15 @@ export default function App() {
                           <input
                             type="text"
                             value={widget.title}
-                            onChange={(e) => updateWidgetField(widget.id, 'title', e.target.value)}
+                            onChange={(event) => updateWidgetField(widget.id, 'title', event.target.value)}
                           />
                           {hasDatasetTarget(widget.type) ? (
                             <div className="widget-dataset-dropzone">
-                              <span>
-                                {assignedSources.length
-                                  ? `${assignedSources.length} datasource(s) attached`
-                                  : 'Drop datasource here'}
-                              </span>
+                              <span>{dataset?.label || 'Drop datasource here'}</span>
                               <small>
-                                {assignedSources.length
-                                  ? assignedSources.map((source) => source.dataset?.label).filter(Boolean).join(', ')
-                                  : 'You can add more than one datasource'}
+                                {dataset
+                                  ? `${dataset.records.length} rows / ${dataset.fields.length} fields`
+                                  : 'Only one datasource per widget'}
                               </small>
                             </div>
                           ) : null}
@@ -1103,8 +720,8 @@ export default function App() {
                               min="10"
                               max="96"
                               value={widget.fontSize || 28}
-                              onChange={(e) =>
-                                updateWidgetField(widget.id, 'fontSize', Number(e.target.value) || 10)
+                              onChange={(event) =>
+                                updateWidgetField(widget.id, 'fontSize', Number(event.target.value) || 10)
                               }
                             />
                           ) : null}
@@ -1132,7 +749,7 @@ export default function App() {
                   ) : null}
 
                   <div className="widget-visual">
-                    <WidgetRenderer widget={widget} sources={enrichedSources} />
+                    <WidgetRenderer widget={widget} dataset={dataset} />
                   </div>
                 </div>
 
@@ -1165,7 +782,7 @@ export default function App() {
             <div className="config-modal-header">
               <div>
                 <h2>{activeConfigWidget.title}</h2>
-                <p>Configure datasources, column mapping, and relationships for this widget.</p>
+                <p>Configure the widget datasource and field mapping.</p>
               </div>
               <button type="button" className="section-toggle" onClick={() => setActiveConfigWidgetId(null)}>
                 Close
@@ -1173,41 +790,23 @@ export default function App() {
             </div>
 
             <div className="config-modal-body">
-              <div className="widget-assignment-hint">
-                <span>Compatible datasources:</span>
-                <div className="hint-chip-list">
-                  {getCompatibleDatasets(activeConfigWidget.type).map((item) => (
-                    <span key={item.id} className="hint-chip">
-                      {item.label}
-                    </span>
-                  ))}
-                </div>
+              <div className="mapping-grid">
+                <label>
+                  <span>Datasource</span>
+                  <select
+                    value={activeConfigWidget.dataset}
+                    onChange={(event) => assignDatasourceToWidget(activeConfigWidget.id, event.target.value)}
+                  >
+                    {getCompatibleDatasets(activeConfigWidget.type).map((dataset) => (
+                      <option key={dataset.id} value={dataset.id}>
+                        {dataset.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
 
-              {activeConfigSources.map((source, index) => (
-                <section key={source.sourceId} className="source-config-card">
-                  <div className="source-config-header">
-                    <div>
-                      <strong>
-                        Source {index + 1}: {source.dataset?.label || source.datasetId}
-                      </strong>
-                      <span>
-                        {index === 0
-                          ? 'Base source for relationship matching'
-                          : 'Linked to base source using shared fields'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="remove-source-button"
-                      onClick={() => removeWidgetSource(activeConfigWidget.id, source.sourceId)}
-                    >
-                      Remove Source
-                    </button>
-                  </div>
-                  {renderSourceMappingControls(activeConfigWidget, source, activeConfigBaseSource)}
-                </section>
-              ))}
+              {renderMappingControls(activeConfigWidget, activeConfigDataset)}
             </div>
           </div>
         </div>
