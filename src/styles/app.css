@@ -139,6 +139,10 @@ button {
   cursor: not-allowed;
 }
 
+.dashboard-file-input {
+  display: none;
+}
+
 .topbar h1 {
   margin: 0;
   font-size: 1.65rem;

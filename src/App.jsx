@@ -74,6 +74,22 @@ const ToolbarIcon = ({ name }) => {
           <path {...common} d="M5 20h14" />
         </svg>
       );
+    case 'save':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M5 4h12l2 2v14H5Z" />
+          <path {...common} d="M8 4v6h8V4" />
+          <path {...common} d="M8 20v-6h8v6" />
+        </svg>
+      );
+    case 'upload':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M12 21V9" />
+          <path {...common} d="M7 14l5-5 5 5" />
+          <path {...common} d="M5 4h14" />
+        </svg>
+      );
     case 'sidebar':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -266,6 +282,30 @@ const cloneWorkspace = (workspace) => ({
   dashboards: Array.isArray(workspace.dashboards) ? workspace.dashboards.map((dashboard) => cloneDashboard(dashboard)) : []
 });
 
+const createSafeFileName = (value, fallback = 'dashboard') =>
+  (value || fallback).trim().replace(/[^\w\-]+/g, '_') || fallback;
+
+const normalizeImportedDashboard = (value) => {
+  const dashboardValue = value?.dashboard || value;
+
+  if (Array.isArray(dashboardValue)) {
+    return createDashboard('Imported Dashboard', dashboardValue);
+  }
+
+  if (!dashboardValue || !Array.isArray(dashboardValue.widgets)) {
+    throw new Error('The selected file does not contain a dashboard.');
+  }
+
+  return {
+    id: crypto.randomUUID(),
+    name:
+      typeof dashboardValue.name === 'string' && dashboardValue.name.trim()
+        ? dashboardValue.name.trim()
+        : 'Imported Dashboard',
+    widgets: cloneWidgets(dashboardValue.widgets)
+  };
+};
+
 const lineTemplate = widgetCatalog.find((widget) => widget.type === 'line');
 const barTemplate = widgetCatalog.find((widget) => widget.type === 'bar');
 const tableTemplate = widgetCatalog.find((widget) => widget.type === 'table');
@@ -385,6 +425,7 @@ export default function App() {
   const [selectionBox, setSelectionBox] = useState(null);
   const [printScale, setPrintScale] = useState(1);
   const canvasRef = useRef(null);
+  const importFileInputRef = useRef(null);
   const selectionBoxRef = useRef(null);
   const gestureSnapshotRef = useRef(null);
   const gestureChangedRef = useRef(false);
@@ -611,6 +652,52 @@ export default function App() {
       if (shouldRestoreReadOnly) {
         setReadOnly(false);
       }
+    }
+  };
+
+  const saveActiveDashboardFile = () => {
+    if (!activeDashboard) return;
+
+    const exportPayload = {
+      type: 'bi-dashboard.dashboard',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      dashboard: cloneDashboard(activeDashboard)
+    };
+    const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `${createSafeFileName(activeDashboard.name)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const openDashboardImportPicker = () => {
+    importFileInputRef.current?.click();
+  };
+
+  const importDashboardFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    try {
+      const importedDashboard = normalizeImportedDashboard(JSON.parse(await file.text()));
+
+      updateWorkspace((prev) => ({
+        dashboards: [...prev.dashboards, importedDashboard],
+        activeDashboardId: importedDashboard.id
+      }));
+      clearTransientSelectionState();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Unable to import dashboard file.');
     }
   };
 
@@ -1511,6 +1598,19 @@ export default function App() {
           >
             <ToolbarIcon name="trash" />
           </button>
+          <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label="Save dashboard as file" title="Save dashboard as file">
+            <ToolbarIcon name="save" />
+          </button>
+          <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label="Import dashboard file" title="Import dashboard file">
+            <ToolbarIcon name="upload" />
+          </button>
+          <input
+            ref={importFileInputRef}
+            className="dashboard-file-input"
+            type="file"
+            accept="application/json,.json"
+            onChange={importDashboardFile}
+          />
           <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="Print dashboard" title="Print dashboard">
             <ToolbarIcon name="print" />
           </button>

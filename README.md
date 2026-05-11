@@ -2,6 +2,13 @@
 
 React + Vite dashboard builder prototype.
 
+## Features
+
+- Build dashboards from draggable widgets.
+- Save the active dashboard as a `.json` file.
+- Import a saved dashboard `.json` file.
+- Export the active dashboard as PDF.
+
 ## Local development
 
 ```bash
