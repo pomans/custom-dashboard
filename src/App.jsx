@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
 import { datasetLibrary, widgetCatalog } from './data/sampleData';
 
@@ -9,6 +11,121 @@ const MIN_W = 2;
 const MIN_H = 2;
 const MIN_CANVAS_ROWS = 20;
 const CANVAS_GROWTH_PADDING = 8;
+const PRINT_PAGE_MARGIN_MM = 12;
+const PX_PER_MM = 96 / 25.4;
+const MM_PER_PX = 25.4 / 96;
+const LOCAL_STORAGE_KEY = 'bi-dashboard.workspace.v1';
+const TEXT_WIDGET_TYPES = ['textbox'];
+const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard'];
+const hasConfigPopup = (type) => hasDatasetTarget(type) || TEXT_WIDGET_TYPES.includes(type);
+const isInteractiveTarget = (target) =>
+  Boolean(target.closest('button') || target.closest('input') || target.closest('select') || target.closest('textarea') || target.closest('.checkbox-item'));
+const EXPRESSION_SNIPPETS = [
+  '${year(current_date)}',
+  '${buddhist_year(current_date)}',
+  '${month(current_date)}',
+  '${month_name(current_date)}',
+  '${day(current_date)}',
+  '${format_date(current_date)}',
+  '${year(current_date) + 543}'
+];
+
+const ToolbarIcon = ({ name }) => {
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+
+  switch (name) {
+    case 'plus':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M12 5v14" />
+          <path {...common} d="M5 12h14" />
+        </svg>
+      );
+    case 'copy':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect {...common} x="9" y="9" width="10" height="10" rx="2" />
+          <path {...common} d="M7 15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+        </svg>
+      );
+    case 'trash':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M3 6h18" />
+          <path {...common} d="M8 6V4h8v2" />
+          <path {...common} d="M6 6l1 14h10l1-14" />
+          <path {...common} d="M10 11v6" />
+          <path {...common} d="M14 11v6" />
+        </svg>
+      );
+    case 'print':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M7 9V4h10v5" />
+          <rect {...common} x="6" y="13" width="12" height="7" rx="2" />
+          <path {...common} d="M7 17h10" />
+        </svg>
+      );
+    case 'download':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M12 3v12" />
+          <path {...common} d="M7 10l5 5 5-5" />
+          <path {...common} d="M5 20h14" />
+        </svg>
+      );
+    case 'sidebar':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect {...common} x="4" y="4" width="16" height="16" rx="2" />
+          <path {...common} d="M9 4v16" />
+        </svg>
+      );
+    case 'preview':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+          <circle {...common} cx="12" cy="12" r="3" />
+        </svg>
+      );
+    case 'edit':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M4 20h4l10-10a2.1 2.1 0 0 0-4-4L4 16v4Z" />
+          <path {...common} d="M13.5 6.5l4 4" />
+        </svg>
+      );
+    case 'align-left':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M4 6h16" />
+          <path {...common} d="M4 10h10" />
+          <path {...common} d="M4 14h16" />
+          <path {...common} d="M4 18h10" />
+        </svg>
+      );
+    case 'align-center':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M4 6h16" />
+          <path {...common} d="M7 10h10" />
+          <path {...common} d="M4 14h16" />
+          <path {...common} d="M7 18h10" />
+        </svg>
+      );
+    case 'align-right':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...common} d="M4 6h16" />
+          <path {...common} d="M10 10h10" />
+          <path {...common} d="M4 14h16" />
+          <path {...common} d="M10 18h10" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
 
 const getFieldGroups = (dataset) => {
   const fields = dataset?.fields || [];
@@ -23,8 +140,12 @@ const isDatasetCompatible = (widgetType, dataset) => {
 
   const { numericFields, dimensionFields } = getFieldGroups(dataset);
 
-  if (['line', 'bar', 'pie', 'treemap'].includes(widgetType)) {
+  if (['line', 'bar', 'pie', 'treemap', 'rankingList'].includes(widgetType)) {
     return numericFields.length > 0 && dimensionFields.length > 0;
+  }
+
+  if (widgetType === 'summaryCard') {
+    return numericFields.length > 0;
   }
 
   if (widgetType === 'table') {
@@ -64,6 +185,25 @@ const buildDefaultMapping = (widgetType, dataset) => {
     };
   }
 
+  if (widgetType === 'summaryCard') {
+    return {
+      metricField: numericFields[0]?.key || '',
+      aggregation: 'sum',
+      comparisonField: numericFields[1]?.key || '',
+      helperText: 'Increased from last month',
+      colorTheme: 'auto'
+    };
+  }
+
+  if (widgetType === 'rankingList') {
+    return {
+      labelField: primaryDimension,
+      valueField: numericFields[0]?.key || '',
+      sortDirection: 'desc',
+      limit: 5
+    };
+  }
+
   if (widgetType === 'table') {
     return {
       columns: dataset.fields.slice(0, 4).map((field) => field.key)
@@ -75,23 +215,56 @@ const buildDefaultMapping = (widgetType, dataset) => {
 
 const createWidget = (prev, template, x, y, overrides = {}) => {
   const index = prev.filter((item) => item.type === template.type).length + 1;
-  const isTextWidget = template.type === 'label' || template.type === 'date';
+  const isTextWidget = TEXT_WIDGET_TYPES.includes(template.type);
+  const isSummaryWidget = template.type === 'summaryCard';
   const dataset = datasetLibrary[overrides.dataset || template.dataset];
+  const title = overrides.titleLabel?.trim() || `${template.title} ${index}`;
 
   return {
     id: crypto.randomUUID(),
     type: template.type,
-    title: overrides.titleLabel?.trim() || `${template.title} ${index}`,
+    title,
     dataset: overrides.dataset || template.dataset || '',
     mapping: overrides.mapping || buildDefaultMapping(template.type, dataset),
     preview: overrides.preview || false,
     fontSize: overrides.fontSize || 28,
+    expression: overrides.expression || (isTextWidget ? title : ''),
+    textStyle: overrides.textStyle || {
+      fontWeight: 600,
+      fontStyle: 'normal',
+      textDecoration: 'none'
+    },
+    textAlign: overrides.textAlign || 'center',
     x,
     y,
-    w: overrides.w || 4,
-    h: overrides.h || (isTextWidget ? 2 : 5)
+    w: overrides.w || (isSummaryWidget ? 3 : 4),
+    h: overrides.h || (isTextWidget || isSummaryWidget ? 2 : 5)
   };
 };
+
+const cloneWidget = (widget) => ({
+  ...widget,
+  mapping: widget.mapping ? { ...widget.mapping } : {},
+  textStyle: widget.textStyle ? { ...widget.textStyle } : {}
+});
+
+const cloneWidgets = (widgets) => widgets.map((widget) => cloneWidget(widget));
+
+const createDashboard = (name, widgets = []) => ({
+  id: crypto.randomUUID(),
+  name,
+  widgets: cloneWidgets(widgets)
+});
+
+const cloneDashboard = (dashboard) => ({
+  ...dashboard,
+  widgets: cloneWidgets(dashboard.widgets || [])
+});
+
+const cloneWorkspace = (workspace) => ({
+  activeDashboardId: workspace.activeDashboardId,
+  dashboards: Array.isArray(workspace.dashboards) ? workspace.dashboards.map((dashboard) => cloneDashboard(dashboard)) : []
+});
 
 const lineTemplate = widgetCatalog.find((widget) => widget.type === 'line');
 const barTemplate = widgetCatalog.find((widget) => widget.type === 'bar');
@@ -118,37 +291,328 @@ const initialWidgets = [
   })
 ];
 
-const hasDatasetTarget = (type) => !['label', 'date'].includes(type);
+const createDefaultWorkspace = () => {
+  const dashboard = createDashboard('Dashboard 1', initialWidgets);
+
+  return {
+    dashboards: [dashboard],
+    activeDashboardId: dashboard.id
+  };
+};
+
+const normalizeWorkspace = (value) => {
+  if (Array.isArray(value)) {
+    const dashboard = createDashboard('Dashboard 1', value);
+    return {
+      dashboards: [dashboard],
+      activeDashboardId: dashboard.id
+    };
+  }
+
+  const dashboards = Array.isArray(value?.dashboards)
+    ? value.dashboards
+        .filter(Boolean)
+        .map((dashboard, index) => ({
+          id: typeof dashboard.id === 'string' && dashboard.id ? dashboard.id : crypto.randomUUID(),
+          name:
+            typeof dashboard.name === 'string' && dashboard.name.trim()
+              ? dashboard.name.trim()
+              : `Dashboard ${index + 1}`,
+          widgets: Array.isArray(dashboard.widgets) ? cloneWidgets(dashboard.widgets) : []
+        }))
+    : [];
+
+  if (!dashboards.length) return createDefaultWorkspace();
+
+  const activeDashboardId =
+    typeof value?.activeDashboardId === 'string' &&
+    dashboards.some((dashboard) => dashboard.id === value.activeDashboardId)
+      ? value.activeDashboardId
+      : dashboards[0].id;
+
+  return { dashboards, activeDashboardId };
+};
+
+const loadWorkspaceFromStorage = () => {
+  if (typeof window === 'undefined') return createDefaultWorkspace();
+
+  try {
+    const stored = window.localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!stored) return createDefaultWorkspace();
+
+    return normalizeWorkspace(JSON.parse(stored));
+  } catch {
+    return createDefaultWorkspace();
+  }
+};
+
+const hasDatasetTarget = (type) => !TEXT_WIDGET_TYPES.includes(type);
+const MAX_HISTORY_ENTRIES = 50;
+
+const getA4LandscapeFitScale = (contentWidthPx, contentHeightPx) => {
+  const pageWidthPx = (297 - PRINT_PAGE_MARGIN_MM * 2) * PX_PER_MM;
+  const pageHeightPx = (210 - PRINT_PAGE_MARGIN_MM * 2) * PX_PER_MM;
+
+  if (!contentWidthPx || !contentHeightPx) {
+    return {
+      scale: 1,
+      pageWidthPx,
+      pageHeightPx
+    };
+  }
+
+  return {
+    scale: Math.min(1, pageWidthPx / contentWidthPx, pageHeightPx / contentHeightPx),
+    pageWidthPx,
+    pageHeightPx
+  };
+};
 
 export default function App() {
-  const [widgets, setWidgets] = useState(initialWidgets);
+  const [workspace, setWorkspace] = useState(loadWorkspaceFromStorage);
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
   const [canvasWidth, setCanvasWidth] = useState(1200);
   const [action, setAction] = useState(null);
   const [hoverGrid, setHoverGrid] = useState(null);
-  const [readOnly, setReadOnly] = useState(false);
+  const [readOnly, setReadOnly] = useState(true);
   const [dropTargetWidgetId, setDropTargetWidgetId] = useState(null);
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
   const [datasourceCollapsed, setDatasourceCollapsed] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [activeConfigWidgetId, setActiveConfigWidgetId] = useState(null);
+  const [selectedWidgetIds, setSelectedWidgetIds] = useState([]);
+  const [selectionBox, setSelectionBox] = useState(null);
+  const [printScale, setPrintScale] = useState(1);
   const canvasRef = useRef(null);
+  const selectionBoxRef = useRef(null);
+  const gestureSnapshotRef = useRef(null);
+  const gestureChangedRef = useRef(false);
 
+  const dashboards = workspace.dashboards;
+  const activeDashboardId = workspace.activeDashboardId;
+  const activeDashboard = dashboards.find((dashboard) => dashboard.id === activeDashboardId) || dashboards[0];
+  const widgets = activeDashboard?.widgets || [];
+  const effectiveSidebarHidden = readOnly || sidebarHidden;
   const cellWidth = GRID_COL_WIDTH;
   const datasourceList = useMemo(() => Object.values(datasetLibrary), []);
   const maxOccupiedCol = useMemo(() => {
     if (!widgets.length) return MIN_GRID_COLS;
     return Math.max(...widgets.map((widget) => widget.x + widget.w), MIN_GRID_COLS);
   }, [widgets]);
+  const minOccupiedCol = useMemo(() => {
+    if (!widgets.length) return 0;
+    return Math.min(...widgets.map((widget) => widget.x));
+  }, [widgets]);
   const maxOccupiedRow = useMemo(() => {
     if (!widgets.length) return MIN_CANVAS_ROWS;
     return Math.max(...widgets.map((widget) => widget.y + widget.h), MIN_CANVAS_ROWS);
   }, [widgets]);
   const canvasCols = maxOccupiedCol + CANVAS_GROWTH_PADDING;
-  const canvasRows = maxOccupiedRow + CANVAS_GROWTH_PADDING;
+  const canvasRows = readOnly ? maxOccupiedRow : maxOccupiedRow + CANVAS_GROWTH_PADDING;
   const canvasContentWidth = canvasCols * cellWidth;
   const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
+  const occupiedContentWidth = readOnly
+    ? Math.max(cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth)
+    : Math.max(MIN_GRID_COLS * cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth);
+  const canvasShiftX = readOnly
+    ? -minOccupiedCol * cellWidth
+    : sidebarHidden
+      ? Math.max(0, Math.floor((canvasWidth - occupiedContentWidth) / 2) - minOccupiedCol * cellWidth)
+      : 0;
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
   const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
+  const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
+
+  const getWidgetRect = (widget) => ({
+    x: widget.x * cellWidth + canvasShiftX,
+    y: widget.y * GRID_ROW_HEIGHT,
+    width: widget.w * cellWidth,
+    height: widget.h * GRID_ROW_HEIGHT
+  });
+
+  const normalizeRect = (rect) => {
+    const x = Math.min(rect.x1, rect.x2);
+    const y = Math.min(rect.y1, rect.y2);
+    const width = Math.abs(rect.x2 - rect.x1);
+    const height = Math.abs(rect.y2 - rect.y1);
+
+    return { x, y, width, height };
+  };
+
+  const clearTransientSelectionState = () => {
+    setActiveConfigWidgetId(null);
+    setSelectedWidgetIds([]);
+    setDropTargetWidgetId(null);
+    setSelectionBox(null);
+    setHoverGrid(null);
+    setAction(null);
+    selectionBoxRef.current = null;
+    gestureSnapshotRef.current = null;
+    gestureChangedRef.current = false;
+  };
+
+  const pushHistorySnapshot = (snapshot) => {
+    if (!snapshot) return;
+
+    setUndoStack((prev) => [...prev, cloneWorkspace(snapshot)].slice(-MAX_HISTORY_ENTRIES));
+    setRedoStack([]);
+  };
+
+  const updateWorkspace = (updater, { recordHistory = true } = {}) => {
+    setWorkspace((prev) => {
+      const nextWorkspace = typeof updater === 'function' ? updater(prev) : updater;
+
+      if (recordHistory && JSON.stringify(prev) !== JSON.stringify(nextWorkspace)) {
+        setUndoStack((prevHistory) => [...prevHistory, cloneWorkspace(prev)].slice(-MAX_HISTORY_ENTRIES));
+        setRedoStack([]);
+      }
+
+      return nextWorkspace;
+    });
+  };
+
+  const undoWorkspace = () => {
+    if (!undoStack.length) return;
+
+    const snapshot = undoStack[undoStack.length - 1];
+    const currentSnapshot = cloneWorkspace(workspace);
+
+    setUndoStack((prev) => prev.slice(0, -1));
+    setRedoStack((prev) => [...prev, currentSnapshot].slice(-MAX_HISTORY_ENTRIES));
+    setWorkspace(cloneWorkspace(snapshot));
+    clearTransientSelectionState();
+  };
+
+  const redoWorkspace = () => {
+    if (!redoStack.length) return;
+
+    const snapshot = redoStack[redoStack.length - 1];
+    const currentSnapshot = cloneWorkspace(workspace);
+
+    setRedoStack((prev) => prev.slice(0, -1));
+    setUndoStack((prev) => [...prev, currentSnapshot].slice(-MAX_HISTORY_ENTRIES));
+    setWorkspace(cloneWorkspace(snapshot));
+    clearTransientSelectionState();
+  };
+
+  const rectsIntersect = (a, b) =>
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y;
+
+  const getCanvasLocalPoint = (event) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+
+    return {
+      x: Math.max(0, event.clientX - rect.left - canvasShiftX),
+      y: Math.max(0, event.clientY - rect.top)
+    };
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    try {
+      window.localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({
+          version: 1,
+          dashboards,
+          activeDashboardId
+        })
+      );
+    } catch {
+      // Ignore quota or storage failures.
+    }
+  }, [dashboards, activeDashboardId]);
+
+  const printActiveDashboard = async () => {
+    if (!activeDashboard) return;
+
+    const shouldRestoreReadOnly = !readOnly;
+
+    if (shouldRestoreReadOnly) {
+      setReadOnly(true);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+
+    const canvasNode = canvasRef.current;
+    const canvasBounds = canvasNode?.getBoundingClientRect();
+    const fitMetrics = canvasBounds
+      ? getA4LandscapeFitScale(canvasBounds.width, canvasBounds.height)
+      : { scale: 1 };
+
+    setPrintScale(fitMetrics.scale);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const restoreReadOnly = () => {
+      setPrintScale(1);
+      if (shouldRestoreReadOnly) {
+        setReadOnly(false);
+      }
+      window.removeEventListener('afterprint', restoreReadOnly);
+    };
+
+    window.addEventListener('afterprint', restoreReadOnly);
+
+    try {
+      window.print();
+    } catch {
+      restoreReadOnly();
+    }
+  };
+
+  const downloadActiveDashboardPdf = async () => {
+    if (!canvasRef.current || !activeDashboard) return;
+
+    const shouldRestoreReadOnly = !readOnly;
+
+    if (shouldRestoreReadOnly) {
+      setReadOnly(true);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+
+    if (document.fonts?.ready) {
+      await document.fonts.ready;
+    }
+
+    try {
+      const canvas = await html2canvas(canvasRef.current, {
+        backgroundColor: '#f8fafc',
+        scale: 2,
+        useCORS: true
+      });
+
+      const imageData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4'
+      });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const usableWidth = pageWidth - PRINT_PAGE_MARGIN_MM * 2;
+      const usableHeight = pageHeight - PRINT_PAGE_MARGIN_MM * 2;
+      const imageWidthMm = canvas.width * MM_PER_PX;
+      const imageHeightMm = canvas.height * MM_PER_PX;
+      const fitScale = Math.min(1, usableWidth / imageWidthMm, usableHeight / imageHeightMm);
+      const finalWidth = imageWidthMm * fitScale;
+      const finalHeight = imageHeightMm * fitScale;
+      const offsetX = (pageWidth - finalWidth) / 2;
+      const offsetY = (pageHeight - finalHeight) / 2;
+
+      pdf.addImage(imageData, 'PNG', offsetX, offsetY, finalWidth, finalHeight);
+      const fileName = `${(activeDashboard.name || 'dashboard').trim().replace(/[^\w\-]+/g, '_') || 'dashboard'}.pdf`;
+      pdf.save(fileName);
+    } finally {
+      if (shouldRestoreReadOnly) {
+        setReadOnly(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!canvasRef.current) return undefined;
@@ -163,6 +627,76 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const onKeyDown = (event) => {
+      const key = event.key.toLowerCase();
+      const isModifierPressed = event.ctrlKey || event.metaKey;
+      if (!isModifierPressed || event.altKey) return;
+
+      const target = event.target;
+      const isTypingSurface =
+        target instanceof HTMLElement &&
+        Boolean(target.closest('input, textarea, select, [contenteditable="true"]'));
+
+      if (isTypingSurface) return;
+
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        undoWorkspace();
+        return;
+      }
+
+      if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        redoWorkspace();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [redoStack, undoStack, workspace]);
+
+  const setWidgets = (updater, options = {}) => {
+    updateWorkspace(
+      (prev) => {
+        const currentDashboardId = prev.activeDashboardId;
+
+        return {
+          ...prev,
+          dashboards: prev.dashboards.map((dashboard) => {
+            if (dashboard.id !== currentDashboardId) return dashboard;
+
+            const nextWidgets = typeof updater === 'function' ? updater(dashboard.widgets) : updater;
+
+            return {
+              ...dashboard,
+              widgets: nextWidgets
+            };
+          })
+        };
+      },
+      options
+    );
+  };
+
+  const updateActiveDashboard = (updater, options = {}) => {
+    updateWorkspace(
+      (prev) => {
+        const currentDashboardId = prev.activeDashboardId;
+
+        return {
+          ...prev,
+          dashboards: prev.dashboards.map((dashboard) => {
+            if (dashboard.id !== currentDashboardId) return dashboard;
+
+            return typeof updater === 'function' ? updater(dashboard) : { ...dashboard, ...updater };
+          })
+        };
+      },
+      options
+    );
+  };
+
+  useEffect(() => {
     if (!action || readOnly) return undefined;
 
     const onMove = (event) => {
@@ -171,28 +705,88 @@ export default function App() {
       const snapX = Math.round(deltaX / cellWidth);
       const snapY = Math.round(deltaY / GRID_ROW_HEIGHT);
 
-      setWidgets((prev) =>
-        prev.map((item) => {
-          if (item.id !== action.id) return item;
+      if (action.kind === 'marquee') {
+        if (!canvasRef.current) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const nextBox = normalizeRect({
+          x1: action.startX - rect.left - canvasShiftX,
+          y1: action.startY - rect.top,
+          x2: event.clientX - rect.left - canvasShiftX,
+          y2: event.clientY - rect.top
+        });
+        selectionBoxRef.current = nextBox;
+        setSelectionBox(nextBox);
+        return;
+      }
 
-          if (action.kind === 'move') {
+      setWidgets(
+        (prev) =>
+          prev.map((item) => {
+            if (action.kind === 'move-selection') {
+              const origin = action.originMap[item.id];
+              if (!origin) return item;
+
+              return {
+                ...item,
+                x: Math.max(0, origin.x + snapX),
+                y: Math.max(0, origin.y + snapY)
+              };
+            }
+
+            if (item.id !== action.id) return item;
+
+            if (action.kind === 'move') {
+              return {
+                ...item,
+                x: Math.max(0, action.origin.x + snapX),
+                y: Math.max(0, action.origin.y + snapY)
+              };
+            }
+
             return {
               ...item,
-              x: Math.max(0, action.origin.x + snapX),
-              y: Math.max(0, action.origin.y + snapY)
+              w: Math.max(MIN_W, action.origin.w + snapX),
+              h: Math.max(MIN_H, action.origin.h + snapY)
             };
-          }
-
-          return {
-            ...item,
-            w: Math.max(MIN_W, action.origin.w + snapX),
-            h: Math.max(MIN_H, action.origin.h + snapY)
-          };
-        })
+          }),
+        { recordHistory: false }
       );
+
+      if (
+        (action.kind === 'move' || action.kind === 'move-selection' || action.kind === 'resize') &&
+        (snapX !== 0 || snapY !== 0)
+      ) {
+        gestureChangedRef.current = true;
+      }
     };
 
-    const onUp = () => setAction(null);
+    const onUp = () => {
+      if (action.kind === 'marquee' && canvasRef.current && selectionBoxRef.current) {
+        const nextSelection = widgets
+          .filter((widget) => rectsIntersect(getWidgetRect(widget), selectionBoxRef.current))
+          .map((widget) => widget.id);
+
+        setSelectedWidgetIds(nextSelection);
+      }
+
+      if (action.kind === 'marquee' && !selectionBoxRef.current) {
+        setSelectedWidgetIds([]);
+      }
+
+      if (
+        gestureChangedRef.current &&
+        gestureSnapshotRef.current &&
+        (action.kind === 'move' || action.kind === 'move-selection' || action.kind === 'resize')
+      ) {
+        pushHistorySnapshot(gestureSnapshotRef.current);
+      }
+
+      setAction(null);
+      setSelectionBox(null);
+      selectionBoxRef.current = null;
+      gestureSnapshotRef.current = null;
+      gestureChangedRef.current = false;
+    };
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -201,7 +795,7 @@ export default function App() {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, [action, cellWidth, readOnly]);
+  }, [action, cellWidth, readOnly, widgets]);
 
   const getCompatibleDatasets = (widgetType) =>
     datasourceList.filter((dataset) => isDatasetCompatible(widgetType, dataset));
@@ -232,11 +826,11 @@ export default function App() {
 
     event.preventDefault();
 
-    if (!canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
+    const point = getCanvasLocalPoint(event);
+    if (!point) return;
     setHoverGrid({
-      x: Math.max(0, Math.floor((event.clientX - rect.left) / cellWidth)),
-      y: Math.max(0, Math.floor((event.clientY - rect.top) / GRID_ROW_HEIGHT))
+      x: Math.max(0, Math.floor(point.x / cellWidth)),
+      y: Math.max(0, Math.floor(point.y / GRID_ROW_HEIGHT))
     });
   };
 
@@ -248,9 +842,10 @@ export default function App() {
     const template = widgetCatalog.find((item) => item.type === type);
     if (!template || !canvasRef.current) return;
 
-    const rect = canvasRef.current.getBoundingClientRect();
-    const droppedX = Math.max(0, Math.floor((event.clientX - rect.left) / cellWidth));
-    const droppedY = Math.max(0, Math.floor((event.clientY - rect.top) / GRID_ROW_HEIGHT));
+    const point = getCanvasLocalPoint(event);
+    if (!point) return;
+    const droppedX = Math.max(0, Math.floor(point.x / cellWidth));
+    const droppedY = Math.max(0, Math.floor(point.y / GRID_ROW_HEIGHT));
 
     setWidgets((prev) => [...prev, createWidget(prev, template, droppedX, droppedY)]);
     setHoverGrid(null);
@@ -260,6 +855,201 @@ export default function App() {
     if (readOnly) return;
     setWidgets((prev) => prev.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
+
+  const insertWidgetExpressionSnippet = (id, snippet, start = null, end = null) => {
+    if (readOnly || !snippet) return;
+
+    setWidgets((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+
+        const expression = item.expression || '';
+        const insertStart = Number.isInteger(start) ? start : expression.length;
+        const insertEnd = Number.isInteger(end) ? end : insertStart;
+
+        return {
+          ...item,
+          expression: `${expression.slice(0, insertStart)}${snippet}${expression.slice(insertEnd)}`
+        };
+      })
+    );
+  };
+
+  const updateWidgetTextStyle = (id, patch) => {
+    if (readOnly) return;
+    setWidgets((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              textStyle: {
+                fontWeight: 600,
+                fontStyle: 'normal',
+                textDecoration: 'none',
+                ...item.textStyle,
+                ...patch
+              }
+            }
+          : item
+      )
+    );
+  };
+
+  const updateWidgetTextAlign = (id, textAlign) => {
+    if (readOnly) return;
+    setWidgets((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, textAlign } : item))
+    );
+  };
+
+  const renderTextWidgetControls = (widget) => (
+    <div className="mapping-grid text-widget-config">
+      <label>
+        <span>Widget Title</span>
+        <input
+          type="text"
+          value={widget.title}
+          onChange={(event) => updateWidgetField(widget.id, 'title', event.target.value)}
+        />
+      </label>
+
+      <div className="text-format-toolbar" aria-label="Text formatting">
+        <label className="font-size-control" title="Font size">
+          <span>Size</span>
+          <input
+            type="number"
+            min="10"
+            max="96"
+            value={widget.fontSize || 28}
+            onChange={(event) => updateWidgetField(widget.id, 'fontSize', Number(event.target.value) || 10)}
+          />
+        </label>
+        <button
+          type="button"
+          className={widget.textStyle?.fontWeight === 700 ? 'active' : ''}
+          aria-label="Bold text"
+          title="Bold"
+          onClick={() =>
+            updateWidgetTextStyle(widget.id, {
+              fontWeight: widget.textStyle?.fontWeight === 700 ? 600 : 700
+            })
+          }
+        >
+          B
+        </button>
+        <button
+          type="button"
+          className={widget.textStyle?.fontWeight === 300 ? 'active' : ''}
+          aria-label="Thin text"
+          title="Thin"
+          onClick={() =>
+            updateWidgetTextStyle(widget.id, {
+              fontWeight: widget.textStyle?.fontWeight === 300 ? 600 : 300
+            })
+          }
+        >
+          T
+        </button>
+        <button
+          type="button"
+          className={widget.textStyle?.fontStyle === 'italic' ? 'active' : ''}
+          aria-label="Italic text"
+          title="Italic"
+          onClick={() =>
+            updateWidgetTextStyle(widget.id, {
+              fontStyle: widget.textStyle?.fontStyle === 'italic' ? 'normal' : 'italic'
+            })
+          }
+        >
+          I
+        </button>
+        <button
+          type="button"
+          className={widget.textStyle?.textDecoration === 'underline' ? 'active' : ''}
+          aria-label="Underline text"
+          title="Underline"
+          onClick={() =>
+            updateWidgetTextStyle(widget.id, {
+              textDecoration: widget.textStyle?.textDecoration === 'underline' ? 'none' : 'underline'
+            })
+          }
+          >
+            U
+          </button>
+        <div className="text-align-group" aria-label="Text alignment">
+          <button
+            type="button"
+            className={widget.textAlign === 'left' ? 'active' : ''}
+            aria-label="Align text left"
+            title="Align left"
+            onClick={() => updateWidgetTextAlign(widget.id, 'left')}
+          >
+            <ToolbarIcon name="align-left" />
+          </button>
+          <button
+            type="button"
+            className={widget.textAlign === 'center' ? 'active' : ''}
+            aria-label="Align text center"
+            title="Align center"
+            onClick={() => updateWidgetTextAlign(widget.id, 'center')}
+          >
+            <ToolbarIcon name="align-center" />
+          </button>
+          <button
+            type="button"
+            className={widget.textAlign === 'right' ? 'active' : ''}
+            aria-label="Align text right"
+            title="Align right"
+            onClick={() => updateWidgetTextAlign(widget.id, 'right')}
+          >
+            <ToolbarIcon name="align-right" />
+          </button>
+        </div>
+      </div>
+
+      <label>
+        <span>Text Expression</span>
+        <textarea
+          rows="2"
+          value={widget.expression || ''}
+          onChange={(event) => updateWidgetField(widget.id, 'expression', event.target.value)}
+          onDragOver={(event) => {
+            if (Array.from(event.dataTransfer.types).includes('text/expression-snippet')) {
+              event.preventDefault();
+            }
+          }}
+          onDrop={(event) => {
+            const snippet = event.dataTransfer.getData('text/expression-snippet');
+            if (!snippet) return;
+
+            event.preventDefault();
+            insertWidgetExpressionSnippet(widget.id, snippet, event.currentTarget.selectionStart, event.currentTarget.selectionEnd);
+          }}
+        />
+      </label>
+
+      <div className="expression-hints">
+        <span>Functions:</span>
+        {EXPRESSION_SNIPPETS.map((snippet) => (
+          <button
+            key={snippet}
+            type="button"
+            className="expression-chip"
+            draggable
+            title="Drag into the editor"
+            onClick={() => insertWidgetExpressionSnippet(widget.id, snippet)}
+            onDragStart={(event) => {
+              event.dataTransfer.setData('text/expression-snippet', snippet);
+              event.dataTransfer.setData('text/plain', snippet);
+              event.dataTransfer.effectAllowed = 'copy';
+            }}
+          >
+            <code>{snippet}</code>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   const updateWidgetMapping = (id, patch) => {
     if (readOnly) return;
@@ -305,6 +1095,63 @@ export default function App() {
   const removeWidget = (id) => {
     if (readOnly) return;
     setWidgets((prev) => prev.filter((item) => item.id !== id));
+    setSelectedWidgetIds((prev) => prev.filter((itemId) => itemId !== id));
+    if (activeConfigWidgetId === id) {
+      setActiveConfigWidgetId(null);
+    }
+  };
+
+  const selectDashboard = (dashboardId) => {
+    updateWorkspace((prev) => ({
+      ...prev,
+      activeDashboardId: dashboardId
+    }));
+    clearTransientSelectionState();
+  };
+
+  const renameActiveDashboard = (name) => {
+    const nextName = name.trim();
+    if (!nextName) return;
+
+    updateActiveDashboard((dashboard) => ({
+      ...dashboard,
+      name: nextName
+    }));
+  };
+
+  const createNewDashboard = () => {
+    if (readOnly) return;
+
+    const newDashboard = createDashboard(`Dashboard ${dashboards.length + 1}`, []);
+    updateWorkspace((prev) => ({
+      dashboards: [...prev.dashboards, newDashboard],
+      activeDashboardId: newDashboard.id
+    }));
+    clearTransientSelectionState();
+  };
+
+  const duplicateActiveDashboard = () => {
+    if (readOnly || !activeDashboard) return;
+
+    const duplicatedDashboard = createDashboard(`${activeDashboard.name} Copy`, activeDashboard.widgets);
+    updateWorkspace((prev) => ({
+      dashboards: [...prev.dashboards, duplicatedDashboard],
+      activeDashboardId: duplicatedDashboard.id
+    }));
+    clearTransientSelectionState();
+  };
+
+  const deleteActiveDashboard = () => {
+    if (readOnly || dashboards.length <= 1 || !activeDashboard) return;
+
+    updateWorkspace((prev) => {
+      const remainingDashboards = prev.dashboards.filter((dashboard) => dashboard.id !== prev.activeDashboardId);
+      return {
+        dashboards: remainingDashboards,
+        activeDashboardId: remainingDashboards[0].id
+      };
+    });
+    clearTransientSelectionState();
   };
 
   const renderMappingControls = (widget, dataset) => {
@@ -445,6 +1292,141 @@ export default function App() {
       );
     }
 
+    if (widget.type === 'summaryCard') {
+      return (
+        <div className="mapping-grid">
+          <label>
+            <span>Metric Field</span>
+            <select
+              value={widget.mapping?.metricField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { metricField: event.target.value })}
+            >
+              {numericFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Aggregation</span>
+            <select
+              value={widget.mapping?.aggregation || 'sum'}
+              onChange={(event) => updateWidgetMapping(widget.id, { aggregation: event.target.value })}
+            >
+              <option value="sum">Sum</option>
+              <option value="avg">Average</option>
+              <option value="min">Minimum</option>
+              <option value="max">Maximum</option>
+              <option value="count">Count Rows</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Comparison Field</span>
+            <select
+              value={widget.mapping?.comparisonField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { comparisonField: event.target.value })}
+            >
+              <option value="">No Comparison</option>
+              {numericFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Helper Text</span>
+            <input
+              type="text"
+              value={widget.mapping?.helperText || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { helperText: event.target.value })}
+            />
+          </label>
+
+          <label>
+            <span>Color Theme</span>
+            <select
+              value={widget.mapping?.colorTheme || 'auto'}
+              onChange={(event) => updateWidgetMapping(widget.id, { colorTheme: event.target.value })}
+            >
+              <option value="auto">Auto by Trend</option>
+              <option value="emerald">Emerald</option>
+              <option value="blue">Blue</option>
+              <option value="cyan">Cyan</option>
+              <option value="violet">Violet</option>
+              <option value="amber">Amber</option>
+              <option value="rose">Rose</option>
+              <option value="slate">Slate</option>
+            </select>
+          </label>
+        </div>
+      );
+    }
+
+    if (widget.type === 'rankingList') {
+      return (
+        <div className="mapping-grid">
+          <label>
+            <span>Label Field</span>
+            <select
+              value={widget.mapping?.labelField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { labelField: event.target.value })}
+            >
+              {dimensionFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Value Field</span>
+            <select
+              value={widget.mapping?.valueField || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
+            >
+              {numericFields.map((field) => (
+                <option key={field.key} value={field.key}>
+                  {field.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Sort</span>
+            <select
+              value={widget.mapping?.sortDirection || 'desc'}
+              onChange={(event) => updateWidgetMapping(widget.id, { sortDirection: event.target.value })}
+            >
+              <option value="desc">Highest First</option>
+              <option value="asc">Lowest First</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Top N</span>
+            <input
+              type="number"
+              min="1"
+              max={dataset.records.length}
+              value={widget.mapping?.limit || 5}
+              onChange={(event) =>
+                updateWidgetMapping(widget.id, {
+                  limit: Math.max(1, Math.min(dataset.records.length, Number(event.target.value) || 1))
+                })
+              }
+            />
+          </label>
+        </div>
+      );
+    }
+
     if (widget.type === 'table') {
       const visibleColumns = widget.mapping?.columns || [];
 
@@ -491,22 +1473,76 @@ export default function App() {
           <h1>Dashboard Builder Prototype</h1>
           <p>Drag widgets to the canvas, then attach one datasource and map fields per widget.</p>
         </div>
+        <div className="dashboard-bar">
+          <select
+            className="dashboard-switcher"
+            value={activeDashboardId}
+            onChange={(event) => selectDashboard(event.target.value)}
+            aria-label="Dashboard"
+            title="Dashboard"
+          >
+            {dashboards.map((dashboard) => (
+              <option key={dashboard.id} value={dashboard.id}>
+                {dashboard.name}
+              </option>
+            ))}
+          </select>
+          <input
+            className="dashboard-name-input"
+            type="text"
+            value={activeDashboard?.name || ''}
+            aria-label="Dashboard name"
+            title="Dashboard name"
+            onChange={(event) => renameActiveDashboard(event.target.value)}
+          />
+          <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label="Create new dashboard" title="Create new dashboard">
+            <ToolbarIcon name="plus" />
+          </button>
+          <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label="Duplicate dashboard" title="Duplicate dashboard">
+            <ToolbarIcon name="copy" />
+          </button>
+          <button
+            type="button"
+            className="dashboard-action danger icon-only"
+            onClick={deleteActiveDashboard}
+            disabled={dashboards.length <= 1}
+            aria-label="Delete dashboard"
+            title="Delete dashboard"
+          >
+            <ToolbarIcon name="trash" />
+          </button>
+          <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="Print dashboard" title="Print dashboard">
+            <ToolbarIcon name="print" />
+          </button>
+          <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="Download dashboard as PDF" title="Download dashboard as PDF">
+            <ToolbarIcon name="download" />
+          </button>
+        </div>
         <div className="topbar-actions">
           <button
             type="button"
-            className="sidebar-toggle topbar-toggle"
+            className="sidebar-toggle topbar-toggle icon-only"
             onClick={() => setSidebarHidden((prev) => !prev)}
+            aria-label={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
+            title={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
+            disabled={readOnly}
           >
-            {sidebarHidden ? 'Show Sidebar' : 'Hide Sidebar'}
+            <ToolbarIcon name="sidebar" />
           </button>
-          <button type="button" className="mode-toggle" onClick={() => setReadOnly((prev) => !prev)}>
-            {readOnly ? 'Exit Read Only' : 'Read Only Preview'}
+          <button
+            type="button"
+            className="mode-toggle icon-only"
+            onClick={() => setReadOnly((prev) => !prev)}
+            aria-label={readOnly ? 'Exit read only preview' : 'Open read only preview'}
+            title={readOnly ? 'Exit read only preview' : 'Open read only preview'}
+          >
+            <ToolbarIcon name={readOnly ? 'edit' : 'preview'} />
           </button>
         </div>
       </header>
 
-      <div className={`builder-layout ${sidebarHidden ? 'sidebar-hidden' : ''}`}>
-        <aside className={`palette ${readOnly ? 'read-only' : ''} ${sidebarHidden ? 'hidden' : ''}`}>
+      <div className={`builder-layout ${effectiveSidebarHidden ? 'sidebar-hidden' : ''} ${readOnly ? 'read-only-preview' : ''}`}>
+        <aside className={`palette ${readOnly ? 'read-only' : ''} ${effectiveSidebarHidden ? 'hidden' : ''}`}>
           <section className={`palette-section ${paletteCollapsed ? 'collapsed' : ''}`}>
             <div className="palette-section-header">
               <div>
@@ -533,7 +1569,7 @@ export default function App() {
                     onDragStart={(event) => onPaletteDragStart(event, item.type)}
                   >
                     <strong>{item.label}</strong>
-                    <span>{item.title}</span>
+                    <span>{item.description || item.title}</span>
                   </button>
                 ))}
               </div>
@@ -587,20 +1623,56 @@ export default function App() {
             '--grid-cols': canvasCols,
             '--row-size': `${GRID_ROW_HEIGHT}px`,
             '--canvas-height': `${canvasHeight}px`,
-            '--canvas-width': `${canvasContentWidth}px`
+            '--canvas-width': `${canvasContentWidth}px`,
+            '--canvas-side-pad': `${canvasShiftX}px`,
+            '--print-scale': printScale,
+            width: readOnly ? `${occupiedContentWidth}px` : undefined,
+            marginLeft: readOnly ? 'auto' : undefined,
+            marginRight: readOnly ? 'auto' : undefined
           }}
           onDragOver={onCanvasDragOver}
           onDrop={onCanvasDrop}
           onDragLeave={() => setHoverGrid(null)}
+          onMouseDown={(event) => {
+            if (readOnly) return;
+            if (event.target.closest('.widget-card')) return;
+            if (isInteractiveTarget(event.target)) return;
+
+            const point = getCanvasLocalPoint(event);
+            if (!point) return;
+
+            setActiveConfigWidgetId(null);
+            setDropTargetWidgetId(null);
+            setAction({
+              kind: 'marquee',
+              startX: event.clientX,
+              startY: event.clientY
+            });
+            selectionBoxRef.current = null;
+            setSelectionBox(null);
+            setSelectedWidgetIds([]);
+          }}
         >
           {!readOnly && hoverGrid ? (
             <div
               className="drop-preview"
               style={{
-                left: hoverGrid.x * cellWidth,
+                left: hoverGrid.x * cellWidth + canvasShiftX,
                 top: hoverGrid.y * GRID_ROW_HEIGHT,
                 width: cellWidth * 4,
                 height: GRID_ROW_HEIGHT * 4
+              }}
+            />
+          ) : null}
+
+          {!readOnly && selectionBox ? (
+            <div
+              className="selection-marquee"
+              style={{
+                left: selectionBox.x + canvasShiftX,
+                top: selectionBox.y,
+                width: selectionBox.width,
+                height: selectionBox.height
               }}
             />
           ) : null}
@@ -609,15 +1681,22 @@ export default function App() {
             const dataset = datasetLibrary[widget.dataset];
             const compatibleDatasets = getCompatibleDatasets(widget.type);
             const isWidgetPreview = readOnly || widget.preview;
+            const isChromelessPreview =
+              isWidgetPreview && CHROMELESS_PREVIEW_TYPES.includes(widget.type);
+            const isSelected = selectedWidgetIds.includes(widget.id);
 
             return (
               <section
                 key={widget.id}
                 className={`widget-card ${readOnly ? 'read-only' : ''} ${
-                  isWidgetPreview && (widget.type === 'label' || widget.type === 'date') ? 'no-chrome' : ''
-                } ${dropTargetWidgetId === widget.id ? 'drop-target' : ''}`}
+                  isChromelessPreview ? 'no-chrome' : ''
+                } ${dropTargetWidgetId === widget.id ? 'drop-target' : ''} ${
+                  isSelected ? 'selected' : ''
+                }`}
+                data-widget-type={widget.type}
+                data-widget-title={widget.title}
                 style={{
-                  left: widget.x * cellWidth,
+                  left: widget.x * cellWidth + canvasShiftX,
                   top: widget.y * GRID_ROW_HEIGHT,
                   width: widget.w * cellWidth,
                   height: widget.h * GRID_ROW_HEIGHT
@@ -647,27 +1726,57 @@ export default function App() {
                   assignDatasourceToWidget(widget.id, datasourceId);
                   setDropTargetWidgetId(null);
                 }}
+                onMouseDown={(event) => {
+                  if (readOnly) return;
+                  if (isInteractiveTarget(event.target) || event.target.closest('.drag-handle')) return;
+
+                  event.stopPropagation();
+
+                  setActiveConfigWidgetId(null);
+                  setDropTargetWidgetId(null);
+
+                  if (event.metaKey || event.ctrlKey) {
+                    setSelectedWidgetIds((prev) =>
+                      prev.includes(widget.id) ? prev.filter((id) => id !== widget.id) : [...prev, widget.id]
+                    );
+                    return;
+                  }
+
+                  setSelectedWidgetIds([widget.id]);
+                }}
               >
-                {isWidgetPreview && (widget.type === 'label' || widget.type === 'date') ? null : (
+                {isChromelessPreview ? null : (
                   <div
                     className="widget-header drag-handle"
                     onMouseDown={(event) => {
                       if (readOnly) return;
                       if (
-                        event.target.closest('select') ||
-                        event.target.closest('button') ||
-                        event.target.closest('input') ||
-                        event.target.closest('.checkbox-item')
+                        isInteractiveTarget(event.target) ||
+                        event.target.closest('.resize-handle')
                       ) {
                         return;
                       }
 
+                      const movingIds =
+                        selectedWidgetIds.includes(widget.id) && selectedWidgetIds.length > 1
+                          ? selectedWidgetIds
+                          : [widget.id];
+                      const originMap = Object.fromEntries(
+                        widgets
+                          .filter((item) => movingIds.includes(item.id))
+                          .map((item) => [item.id, { x: item.x, y: item.y }])
+                      );
+
+                      setSelectedWidgetIds(movingIds);
+                      gestureSnapshotRef.current = cloneWorkspace(workspace);
+                      gestureChangedRef.current = false;
                       setAction({
-                        kind: 'move',
+                        kind: movingIds.length > 1 ? 'move-selection' : 'move',
                         id: widget.id,
                         startX: event.clientX,
                         startY: event.clientY,
-                        origin: { x: widget.x, y: widget.y }
+                        origin: { x: widget.x, y: widget.y },
+                        originMap
                       });
                     }}
                   >
@@ -681,11 +1790,15 @@ export default function App() {
                       <>
                         <div className="widget-title-block">
                           <small>{widget.type.toUpperCase()}</small>
-                          <input
-                            type="text"
-                            value={widget.title}
-                            onChange={(event) => updateWidgetField(widget.id, 'title', event.target.value)}
-                          />
+                          {TEXT_WIDGET_TYPES.includes(widget.type) ? (
+                            <strong>{widget.title}</strong>
+                          ) : (
+                            <input
+                              type="text"
+                              value={widget.title}
+                              onChange={(event) => updateWidgetField(widget.id, 'title', event.target.value)}
+                            />
+                          )}
                           {hasDatasetTarget(widget.type) ? (
                             <div className="widget-dataset-dropzone">
                               <span>{dataset?.label || 'Drop datasource here'}</span>
@@ -698,41 +1811,52 @@ export default function App() {
                           ) : null}
                         </div>
                         <div className="widget-controls">
-                          {hasDatasetTarget(widget.type) ? (
+                          {hasConfigPopup(widget.type) ? (
                             <button
                               type="button"
-                              className="config-toggle"
+                              className="icon-button config-toggle"
+                              aria-label="Configure widget"
+                              title="Configure"
                               onClick={() => setActiveConfigWidgetId(widget.id)}
                             >
-                              Configure
+                              ⚙
                             </button>
                           ) : null}
                           <button
                             type="button"
-                            className="preview-toggle"
+                            className="icon-button preview-toggle"
+                            aria-label={widget.preview ? 'Edit widget' : 'Preview widget'}
+                            title={widget.preview ? 'Edit' : 'Preview'}
                             onClick={() => toggleWidgetPreview(widget.id)}
                           >
-                            {widget.preview ? 'Edit' : 'Preview'}
+                            {widget.preview ? '✎' : '◐'}
                           </button>
-                          {widget.type === 'label' || widget.type === 'date' ? (
-                            <input
-                              type="number"
-                              min="10"
-                              max="96"
-                              value={widget.fontSize || 28}
-                              onChange={(event) =>
-                                updateWidgetField(widget.id, 'fontSize', Number(event.target.value) || 10)
-                              }
-                            />
-                          ) : null}
-                          <button type="button" onClick={() => removeWidget(widget.id)}>
-                            Remove
+                          <button
+                            type="button"
+                            className="icon-button remove-toggle"
+                            aria-label="Remove widget"
+                            title="Remove"
+                            onClick={() => removeWidget(widget.id)}
+                          >
+                            ×
                           </button>
                         </div>
                       </>
                     )}
                   </div>
                 )}
+
+                {!readOnly && isChromelessPreview ? (
+                  <button
+                    type="button"
+                    className="preview-edit-floating"
+                    aria-label="Edit widget"
+                    title="Edit"
+                    onClick={() => toggleWidgetPreview(widget.id)}
+                  >
+                    ✎
+                  </button>
+                ) : null}
 
                 <div className="widget-content">
                   {!isWidgetPreview && hasDatasetTarget(widget.type) ? (
@@ -748,7 +1872,11 @@ export default function App() {
                     </div>
                   ) : null}
 
-                  <div className="widget-visual">
+                  <div
+                    className={`widget-visual ${
+                      !isWidgetPreview && TEXT_WIDGET_TYPES.includes(widget.type) ? 'text-preview-visual' : ''
+                    }`}
+                  >
                     <WidgetRenderer widget={widget} dataset={dataset} />
                   </div>
                 </div>
@@ -760,6 +1888,8 @@ export default function App() {
                     className="resize-handle"
                     onMouseDown={(event) => {
                       event.preventDefault();
+                      gestureSnapshotRef.current = cloneWorkspace(workspace);
+                      gestureChangedRef.current = false;
                       setAction({
                         kind: 'resize',
                         id: widget.id,
@@ -782,7 +1912,11 @@ export default function App() {
             <div className="config-modal-header">
               <div>
                 <h2>{activeConfigWidget.title}</h2>
-                <p>Configure the widget datasource and field mapping.</p>
+                <p>
+                  {TEXT_WIDGET_TYPES.includes(activeConfigWidget.type)
+                    ? 'Configure text content and formatting.'
+                    : 'Configure the widget datasource and field mapping.'}
+                </p>
               </div>
               <button type="button" className="section-toggle" onClick={() => setActiveConfigWidgetId(null)}>
                 Close
@@ -790,23 +1924,29 @@ export default function App() {
             </div>
 
             <div className="config-modal-body">
-              <div className="mapping-grid">
-                <label>
-                  <span>Datasource</span>
-                  <select
-                    value={activeConfigWidget.dataset}
-                    onChange={(event) => assignDatasourceToWidget(activeConfigWidget.id, event.target.value)}
-                  >
-                    {getCompatibleDatasets(activeConfigWidget.type).map((dataset) => (
-                      <option key={dataset.id} value={dataset.id}>
-                        {dataset.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              {TEXT_WIDGET_TYPES.includes(activeConfigWidget.type) ? (
+                renderTextWidgetControls(activeConfigWidget)
+              ) : (
+                <>
+                  <div className="mapping-grid">
+                    <label>
+                      <span>Datasource</span>
+                      <select
+                        value={activeConfigWidget.dataset}
+                        onChange={(event) => assignDatasourceToWidget(activeConfigWidget.id, event.target.value)}
+                      >
+                        {getCompatibleDatasets(activeConfigWidget.type).map((dataset) => (
+                          <option key={dataset.id} value={dataset.id}>
+                            {dataset.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
 
-              {renderMappingControls(activeConfigWidget, activeConfigDataset)}
+                  {renderMappingControls(activeConfigWidget, activeConfigDataset)}
+                </>
+              )}
             </div>
           </div>
         </div>

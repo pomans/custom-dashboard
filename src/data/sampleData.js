@@ -126,11 +126,54 @@ export const datasetLibrary = {
 };
 
 export const widgetCatalog = [
-  { type: 'line', label: 'Line', dataset: 'monthlyBusiness', title: 'Revenue Trend' },
-  { type: 'bar', label: 'Bar', dataset: 'regionalPerformance', title: 'Regional Performance' },
-  { type: 'pie', label: 'Pie', dataset: 'marketingChannels', title: 'Channel Distribution' },
-  { type: 'treemap', label: 'Treemap', dataset: 'productMix', title: 'Product Mix' },
-  { type: 'table', label: 'Table', dataset: 'orderRecords', title: 'Order Records' },
-  { type: 'label', label: 'Label', dataset: '', title: 'Label Text' },
-  { type: 'date', label: 'Current Date', dataset: '', title: 'Today' }
+  {
+    type: 'line',
+    label: 'Line',
+    dataset: 'monthlyBusiness',
+    title: 'Revenue Trend',
+    description: 'แสดงแนวโน้มข้อมูลตามลำดับ'
+  },
+  {
+    type: 'bar',
+    label: 'Bar',
+    dataset: 'regionalPerformance',
+    title: 'Regional Performance',
+    description: 'เปรียบเทียบค่าระหว่างหมวดหมู่'
+  },
+  {
+    type: 'pie',
+    label: 'Pie',
+    dataset: 'marketingChannels',
+    title: 'Channel Distribution',
+    description: 'แสดงสัดส่วนของแต่ละรายการ'
+  },
+  {
+    type: 'treemap',
+    label: 'Treemap',
+    dataset: 'productMix',
+    title: 'Product Mix',
+    description: 'แสดงขนาดข้อมูลแบบจัดกลุ่ม'
+  },
+  {
+    type: 'summaryCard',
+    label: 'Summary Card',
+    dataset: 'monthlyBusiness',
+    title: 'Total Revenue',
+    description: 'สรุปตัวเลขสำคัญแบบการ์ด'
+  },
+  {
+    type: 'rankingList',
+    label: 'Ranking List',
+    dataset: 'regionalPerformance',
+    title: 'Top Regions',
+    description: 'จัดอันดับรายการตามค่า Top N'
+  },
+  {
+    type: 'table',
+    label: 'Table',
+    dataset: 'orderRecords',
+    title: 'Order Records',
+    description: 'แสดงข้อมูลเป็นแถวและคอลัมน์'
+  },
+  { type: 'textbox', label: 'TextBox', dataset: '', title: 'Text Box', description: 'แสดงข้อความและ expression' }
 ];
