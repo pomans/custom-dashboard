@@ -386,7 +386,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
         data={[...actualSeries, ...forecastSeries]}
-        margin={{ top: 18, right: 18, bottom: 26, left: 18 }}
+        margin={{ top: 18, right: 18, bottom: 42, left: 18 }}
       >
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         {actualSeries.map((entry) =>
@@ -401,7 +401,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
             />
           ) : null
         )}
-        <XAxis dataKey="year" tickFormatter={formatAnnualTick} interval={0} />
+        <XAxis dataKey="year" tickFormatter={formatAnnualTick} interval={0} tickMargin={10} />
         <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
         <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
         <Line
