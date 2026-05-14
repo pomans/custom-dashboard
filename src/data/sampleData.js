@@ -1,4 +1,242 @@
+const MICE_QUARTER_LABELS = {
+  calendar: ['Q1 (Jan - Mar)', 'Q2 (Apr - Jun)', 'Q3 (Jul - Sep)', 'Q4 (Oct - Dec)'],
+  fiscal: ['Q1 (Oct - Dec)', 'Q2 (Jan - Mar)', 'Q3 (Apr - Jun)', 'Q4 (Jul - Sep)']
+};
+
+const MICE_INDUSTRIES = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions', 'Mega Events'];
+
+const MICE_COUNTRIES = [
+  { country: 'Thailand', continent: 'Asia', market: 'Domestic' },
+  { country: 'China', continent: 'Asia', market: 'International' },
+  { country: 'Japan', continent: 'Asia', market: 'International' },
+  { country: 'Singapore', continent: 'Asia', market: 'International' },
+  { country: 'Malaysia', continent: 'Asia', market: 'International' },
+  { country: 'India', continent: 'Asia', market: 'International' },
+  { country: 'Germany', continent: 'Europe', market: 'International' },
+  { country: 'United States', continent: 'North America', market: 'International' }
+];
+
+const MICE_MARKET_WEIGHTS = {
+  Domestic: 0.82,
+  International: 1.18
+};
+
+const MICE_INDUSTRY_WEIGHTS = {
+  Meetings: 1,
+  Incentives: 0.86,
+  Conventions: 1.08,
+  Exhibitions: 1.18,
+  'Mega Events': 1.32
+};
+
+const MICE_COUNTRY_WEIGHTS = {
+  Thailand: 1.1,
+  China: 1.35,
+  Japan: 1.18,
+  Singapore: 0.96,
+  Malaysia: 0.9,
+  India: 1.02,
+  Germany: 0.88,
+  'United States': 0.83
+};
+
+const createMiceStatisticsRecords = () => {
+  const records = [];
+  const years = Array.from({ length: 20 }, (_, index) => 2007 + index);
+  const yearlyTrend = {
+    2007: 0.96,
+    2008: 0.95,
+    2009: 0.95,
+    2010: 0.98,
+    2011: 1.05,
+    2012: 1.13,
+    2013: 1.18,
+    2014: 1.12,
+    2015: 1.15,
+    2016: 1.19,
+    2017: 1.23,
+    2018: 1.28,
+    2019: 1.14,
+    2020: 0.28,
+    2021: 0.04,
+    2022: 1.02,
+    2023: 0.45,
+    2024: 0.62,
+    2025: 0.42,
+    2026: 0.22
+  };
+
+  years.forEach((year, yearIndex) => {
+    ['calendar', 'fiscal'].forEach((yearMode) => {
+      MICE_QUARTER_LABELS[yearMode].forEach((quarterLabel, quarterIndex) => {
+        MICE_COUNTRIES.forEach((countryItem, countryIndex) => {
+          const availableMarkets = countryItem.market === 'Domestic' ? ['Domestic'] : ['International'];
+
+          availableMarkets.forEach((market) => {
+            MICE_INDUSTRIES.forEach((industry, industryIndex) => {
+              const marketWeight = MICE_MARKET_WEIGHTS[market];
+              const industryWeight = MICE_INDUSTRY_WEIGHTS[industry];
+              const countryWeight = MICE_COUNTRY_WEIGHTS[countryItem.country];
+              const timeWeight = 1 + yearIndex * 0.12 + quarterIndex * 0.08 + (yearMode === 'fiscal' ? 0.05 : 0);
+              const baseWeight = marketWeight * industryWeight * countryWeight * timeWeight * (yearlyTrend[year] || 1);
+              const sequenceWeight = 1 + countryIndex * 0.015 + industryIndex * 0.02;
+
+              const miceEvents = Math.round((520 + quarterIndex * 72 + yearIndex * 95) * baseWeight * sequenceWeight);
+              const miceVisitors = Math.round(miceEvents * (market === 'International' ? 12.8 : 8.2));
+              const revenueGenerated = Math.round(miceEvents * (market === 'International' ? 4200 : 2900));
+              const avgStayDays = Number((market === 'International' ? 4.4 : 2.9) + quarterIndex * 0.18 + yearIndex * 0.11 + (countryIndex % 3) * 0.05).toFixed(1);
+              const avgSpendPerTrip = Number(
+                (market === 'International' ? 17500 : 11800) + quarterIndex * 780 + yearIndex * 640 + industryIndex * 420 + countryIndex * 95
+              );
+              const avgSpendPerDay = Number((avgSpendPerTrip / Number(avgStayDays)).toFixed(0));
+
+              records.push({
+                yearMode,
+                year,
+                quarter: quarterIndex + 1,
+                quarterLabel,
+                market,
+                industry,
+                country: countryItem.country,
+                nationality: countryItem.country,
+                continent: countryItem.continent,
+                miceEvents,
+                revenueGenerated,
+                miceVisitors,
+                avgStayDays: Number(avgStayDays),
+                avgSpendPerTrip,
+                avgSpendPerDay
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+
+  return records;
+};
+
+const makeSeries = (values) =>
+  values.map((value, index) => ({
+    year: 2007 + index,
+    value
+  }));
+
+const MICE_FIXED_PROFILE = {
+  charts: {
+    events: makeSeries([
+      6242, 6155, 6163, 6352, 6803, 7445, 7915, 7465, 7634, 7682,
+      8120, 8450, 7890, 1700, 0, 6320, 2030, 2860, 1910, 1000
+    ]),
+    revenue: makeSeries([
+      69517, 52699, 58398, 53226, 69552, 81636, 89460, 81721, 103149, 96910,
+      117320, 129860, 97020, 12000, 0, 145000, 54000, 95000, 48000, 30000
+    ]),
+    visitors: makeSeries([
+      857244, 727723, 730352, 696908, 799450, 916036, 1066963, 1156274, 1460528, 1442481,
+      1630000, 1805000, 1742000, 438000, 0, 2200000, 880000, 1700000, 860000, 500000
+    ])
+  },
+  kpis: {
+    events: 17753,
+    eventsGrowth: 6.6,
+    visitors: 560512,
+    visitorsGrowth: -31.3,
+    topNationality: 'China',
+    topNationalityGrowth: 32.2,
+    topIndustry: 'Meetings'
+  },
+  nationalityPerformance: [
+    { continent: 'Asia', nationality: 'China', current: 204280, previous: 154479, yoy: 32.2 },
+    { continent: 'Asia', nationality: 'India', current: 169804, previous: 203690, yoy: -16.6 },
+    { continent: 'Asia', nationality: 'Malaysia', current: 57337, previous: 112668, yoy: -49.1 },
+    { continent: 'Asia', nationality: 'Hong Kong', current: 19070, previous: 17290, yoy: 10.3 },
+    { continent: 'Europe', nationality: 'Germany', current: 13332, previous: 17584, yoy: -24.2 },
+    { continent: 'Asia', nationality: 'Singapore', current: 10879, previous: 31902, yoy: -65.9 },
+    { continent: 'North America', nationality: 'United States of America', current: 9299, previous: 38809, yoy: -76.0 },
+    { continent: 'Asia', nationality: 'Vietnam', current: 8529, previous: 30834, yoy: -72.3 },
+    { continent: 'Asia', nationality: 'Philippines', current: 8237, previous: 7586, yoy: 8.6 },
+    { continent: 'Asia', nationality: 'Korea, South', current: 6143, previous: 24799, yoy: -75.2 },
+    { continent: 'Asia', nationality: 'Japan', current: 5747, previous: 14659, yoy: -60.8 },
+    { continent: 'Asia', nationality: 'Indonesia', current: 5441, previous: 24823, yoy: -78.1 },
+    { continent: 'Oceania', nationality: 'Australia', current: 5315, previous: 15344, yoy: -65.4 },
+    { continent: 'Europe', nationality: 'United Kingdom', current: 4838, previous: 20153, yoy: -76.0 },
+    { continent: 'Europe', nationality: 'France', current: 3985, previous: 9577, yoy: -58.4 },
+    { continent: 'Europe', nationality: 'Belgium', current: 3513, previous: 1881, yoy: 86.8 },
+    { continent: 'Europe', nationality: 'Austria', current: 3211, previous: 1584, yoy: 102.7 },
+    { continent: 'Europe', nationality: 'Italy', current: 3124, previous: 4847, yoy: -35.5 },
+    { continent: 'Asia', nationality: 'Bangladesh', current: 3043, previous: 975, yoy: 212.1 }
+  ],
+  nationalityIndustryMatrix: [
+    { nationality: 'China', Meetings: 107528, Incentives: 96752, Conventions: 0, Exhibitions: 0, Total: 204280 },
+    { nationality: 'India', Meetings: 93848, Incentives: 75956, Conventions: 0, Exhibitions: 0, Total: 169804 },
+    { nationality: 'Malaysia', Meetings: 28343, Incentives: 28994, Conventions: 0, Exhibitions: 0, Total: 57337 },
+    { nationality: 'Hong Kong', Meetings: 14677, Incentives: 4393, Conventions: 0, Exhibitions: 0, Total: 19070 },
+    { nationality: 'Germany', Meetings: 6511, Incentives: 6821, Conventions: 0, Exhibitions: 0, Total: 13332 },
+    { nationality: 'Singapore', Meetings: 5912, Incentives: 4967, Conventions: 0, Exhibitions: 0, Total: 10879 },
+    { nationality: 'United States of America', Meetings: 9299, Incentives: 0, Conventions: 0, Exhibitions: 0, Total: 9299 },
+    { nationality: 'Vietnam', Meetings: 8529, Incentives: 0, Conventions: 0, Exhibitions: 0, Total: 8529 },
+    { nationality: 'Philippines', Meetings: 6278, Incentives: 1959, Conventions: 0, Exhibitions: 0, Total: 8237 },
+    { nationality: 'Korea, South', Meetings: 6143, Incentives: 0, Conventions: 0, Exhibitions: 0, Total: 6143 },
+    { nationality: 'Japan', Meetings: 4548, Incentives: 1199, Conventions: 0, Exhibitions: 0, Total: 5747 },
+    { nationality: 'Indonesia', Meetings: 2210, Incentives: 3231, Conventions: 0, Exhibitions: 0, Total: 5441 },
+    { nationality: 'Australia', Meetings: 2489, Incentives: 629, Conventions: 2197, Exhibitions: 0, Total: 5315 },
+    { nationality: 'United Kingdom', Meetings: 4838, Incentives: 0, Conventions: 0, Exhibitions: 0, Total: 4838 },
+    { nationality: 'France', Meetings: 2963, Incentives: 1022, Conventions: 0, Exhibitions: 0, Total: 3985 },
+    { nationality: 'Belgium', Meetings: 0, Incentives: 2269, Conventions: 1244, Exhibitions: 0, Total: 3513 },
+    { nationality: 'Austria', Meetings: 0, Incentives: 0, Conventions: 0, Exhibitions: 3211, Total: 3211 }
+  ],
+  breakdown: {
+    total: 560512,
+    nationality: [
+      { label: 'China', value: 204280 },
+      { label: 'India', value: 169804 },
+      { label: 'Malaysia', value: 57337 },
+      { label: 'Hong Kong', value: 19070 },
+      { label: 'Germany', value: 13332 },
+      { label: 'Singapore', value: 10879 }
+    ],
+    industry: [
+      { label: 'Meetings', value: 93848 },
+      { label: 'Incentives', value: 75956 },
+      { label: 'Conventions', value: 3441 },
+      { label: 'Exhibitions', value: 7757 }
+    ],
+    quarter: [
+      { label: 'Q1', value: 29799 },
+      { label: 'Q4', value: 22918 },
+      { label: 'Q2', value: 20627 },
+      { label: 'Q3', value: 20504 }
+    ]
+  }
+};
+
 export const datasetLibrary = {
+  miceStatistics: {
+    id: 'miceStatistics',
+    label: 'MICE Statistics',
+    description: 'ชุดข้อมูลตัวอย่างสำหรับแนวโน้มงานไมซ์ รายได้ นักเดินทาง และตัวกรองปี/อุตสาหกรรม/ประเทศ',
+    fields: [
+      { key: 'yearMode', label: 'Year Mode', type: 'category' },
+      { key: 'year', label: 'Year', type: 'number' },
+      { key: 'quarter', label: 'Quarter', type: 'number' },
+      { key: 'quarterLabel', label: 'Quarter Label', type: 'category' },
+      { key: 'market', label: 'Market', type: 'category' },
+      { key: 'industry', label: 'Industry', type: 'category' },
+      { key: 'country', label: 'Country', type: 'category' },
+      { key: 'nationality', label: 'Nationality', type: 'category' },
+      { key: 'continent', label: 'Continent', type: 'category' },
+      { key: 'miceEvents', label: 'MICE Events', type: 'number' },
+      { key: 'revenueGenerated', label: 'Revenue Generated', type: 'number' },
+      { key: 'miceVisitors', label: 'MICE Visitors', type: 'number' },
+      { key: 'avgStayDays', label: 'Average Length of Stay', type: 'number' },
+      { key: 'avgSpendPerTrip', label: 'Average Spend per Trip', type: 'number' },
+      { key: 'avgSpendPerDay', label: 'Average Spend per Person per Day', type: 'number' }
+    ],
+    records: createMiceStatisticsRecords(),
+    fixedProfile: MICE_FIXED_PROFILE
+  },
   monthlyBusiness: {
     id: 'monthlyBusiness',
     label: 'Monthly Business Overview',
@@ -127,7 +365,101 @@ export const datasetLibrary = {
 
 export const widgetCatalog = [
   {
+    type: 'miceEventsChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 6,
+    label: 'MICE Events Chart',
+    dataset: 'miceStatistics',
+    title: 'จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)',
+    description: 'กราฟเส้นสำเร็จรูปตามภาพ'
+  },
+  {
+    type: 'miceRevenueChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 6,
+    label: 'MICE Revenue Chart',
+    dataset: 'miceStatistics',
+    title: 'รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)',
+    description: 'กราฟเส้นสำเร็จรูปตามภาพ'
+  },
+  {
+    type: 'miceVisitorsChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 6,
+    label: 'MICE Visitors Chart',
+    dataset: 'miceStatistics',
+    title: 'จำนวนนักเดินทางไมซ์ (MICE Visitors)',
+    description: 'กราฟเส้นสำเร็จรูปตามภาพ'
+  },
+  {
+    type: 'miceKpis',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 2,
+    label: 'MICE KPI Strip',
+    dataset: 'miceStatistics',
+    title: 'MICE KPI Summary',
+    description: 'ชุด KPI พร้อมใช้ตามภาพ'
+  },
+  {
+    type: 'miceNationalityPerformance',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 8,
+    label: 'Nationality Performance',
+    dataset: 'miceStatistics',
+    title: 'Nationality Performance',
+    description: 'ตารางพร้อมใช้ตามภาพ'
+  },
+  {
+    type: 'miceNationalityIndustryMatrix',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 8,
+    label: 'Industry Matrix',
+    dataset: 'miceStatistics',
+    title: 'Nationality by MICE Industry',
+    description: 'เมทริกซ์ nationality x industry'
+  },
+  {
+    type: 'miceVisitorsBreakdown',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 10,
+    label: 'Visitors Breakdown',
+    dataset: 'miceStatistics',
+    title: 'MICE Visitors Breakdown',
+    description: 'สรุป visitors แบบ breakdown'
+  },
+  {
+    type: 'chart',
+    group: 'configurable',
+    label: 'Chart',
+    dataset: 'miceStatistics',
+    title: 'MICE Trend',
+    description: 'สลับรูปแบบ line, bar, area หรือ stacked bar'
+  },
+  {
+    type: 'kpiCard',
+    group: 'configurable',
+    label: 'KPI Card',
+    dataset: 'miceStatistics',
+    title: 'MICE KPI',
+    description: 'แสดงตัวเลขสำคัญหรือชื่อประเทศตามสัญชาติ'
+  },
+  {
     type: 'line',
+    group: 'configurable',
     label: 'Line',
     dataset: 'monthlyBusiness',
     title: 'Revenue Trend',
@@ -135,6 +467,7 @@ export const widgetCatalog = [
   },
   {
     type: 'bar',
+    group: 'configurable',
     label: 'Bar',
     dataset: 'regionalPerformance',
     title: 'Regional Performance',
@@ -142,6 +475,7 @@ export const widgetCatalog = [
   },
   {
     type: 'pie',
+    group: 'configurable',
     label: 'Pie',
     dataset: 'marketingChannels',
     title: 'Channel Distribution',
@@ -149,6 +483,7 @@ export const widgetCatalog = [
   },
   {
     type: 'treemap',
+    group: 'configurable',
     label: 'Treemap',
     dataset: 'productMix',
     title: 'Product Mix',
@@ -156,6 +491,7 @@ export const widgetCatalog = [
   },
   {
     type: 'summaryCard',
+    group: 'configurable',
     label: 'Summary Card',
     dataset: 'monthlyBusiness',
     title: 'Total Revenue',
@@ -163,6 +499,7 @@ export const widgetCatalog = [
   },
   {
     type: 'rankingList',
+    group: 'configurable',
     label: 'Ranking List',
     dataset: 'regionalPerformance',
     title: 'Top Regions',
@@ -170,10 +507,11 @@ export const widgetCatalog = [
   },
   {
     type: 'table',
+    group: 'configurable',
     label: 'Table',
     dataset: 'orderRecords',
     title: 'Order Records',
     description: 'แสดงข้อมูลเป็นแถวและคอลัมน์'
   },
-  { type: 'textbox', label: 'TextBox', dataset: '', title: 'Text Box', description: 'แสดงข้อความและ expression' }
+  { type: 'textbox', group: 'configurable', label: 'TextBox', dataset: '', title: 'Text Box', description: 'แสดงข้อความและ expression' }
 ];

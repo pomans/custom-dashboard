@@ -4,14 +4,18 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Area,
+  AreaChart,
   Legend,
   Line,
   LineChart,
+  LabelList,
   Pie,
   PieChart,
   ResponsiveContainer,
   Tooltip,
   Treemap,
+  ReferenceArea,
   XAxis,
   YAxis
 } from 'recharts';
@@ -19,15 +23,20 @@ import {
 const PIE_COLORS = ['#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
 const SERIES_COLORS = ['#0ea5e9', '#22c55e', '#f97316', '#8b5cf6', '#ef4444', '#14b8a6'];
 
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0
+const axisValueFormatter = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1
 });
 
 const formatCellValue = (value) => {
-  if (typeof value === 'number' && Math.abs(value) >= 1000) {
-    return currencyFormatter.format(value);
+  if (typeof value === 'number') {
+    if (Math.abs(value) >= 1000000) {
+      return axisValueFormatter.format(value);
+    }
+
+    return new Intl.NumberFormat('en-US', {
+      maximumFractionDigits: Number.isInteger(value) ? 0 : 1
+    }).format(value);
   }
 
   return value ?? '-';
@@ -43,10 +52,33 @@ const formatMetricValue = (value) => {
   return compactNumberFormatter.format(value);
 };
 
+const formatAxisTickValue = (value) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return value;
+  return compactNumberFormatter.format(value);
+};
+
 const formatPercentValue = (value) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return '-';
   const sign = value > 0 ? '+' : '';
   return `${sign}${compactNumberFormatter.format(value)}%`;
+};
+
+const fullNumberFormatter = new Intl.NumberFormat('en-US');
+
+const formatYAxisTickFull = (value) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return value;
+  return fullNumberFormatter.format(value);
+};
+
+const formatYAxisTickMillions = (value) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return value;
+  return `${(value / 1000000).toFixed(1)}M`;
+};
+
+const formatYAxisTickThousands = (value) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return value;
+  if (value === 0) return '0K';
+  return value >= 1000 ? `${Math.round(value / 1000)}K` : value;
 };
 
 const getExpressionContext = () => ({
@@ -231,6 +263,201 @@ const aggregateRecords = (records, fieldKey, aggregation = 'sum') => {
   return values.reduce((sum, value) => sum + value, 0);
 };
 
+const buildAnnualSeries = (records, metricField, aggregation = 'sum') => {
+  const grouped = records.reduce((acc, record) => {
+    const year = Number(record.year);
+    if (!year) return acc;
+    if (!acc[year]) acc[year] = [];
+    acc[year].push(record);
+    return acc;
+  }, {});
+
+  const years = Object.keys(grouped)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  const actualSeries = years.map((year) => ({
+    year,
+    value: aggregateRecords(grouped[year], metricField, aggregation)
+  }));
+
+  const recent = actualSeries.slice(-3);
+  const deltas = recent.slice(1).map((item, index) => item.value - recent[index].value);
+  const slope = deltas.length ? deltas.reduce((sum, value) => sum + value, 0) / deltas.length : 0;
+  const lastValue = actualSeries[actualSeries.length - 1]?.value || 0;
+  const lastYear = actualSeries[actualSeries.length - 1]?.year || years[years.length - 1] || 2026;
+  const forecastSeries = Array.from({ length: 4 }, (_, index) => {
+    const year = lastYear + index + 1;
+    const decay = Math.max(0.18, 1 - index * 0.14);
+    return {
+      year,
+      value: Math.max(0, Math.round(lastValue + slope * (index + 1) * decay)),
+      forecast: true
+    };
+  });
+
+  const yoy = actualSeries.map((item, index) => {
+    const previous = actualSeries[index - 1]?.value;
+    const delta = typeof previous === 'number' && previous !== 0 ? ((item.value - previous) / Math.abs(previous)) * 100 : null;
+    return {
+      ...item,
+      yoy: delta
+    };
+  });
+
+  return { actualSeries: yoy, forecastSeries };
+};
+
+const buildForecastSeries = (actualSeries, futureYears = 4) => {
+  const recent = actualSeries.slice(-3);
+  const deltas = recent.slice(1).map((item, index) => item.value - recent[index].value);
+  const slope = deltas.length ? deltas.reduce((sum, value) => sum + value, 0) / deltas.length : 0;
+  const lastValue = actualSeries[actualSeries.length - 1]?.value || 0;
+  const lastYear = actualSeries[actualSeries.length - 1]?.year || 2026;
+
+  return Array.from({ length: futureYears }, (_, index) => {
+    const year = lastYear + index + 1;
+    const decay = Math.max(0.18, 1 - index * 0.14);
+    return {
+      year,
+      value: Math.max(0, Math.round(lastValue + slope * (index + 1) * decay)),
+      forecast: true
+    };
+  });
+};
+
+const computeYoY = (currentValue, previousValue) => {
+  if (typeof currentValue !== 'number' || Number.isNaN(currentValue)) return null;
+  if (typeof previousValue !== 'number' || Number.isNaN(previousValue)) return null;
+  if (previousValue === 0) {
+    if (currentValue === 0) return 0;
+    return currentValue > 0 ? 100 : -100;
+  }
+
+  return ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+};
+
+const buildCategorySeries = (records, categoryField, metricField, aggregation = 'sum') => {
+  const grouped = records.reduce((acc, record) => {
+    const key = record[categoryField] || 'Other';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(record);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped)
+    .map(([label, groupRecords]) => ({
+      label,
+      value: aggregateRecords(groupRecords, metricField, aggregation)
+    }))
+    .sort((a, b) => (b.value || 0) - (a.value || 0));
+};
+
+const formatAnnualTick = (value) => String(value);
+
+const renderYoyBadge = ({ x, y, value }) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return null;
+
+  const positive = value >= 0;
+  const text = `${positive ? '▲' : '▼'} ${Math.abs(value).toFixed(1)}%`;
+  const fill = positive ? '#1faa2f' : '#ff3b1f';
+  const boxWidth = Math.max(72, text.length * 7.2);
+  const boxX = x - boxWidth / 2;
+  const boxY = positive ? y - 34 : y + 10;
+
+  return (
+    <g>
+      <rect x={boxX} y={boxY} width={boxWidth} height={24} rx="5" fill="#f3efec" opacity="0.8" />
+      <text x={x} y={boxY + 16} textAnchor="middle" fill={fill} fontSize="14" fontWeight="600">
+        {text}
+      </text>
+    </g>
+  );
+};
+
+const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSeries, yTickFormatter }) => (
+  <div className="fixed-mice-chart">
+    <div className="fixed-mice-chart-header">
+      <div className="fixed-mice-chart-title" style={{ background: color }}>
+        {title}
+      </div>
+      <div className="fixed-mice-chart-rule" />
+    </div>
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart
+        data={[...actualSeries, ...forecastSeries]}
+        margin={{ top: 18, right: 18, bottom: 26, left: 18 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+        {actualSeries.map((entry) =>
+          entry.year % 2 === 0 ? (
+            <ReferenceArea
+              key={`band-${entry.year}`}
+              x1={entry.year - 0.5}
+              x2={entry.year + 0.5}
+              fill="#d9d9d9"
+              fillOpacity={0.35}
+              ifOverflow="extendDomain"
+            />
+          ) : null
+        )}
+        <XAxis dataKey="year" tickFormatter={formatAnnualTick} interval={0} />
+        <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
+        <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke="#0f1f68"
+          strokeWidth={3.5}
+          dot={{ r: 5, fill: '#0f1f68' }}
+          activeDot={{ r: 6 }}
+          data={actualSeries}
+        >
+          <LabelList dataKey="yoy" content={renderYoyBadge} />
+        </Line>
+        <Line
+          type="monotone"
+          dataKey="value"
+          stroke="#0f1f68"
+          strokeWidth={3}
+          dot={false}
+          strokeDasharray="6 6"
+          data={forecastSeries}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+    <div className="fixed-mice-chart-axis-label">{yLabel}</div>
+  </div>
+);
+
+const buildChartRows = (records, widget) => {
+  const xField = widget.mapping?.xField;
+  const yFields = widget.mapping?.yFields || [];
+  const aggregation = widget.mapping?.aggregation || 'sum';
+
+  if (!xField || !yFields.length) return [];
+
+  const grouped = records.reduce((acc, record) => {
+    const key = record[xField] ?? 'Other';
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+
+    acc[key].push(record);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).map(([groupKey, groupRecords]) => {
+    const row = { [xField]: groupKey };
+
+    yFields.forEach((fieldKey) => {
+      row[fieldKey] = aggregateRecords(groupRecords, fieldKey, aggregation);
+    });
+
+    return row;
+  });
+};
+
 const buildRankingRows = (records, mapping) => {
   const labelField = mapping?.labelField;
   const valueField = mapping?.valueField;
@@ -301,23 +528,127 @@ const buildTreemapRows = (records, mapping) => {
   return Object.entries(groups).map(([name, children]) => ({ name, children }));
 };
 
-export default function WidgetRenderer({ widget, dataset }) {
+const buildTopLabelRow = (records, mapping) => {
+  const groupField = mapping?.groupField;
+  const valueField = mapping?.valueField;
+  const sortDirection = mapping?.sortDirection || 'desc';
+  const limit = Math.max(1, Number(mapping?.limit) || 1);
+  const rows = buildRankingRows(records, {
+    labelField: groupField,
+    valueField,
+    sortDirection,
+    limit
+  });
+
+  return rows[0] || null;
+};
+
+const aggregateByKey = (records, groupField, valueField, aggregation = 'sum') => {
+  if (!groupField || !valueField) return [];
+
+  const grouped = records.reduce((acc, record) => {
+    const key = record[groupField] || 'Other';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(record);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).map(([label, groupRecords]) => ({
+    label,
+    value: aggregateRecords(groupRecords, valueField, aggregation)
+  }));
+};
+
+const buildPerformanceRows = (records, fields, options = {}) => {
+  const {
+    periodField = 'quarterLabel',
+    metricField,
+    comparisonField,
+    labelField = 'country',
+    aggregation = 'sum',
+    sortBy = metricField,
+    limit = 15
+  } = options;
+
+  const grouped = records.reduce((acc, record) => {
+    const key = record[periodField] || 'Other';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(record);
+    return acc;
+  }, {});
+
+  const seriesRows = Object.entries(grouped).map(([label, groupRecords]) => ({
+    label,
+    thisYear: aggregateRecords(groupRecords, metricField, aggregation),
+    lastYear: comparisonField ? aggregateRecords(groupRecords, comparisonField, aggregation) : null
+  }));
+
+  const tableRows = aggregateByKey(records, labelField, metricField, aggregation)
+    .sort((a, b) => (b.value || 0) - (a.value || 0))
+    .slice(0, limit);
+
+  return { seriesRows, tableRows, labelFieldName: fields?.[labelField]?.label || labelField, metricLabel: fields?.[metricField]?.label || metricField };
+};
+
+const formatYoY = (currentValue, previousValue) => {
+  if (typeof currentValue !== 'number' || typeof previousValue !== 'number') return null;
+  if (previousValue === 0) return null;
+  return ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+};
+
+export default function WidgetRenderer({ widget, dataset, records: overrideRecords }) {
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
     const fallback =
       widget.type === 'date' ? '${format_date(current_date)}' : widget.title || 'Text';
     const textStyle = widget.textStyle || {};
+    const isTextbox = widget.type === 'textbox';
+    const resolvedFontSize = isTextbox ? widget.fontSize || 20 : widget.fontSize || 28;
 
     return (
       <div
-        className="label-widget"
+        className={`label-widget ${isTextbox ? 'textbox-widget' : ''}`}
         style={{
-          fontSize: `${widget.fontSize || 28}px`,
+          '--textbox-align-items':
+            isTextbox && widget.textAlign === 'right'
+              ? 'flex-end'
+              : isTextbox && widget.textAlign === 'center'
+                ? 'center'
+                : 'flex-start',
+          '--textbox-justify-content':
+            isTextbox && widget.textAlign === 'right'
+              ? 'flex-end'
+              : isTextbox && widget.textAlign === 'center'
+                ? 'center'
+                : 'flex-start',
+          '--textbox-text-align':
+            isTextbox && widget.textAlign === 'right'
+              ? 'right'
+              : isTextbox && widget.textAlign === 'center'
+                ? 'center'
+                : 'left',
+          fontSize: `${resolvedFontSize}px`,
           fontWeight: textStyle.fontWeight || 600,
           fontStyle: textStyle.fontStyle || 'normal',
           textDecoration: textStyle.textDecoration || 'none',
-          textAlign: widget.textAlign || 'center',
+          textAlign: isTextbox ? widget.textAlign || 'left' : widget.textAlign || 'center',
           justifyContent:
-            widget.textAlign === 'left' ? 'flex-start' : widget.textAlign === 'right' ? 'flex-end' : 'center'
+            isTextbox
+              ? widget.textAlign === 'right'
+                ? 'flex-end'
+                : widget.textAlign === 'center'
+                  ? 'center'
+                  : 'flex-start'
+              : widget.textAlign === 'left'
+                ? 'flex-start'
+                : widget.textAlign === 'right'
+                  ? 'flex-end'
+                  : 'center'
+          ,
+          whiteSpace: isTextbox ? 'pre-wrap' : undefined,
+          overflowWrap: isTextbox ? 'anywhere' : undefined,
+          wordBreak: isTextbox ? 'break-word' : undefined,
+          lineHeight: isTextbox ? 1.22 : undefined,
+          maxWidth: '100%'
         }}
       >
         {renderTextExpression(widget.expression, fallback)}
@@ -326,41 +657,321 @@ export default function WidgetRenderer({ widget, dataset }) {
   }
 
   if (!dataset?.records?.length) {
-    return <p className="empty-note">Drop one datasource into this widget.</p>;
+    return <p className="empty-note">This widget does not have a fixed datasource configured.</p>;
   }
 
-  const records = dataset.records;
+  const records = overrideRecords || dataset.records;
   const fieldsByKey = Object.fromEntries((dataset.fields || []).map((field) => [field.key, field]));
+  const fixedProfile = dataset.fixedProfile || {};
 
-  if (widget.type === 'line' || widget.type === 'bar') {
+  if (widget.type === 'miceEventsChart') {
+    const annual = fixedProfile.charts?.events || [];
+    const actualSeries = annual.map((item, index) => ({
+      year: item.year,
+      value: item.value,
+      yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
+    }));
+    const forecastSeries = buildForecastSeries(actualSeries);
+    return renderFixedChartPanel({
+      title: 'จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)',
+      color: '#081f68',
+      yLabel: 'MICE Events',
+      actualSeries,
+      forecastSeries,
+      yTickFormatter: formatYAxisTickThousands
+    });
+  }
+
+  if (widget.type === 'miceRevenueChart') {
+    const annual = fixedProfile.charts?.revenue || [];
+    const actualSeries = annual.map((item, index) => ({
+      year: item.year,
+      value: item.value,
+      yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
+    }));
+    const forecastSeries = buildForecastSeries(actualSeries);
+    return renderFixedChartPanel({
+      title: 'รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)',
+      color: '#1d4fb3',
+      yLabel: 'ล้านบาท',
+      actualSeries,
+      forecastSeries,
+      yTickFormatter: formatYAxisTickFull
+    });
+  }
+
+  if (widget.type === 'miceVisitorsChart') {
+    const annual = fixedProfile.charts?.visitors || [];
+    const actualSeries = annual.map((item, index) => ({
+      year: item.year,
+      value: item.value,
+      yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
+    }));
+    const forecastSeries = buildForecastSeries(actualSeries);
+    return renderFixedChartPanel({
+      title: 'จำนวนนักเดินทางไมซ์ (MICE Visitors)',
+      color: '#4098b9',
+      yLabel: 'MICE Visitors',
+      actualSeries,
+      forecastSeries,
+      yTickFormatter: formatYAxisTickMillions
+    });
+  }
+
+  if (widget.type === 'miceKpis') {
+    const profile = fixedProfile.kpis || {};
+    const cards = [
+      { value: formatMetricValue(profile.events), label: 'MICE Events' },
+      { value: `${profile.eventsGrowth >= 0 ? '▲' : '▼'} ${Math.abs(profile.eventsGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.eventsGrowth >= 0 ? 'up' : 'down' },
+      { value: formatMetricValue(profile.visitors), label: 'MICE Inter Visitors' },
+      { value: `${profile.visitorsGrowth >= 0 ? '▲' : '▼'} ${Math.abs(profile.visitorsGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.visitorsGrowth >= 0 ? 'up' : 'down' },
+      { value: profile.topNationality || '-', label: 'Top Nationality' },
+      { value: `${profile.topNationalityGrowth >= 0 ? '▲' : '▼'} ${Math.abs(profile.topNationalityGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.topNationalityGrowth >= 0 ? 'up' : 'down' },
+      { value: profile.topIndustry || '-', label: 'Top Industry' }
+    ];
+
+    return (
+      <div className="fixed-mice-kpi-strip">
+        {cards.map((card, index) => (
+          <div key={`${card.label}-${index}`} className={`fixed-mice-kpi-card ${card.accent || ''}`}>
+            <strong>{card.value}</strong>
+            <span>{card.label}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (widget.type === 'miceNationalityPerformance') {
+    const currentRows = fixedProfile.nationalityPerformance || [];
+    const maxValue = Math.max(...currentRows.map((row) => row.current), 1);
+    const totalCurrent = 560512;
+    const totalPrev = 816258;
+
+    return (
+      <div className="fixed-mice-table-shell">
+        <div className="fixed-mice-chart-title fixed-mice-chart-title-table">Nationality Performance</div>
+        <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
+          <table className="fixed-mice-table fixed-mice-table-heavy">
+            <thead>
+              <tr>
+                <th>Continent</th>
+                <th>Nationality</th>
+                <th>No. of Visitors</th>
+                <th>Last Year</th>
+                <th>%YoY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentRows.map((row) => (
+                <tr key={row.nationality}>
+                  <td>{row.continent}</td>
+                  <td>{row.nationality}</td>
+                  <td>
+                    <div className="table-cell-bar">
+                      <span style={{ width: `${Math.max(10, (row.current / maxValue) * 100)}%` }} />
+                      <strong>{formatMetricValue(row.current)}</strong>
+                    </div>
+                  </td>
+                  <td>{formatMetricValue(row.previous)}</td>
+                  <td className={row.yoy >= 0 ? 'positive' : 'negative'}>
+                    {`${row.yoy >= 0 ? '▲' : '▼'} ${Math.abs(row.yoy).toFixed(1)}%`}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan="2">Total</td>
+                <td>{formatMetricValue(totalCurrent)}</td>
+                <td>{formatMetricValue(totalPrev)}</td>
+                <td className={formatYoY(totalCurrent, totalPrev) >= 0 ? 'positive' : 'negative'}>
+                  {formatYoY(totalCurrent, totalPrev) === null
+                    ? '-'
+                    : `${formatYoY(totalCurrent, totalPrev) >= 0 ? '▲' : '▼'} ${Math.abs(formatYoY(totalCurrent, totalPrev)).toFixed(1)}%`}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (widget.type === 'miceNationalityIndustryMatrix') {
+    const rowData = fixedProfile.nationalityIndustryMatrix || [];
+    const industries = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions'];
+    const columnTotals = Object.fromEntries(
+      [...industries, 'Total'].map((key) => [
+        key,
+        rowData.reduce((sum, row) => sum + (row[key] || 0), 0)
+      ])
+    );
+    const maxCell = Math.max(...rowData.flatMap((row) => industries.map((industry) => row[industry] || 0)), 1);
+
+    return (
+      <div className="fixed-mice-table-shell">
+        <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">Nationality by MICE Industry</div>
+        <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
+          <table className="fixed-mice-table fixed-mice-table-matrix">
+            <thead>
+              <tr>
+                <th>Nationality</th>
+                {industries.map((industry) => (
+                  <th key={industry}>{industry}</th>
+                ))}
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rowData.map((row) => (
+                <tr key={row.nationality}>
+                  <td>{row.nationality}</td>
+                  {industries.map((industry) => (
+                    <td key={industry} className={row[industry] ? 'filled' : 'empty'}>
+                      <div className="matrix-cell">
+                        <span style={{ width: `${Math.max(0, (row[industry] / maxCell) * 100)}%` }} />
+                        <strong>{row[industry] ? formatMetricValue(row[industry]) : ''}</strong>
+                      </div>
+                    </td>
+                  ))}
+                  <td className="total-cell">{formatMetricValue(row.Total)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total</td>
+                {industries.map((industry) => (
+                  <td key={industry}>{formatMetricValue(columnTotals[industry] || 0)}</td>
+                ))}
+                <td>{formatMetricValue(columnTotals.Total || 0)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    );
+  }
+
+  if (widget.type === 'miceVisitorsBreakdown') {
+    const breakdown = fixedProfile.breakdown || {};
+    const nationalityRows = breakdown.nationality || [];
+    const industryRows = breakdown.industry || [];
+    const quarterRows = breakdown.quarter || [];
+    const total = breakdown.total || 0;
+
+    return (
+      <div className="fixed-mice-breakdown">
+        <div className="fixed-mice-chart-title fixed-mice-chart-title-breakdown">MICE Visitors Breakdown</div>
+        <div className="fixed-mice-breakdown-root">
+          <div className="breakdown-root-card">
+            <strong>This Year</strong>
+            <span>{formatMetricValue(total)}</span>
+          </div>
+          <div className="breakdown-column">
+            <div className="breakdown-column-title">Nationality</div>
+            {nationalityRows.map((row) => (
+              <div key={row.label} className="breakdown-node">
+                <span>{row.label}</span>
+                <strong>{formatMetricValue(row.value)}</strong>
+                <div className="breakdown-track">
+                  <i style={{ width: `${Math.max(6, (row.value / nationalityRows[0].value) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="breakdown-column">
+            <div className="breakdown-column-title">Industry</div>
+            {industryRows.map((row) => (
+              <div key={row.label} className="breakdown-node">
+                <span>{row.label}</span>
+                <strong>{formatMetricValue(row.value)}</strong>
+                <div className="breakdown-track">
+                  <i style={{ width: `${Math.max(6, (row.value / industryRows[0].value) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="breakdown-column">
+            <div className="breakdown-column-title">Quarter</div>
+            {quarterRows.map((row) => (
+              <div key={row.label} className="breakdown-node">
+                <span>{row.label}</span>
+                <strong>{formatMetricValue(row.value)}</strong>
+                <div className="breakdown-track">
+                  <i style={{ width: `${Math.max(6, (row.value / quarterRows[0].value) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (widget.type === 'line' || widget.type === 'bar' || widget.type === 'chart') {
     const xField = widget.mapping?.xField;
     const yFields = widget.mapping?.yFields || [];
+    const chartKind = widget.type === 'chart' ? widget.mapping?.chartKind || 'line' : widget.type;
+    const chartRows = buildChartRows(records, widget);
 
     if (!xField || !yFields.length) {
       return <p className="empty-note">Configure x-axis and y-axis fields.</p>;
     }
 
-    const Chart = widget.type === 'line' ? LineChart : BarChart;
-    const SeriesComponent = widget.type === 'line' ? Line : Bar;
+    if (!chartRows.length) {
+      return <p className="empty-note">No data available for the selected configuration.</p>;
+    }
+
+    const Chart =
+      chartKind === 'area'
+        ? AreaChart
+        : chartKind === 'line'
+          ? LineChart
+          : BarChart;
 
     return (
       <ResponsiveContainer width="100%" height="100%">
-        <Chart data={records}>
+        <Chart data={chartRows}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey={xField} />
-          <YAxis />
-          <Tooltip />
+          <YAxis tickFormatter={formatAxisTickValue} />
+          <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
           <Legend />
           {yFields.map((fieldKey, index) => (
-            <SeriesComponent
-              key={fieldKey}
-              type={widget.type === 'line' ? 'monotone' : undefined}
-              dataKey={fieldKey}
-              name={fieldsByKey[fieldKey]?.label || fieldKey}
-              stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
-              fill={SERIES_COLORS[index % SERIES_COLORS.length]}
-              strokeWidth={widget.type === 'line' ? 3 : undefined}
-            />
+            chartKind === 'area' ? (
+              <Area
+                key={fieldKey}
+                type="monotone"
+                dataKey={fieldKey}
+                name={fieldsByKey[fieldKey]?.label || fieldKey}
+                stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
+                fill={SERIES_COLORS[index % SERIES_COLORS.length]}
+                fillOpacity={0.18}
+                strokeWidth={3}
+              />
+            ) : chartKind === 'line' ? (
+              <Line
+                key={fieldKey}
+                type="monotone"
+                dataKey={fieldKey}
+                name={fieldsByKey[fieldKey]?.label || fieldKey}
+                stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
+                strokeWidth={3}
+                dot={{ r: 3 }}
+              />
+            ) : (
+              <Bar
+                key={fieldKey}
+                dataKey={fieldKey}
+                name={fieldsByKey[fieldKey]?.label || fieldKey}
+                stroke={SERIES_COLORS[index % SERIES_COLORS.length]}
+                fill={SERIES_COLORS[index % SERIES_COLORS.length]}
+                stackId={chartKind === 'stackedBar' ? 'stack' : undefined}
+                radius={chartKind === 'stackedBar' ? [4, 4, 0, 0] : [4, 4, 0, 0]}
+              />
+            )
           ))}
         </Chart>
       </ResponsiveContainer>
@@ -405,6 +1016,57 @@ export default function WidgetRenderer({ widget, dataset }) {
             </span>
           ) : null}
           <span>{widget.mapping?.helperText || fieldsByKey[metricField]?.label || 'Total'}</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (widget.type === 'kpiCard') {
+    const displayMode = widget.mapping?.displayMode || 'metric';
+    const tone = resolveSummaryTheme(widget.mapping?.colorTheme, 'neutral');
+
+    if (displayMode === 'label') {
+      const topRow = buildTopLabelRow(records, widget.mapping);
+      const helperText = widget.mapping?.helperText || fieldsByKey[widget.mapping?.groupField]?.label || 'Top label';
+
+      return (
+        <div className={`summary-card summary-card-${tone} kpi-card kpi-card-label`}>
+          <div className="summary-card-header">
+            <span>{widget.title || 'KPI'}</span>
+            <span className="summary-card-link" aria-hidden="true">
+              ↗
+            </span>
+          </div>
+          <strong>{topRow?.label || '-'}</strong>
+          <div className="summary-card-footer">
+            <span>{helperText}</span>
+            {topRow ? <span className="kpi-card-subvalue">{formatMetricValue(topRow.value)}</span> : null}
+          </div>
+        </div>
+      );
+    }
+
+    const metricField = widget.mapping?.metricField;
+    const aggregation = widget.mapping?.aggregation || 'sum';
+
+    if (!metricField && aggregation !== 'count') {
+      return <p className="empty-note">Configure metric field.</p>;
+    }
+
+    const metricValue = aggregateRecords(records, metricField, aggregation);
+    const helperText = widget.mapping?.helperText || fieldsByKey[metricField]?.label || 'Total';
+
+    return (
+      <div className={`summary-card summary-card-${tone} kpi-card`}>
+        <div className="summary-card-header">
+          <span>{widget.title || 'KPI'}</span>
+          <span className="summary-card-link" aria-hidden="true">
+            ↗
+          </span>
+        </div>
+        <strong>{formatMetricValue(metricValue)}</strong>
+        <div className="summary-card-footer">
+          <span>{helperText}</span>
         </div>
       </div>
     );

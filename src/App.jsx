@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
@@ -11,13 +11,30 @@ const MIN_W = 2;
 const MIN_H = 2;
 const MIN_CANVAS_ROWS = 20;
 const CANVAS_GROWTH_PADDING = 8;
+const GRID_SUBDIVISIONS = 8;
 const PRINT_PAGE_MARGIN_MM = 12;
 const PX_PER_MM = 96 / 25.4;
 const MM_PER_PX = 25.4 / 96;
 const LOCAL_STORAGE_KEY = 'bi-dashboard.workspace.v1';
 const TEXT_WIDGET_TYPES = ['textbox'];
-const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard'];
-const hasConfigPopup = (type) => hasDatasetTarget(type) || TEXT_WIDGET_TYPES.includes(type);
+const NO_CONFIG_WIDGET_TYPES = [
+  'miceEventsChart',
+  'miceRevenueChart',
+  'miceVisitorsChart',
+  'miceKpis',
+  'miceNationalityPerformance',
+  'miceNationalityIndustryMatrix',
+  'miceVisitorsBreakdown'
+];
+const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
+const MICE_FILTER_DEFAULTS = {
+  market: 'International',
+  yearMode: 'calendar',
+  year: 2025,
+  industry: 'all',
+  country: 'all'
+};
+const hasConfigPopup = (type) => !NO_CONFIG_WIDGET_TYPES.includes(type) && (hasDatasetTarget(type) || TEXT_WIDGET_TYPES.includes(type));
 const isInteractiveTarget = (target) =>
   Boolean(target.closest('button') || target.closest('input') || target.closest('select') || target.closest('textarea') || target.closest('.checkbox-item'));
 const EXPRESSION_SNIPPETS = [
@@ -143,6 +160,140 @@ const ToolbarIcon = ({ name }) => {
   }
 };
 
+const WidgetThumbnail = ({ type }) => {
+  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' };
+
+  switch (type) {
+    case 'miceEventsChart':
+    case 'miceRevenueChart':
+    case 'miceVisitorsChart':
+    case 'chart':
+    case 'line':
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <path {...common} d="M6 19l4-4 4 2 6-7 2 1" />
+          <circle cx="10" cy="15" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="14" cy="17" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="20" cy="10" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'bar':
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <rect x="7" y="14" width="3" height="6" rx="1" fill="currentColor" stroke="none" />
+          <rect x="12" y="10" width="3" height="10" rx="1" fill="currentColor" stroke="none" />
+          <rect x="17" y="7" width="3" height="13" rx="1" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case 'pie':
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <path {...common} d="M14 8a6 6 0 1 0 6 6h-6Z" />
+          <path {...common} d="M14 8v6h6" />
+        </svg>
+      );
+    case 'miceKpis':
+    case 'kpiCard':
+    case 'summaryCard':
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <rect x="6" y="7" width="6" height="6" rx="1.5" fill="currentColor" stroke="none" />
+          <rect x="16" y="7" width="6" height="6" rx="1.5" fill="currentColor" stroke="none" opacity="0.7" />
+          <rect x="6" y="15" width="16" height="5" rx="1.5" fill="currentColor" stroke="none" opacity="0.4" />
+        </svg>
+      );
+    case 'miceNationalityPerformance':
+    case 'miceNationalityIndustryMatrix':
+    case 'table':
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <path {...common} d="M6 10h16" />
+          <path {...common} d="M6 15h16" />
+          <path {...common} d="M11 7v14" />
+          <path {...common} d="M18 7v14" />
+        </svg>
+      );
+    case 'miceVisitorsBreakdown':
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <path {...common} d="M6 18c3-8 6-8 9-3s6 5 7 1" />
+          <circle cx="9" cy="16" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none" />
+          <circle cx="20" cy="15" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 28 28" aria-hidden="true">
+          <rect x="3" y="4" width="22" height="20" rx="4" />
+          <path {...common} d="M7 10h14M7 15h10M7 20h7" />
+        </svg>
+      );
+  }
+};
+
+const PaletteWidgetThumbnail = ({ type }) => {
+  if (type === 'miceEventsChart' || type === 'miceRevenueChart' || type === 'miceVisitorsChart' || type === 'chart' || type === 'line' || type === 'bar') {
+    return (
+      <div className="palette-thumb palette-thumb-chart" aria-hidden="true">
+        <span className="palette-thumb-bars">
+          <i />
+          <i />
+          <i />
+          <i />
+        </span>
+        <svg viewBox="0 0 40 24" aria-hidden="true">
+          <path d="M2 18L10 15L18 9L26 11L34 5L38 7" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (type === 'miceKpis' || type === 'kpiCard' || type === 'summaryCard') {
+    return (
+      <div className="palette-thumb palette-thumb-kpi" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    );
+  }
+
+  if (type === 'miceNationalityPerformance' || type === 'miceNationalityIndustryMatrix' || type === 'table') {
+    return (
+      <div className="palette-thumb palette-thumb-table" aria-hidden="true">
+        <span className="row" />
+        <span className="row" />
+        <span className="row" />
+        <span className="row" />
+      </div>
+    );
+  }
+
+  if (type === 'miceVisitorsBreakdown') {
+    return (
+      <div className="palette-thumb palette-thumb-breakdown" aria-hidden="true">
+        <span className="root" />
+        <span className="branch a" />
+        <span className="branch b" />
+        <span className="branch c" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="palette-thumb palette-thumb-generic" aria-hidden="true">
+      <span />
+    </div>
+  );
+};
+
 const getFieldGroups = (dataset) => {
   const fields = dataset?.fields || [];
   const numericFields = fields.filter((field) => field.type === 'number');
@@ -151,38 +302,37 @@ const getFieldGroups = (dataset) => {
   return { numericFields, dimensionFields };
 };
 
-const isDatasetCompatible = (widgetType, dataset) => {
-  if (!dataset) return false;
-
-  const { numericFields, dimensionFields } = getFieldGroups(dataset);
-
-  if (['line', 'bar', 'pie', 'treemap', 'rankingList'].includes(widgetType)) {
-    return numericFields.length > 0 && dimensionFields.length > 0;
-  }
-
-  if (widgetType === 'summaryCard') {
-    return numericFields.length > 0;
-  }
-
-  if (widgetType === 'table') {
-    return dataset.fields.length > 0;
-  }
-
-  return false;
-};
-
 const buildDefaultMapping = (widgetType, dataset) => {
   if (!dataset) return {};
+
+  if (NO_CONFIG_WIDGET_TYPES.includes(widgetType)) {
+    return {};
+  }
 
   const { numericFields, dimensionFields } = getFieldGroups(dataset);
   const primaryDimension = dimensionFields[0]?.key || '';
   const secondaryDimension = dimensionFields[1]?.key || '';
   const yFields = numericFields.slice(0, 2).map((field) => field.key);
+  const metricFields = numericFields.filter((field) => !['year', 'quarter'].includes(field.key));
+  const firstMetric = metricFields[0]?.key || numericFields[0]?.key || '';
+  const secondMetric = metricFields[1]?.key || numericFields[1]?.key || '';
+  const isMiceDataset = dataset.id === 'miceStatistics';
+  const isAverageMetric = ['avgStayDays', 'avgSpendPerTrip', 'avgSpendPerDay'].includes(firstMetric);
+
+  if (widgetType === 'chart') {
+    return {
+      chartKind: 'line',
+      xField: isMiceDataset ? 'quarterLabel' : primaryDimension,
+      yFields: isMiceDataset ? [firstMetric || 'miceEvents'] : yFields.length ? yFields : [firstMetric],
+      aggregation: isAverageMetric ? 'avg' : 'sum'
+    };
+  }
 
   if (widgetType === 'line' || widgetType === 'bar') {
     return {
-      xField: primaryDimension,
-      yFields: yFields.length ? yFields : numericFields.slice(0, 1).map((field) => field.key)
+      xField: isMiceDataset ? 'quarterLabel' : primaryDimension,
+      yFields: isMiceDataset ? [firstMetric || 'miceEvents'] : yFields.length ? yFields : [firstMetric],
+      aggregation: isAverageMetric ? 'avg' : 'sum'
     };
   }
 
@@ -203,11 +353,23 @@ const buildDefaultMapping = (widgetType, dataset) => {
 
   if (widgetType === 'summaryCard') {
     return {
-      metricField: numericFields[0]?.key || '',
+      metricField: firstMetric,
       aggregation: 'sum',
-      comparisonField: numericFields[1]?.key || '',
+      comparisonField: secondMetric,
       helperText: 'Increased from last month',
       colorTheme: 'auto'
+    };
+  }
+
+  if (widgetType === 'kpiCard') {
+    return {
+      displayMode: 'metric',
+      metricField: firstMetric,
+      aggregation: isAverageMetric ? 'avg' : 'sum',
+      helperText: metricFields[0]?.label || numericFields[0]?.label || 'Total',
+      colorTheme: 'auto',
+      groupField: isMiceDataset ? 'country' : primaryDimension,
+      valueField: firstMetric
     };
   }
 
@@ -229,20 +391,59 @@ const buildDefaultMapping = (widgetType, dataset) => {
   return {};
 };
 
+const widgetTemplateMap = Object.fromEntries(widgetCatalog.map((widget) => [widget.type, widget]));
+
+const getFixedDatasetId = (widgetType) => widgetTemplateMap[widgetType]?.dataset || '';
+
+const normalizeWidget = (widget) => {
+  const template = widgetTemplateMap[widget.type];
+  const fixedDatasetId = template?.dataset || '';
+  const shouldDisablePreview = NO_CONFIG_WIDGET_TYPES.includes(widget.type);
+
+  if (TEXT_WIDGET_TYPES.includes(widget.type) || !template) {
+    return {
+      ...widget,
+      dataset: widget.dataset || '',
+      mapping: widget.mapping ? { ...widget.mapping } : {},
+      textStyle: widget.textStyle ? { ...widget.textStyle } : {},
+      preview: shouldDisablePreview ? false : Boolean(widget.preview)
+    };
+  }
+
+  const fixedDataset = datasetLibrary[fixedDatasetId];
+  const shouldResetMapping = widget.dataset !== fixedDatasetId || !widget.mapping;
+  const defaultMapping = buildDefaultMapping(widget.type, fixedDataset);
+
+  return {
+    ...widget,
+    dataset: fixedDatasetId,
+    mapping: shouldResetMapping ? defaultMapping : { ...defaultMapping, ...widget.mapping },
+    textStyle: widget.textStyle ? { ...widget.textStyle } : {},
+    preview: shouldDisablePreview ? false : Boolean(widget.preview),
+    autoHeight: TEXT_WIDGET_TYPES.includes(widget.type) ? widget.autoHeight !== false : widget.autoHeight,
+    heightPx: TEXT_WIDGET_TYPES.includes(widget.type) ? widget.heightPx ?? null : widget.heightPx
+  };
+};
+
 const createWidget = (prev, template, x, y, overrides = {}) => {
   const index = prev.filter((item) => item.type === template.type).length + 1;
   const isTextWidget = TEXT_WIDGET_TYPES.includes(template.type);
   const isSummaryWidget = template.type === 'summaryCard';
-  const dataset = datasetLibrary[overrides.dataset || template.dataset];
+  const isKpiWidget = template.type === 'kpiCard';
+  const isChartWidget = template.type === 'chart' || template.type === 'line' || template.type === 'bar';
+  const datasetId = isTextWidget ? '' : template.dataset || '';
+  const dataset = datasetLibrary[datasetId];
+  const shouldDisablePreview = NO_CONFIG_WIDGET_TYPES.includes(template.type);
   const title = overrides.titleLabel?.trim() || `${template.title} ${index}`;
+  const defaultMapping = overrides.mapping || buildDefaultMapping(template.type, dataset);
 
   return {
     id: crypto.randomUUID(),
     type: template.type,
     title,
-    dataset: overrides.dataset || template.dataset || '',
-    mapping: overrides.mapping || buildDefaultMapping(template.type, dataset),
-    preview: overrides.preview || false,
+    dataset: datasetId,
+    mapping: defaultMapping,
+    preview: shouldDisablePreview ? false : overrides.preview || false,
     fontSize: overrides.fontSize || 28,
     expression: overrides.expression || (isTextWidget ? title : ''),
     textStyle: overrides.textStyle || {
@@ -253,28 +454,30 @@ const createWidget = (prev, template, x, y, overrides = {}) => {
     textAlign: overrides.textAlign || 'center',
     x,
     y,
-    w: overrides.w || (isSummaryWidget ? 3 : 4),
-    h: overrides.h || (isTextWidget || isSummaryWidget ? 2 : 5)
+    w: overrides.w || template.defaultW || (isKpiWidget ? 3 : isSummaryWidget ? 3 : isChartWidget ? 6 : 4),
+    h: overrides.h || template.defaultH || (isTextWidget || isSummaryWidget || isKpiWidget ? 2 : isChartWidget ? 5 : 5),
+    autoHeight: isTextWidget ? overrides.autoHeight !== false : undefined,
+    heightPx: isTextWidget ? overrides.heightPx || null : undefined
   };
 };
 
 const cloneWidget = (widget) => ({
-  ...widget,
-  mapping: widget.mapping ? { ...widget.mapping } : {},
-  textStyle: widget.textStyle ? { ...widget.textStyle } : {}
+  ...normalizeWidget(widget)
 });
 
 const cloneWidgets = (widgets) => widgets.map((widget) => cloneWidget(widget));
 
-const createDashboard = (name, widgets = []) => ({
+const createDashboard = (name, widgets = [], options = {}) => ({
   id: crypto.randomUUID(),
   name,
-  widgets: cloneWidgets(widgets)
+  widgets: cloneWidgets(widgets),
+  filters: options.filters ? { ...options.filters } : undefined
 });
 
 const cloneDashboard = (dashboard) => ({
   ...dashboard,
-  widgets: cloneWidgets(dashboard.widgets || [])
+  widgets: cloneWidgets(dashboard.widgets || []),
+  filters: dashboard.filters ? { ...dashboard.filters } : undefined
 });
 
 const cloneWorkspace = (workspace) => ({
@@ -302,37 +505,33 @@ const normalizeImportedDashboard = (value) => {
       typeof dashboardValue.name === 'string' && dashboardValue.name.trim()
         ? dashboardValue.name.trim()
         : 'Imported Dashboard',
-    widgets: cloneWidgets(dashboardValue.widgets)
+    widgets: cloneWidgets(dashboardValue.widgets),
+    filters: dashboardValue.filters ? { ...dashboardValue.filters } : undefined
   };
 };
 
-const lineTemplate = widgetCatalog.find((widget) => widget.type === 'line');
-const barTemplate = widgetCatalog.find((widget) => widget.type === 'bar');
-const tableTemplate = widgetCatalog.find((widget) => widget.type === 'table');
+const miceEventsChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceEventsChart');
+const miceRevenueChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceRevenueChart');
+const miceVisitorsChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsChart');
+const miceKpisTemplate = widgetCatalog.find((widget) => widget.type === 'miceKpis');
+const miceNationalityPerformanceTemplate = widgetCatalog.find((widget) => widget.type === 'miceNationalityPerformance');
+const miceNationalityIndustryMatrixTemplate = widgetCatalog.find((widget) => widget.type === 'miceNationalityIndustryMatrix');
+const miceVisitorsBreakdownTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsBreakdown');
 
 const initialWidgets = [
-  createWidget([], lineTemplate, 0, 0, {
-    titleLabel: 'Revenue Trend 1',
-    dataset: 'monthlyBusiness',
-    w: 6,
-    h: 5
-  }),
-  createWidget([{ type: 'line' }], barTemplate, 6, 0, {
-    titleLabel: 'Regional Performance 1',
-    dataset: 'regionalPerformance',
-    w: 6,
-    h: 5
-  }),
-  createWidget([{ type: 'line' }, { type: 'bar' }], tableTemplate, 0, 5, {
-    titleLabel: 'Order Records 1',
-    dataset: 'orderRecords',
-    w: 8,
-    h: 5
-  })
+  createWidget([], miceEventsChartTemplate, 0, 0),
+  createWidget([{ type: 'miceEventsChart' }], miceRevenueChartTemplate, 0, 7),
+  createWidget([{ type: 'miceRevenueChart' }], miceVisitorsChartTemplate, 0, 14),
+  createWidget([{ type: 'miceVisitorsChart' }], miceKpisTemplate, 0, 21),
+  createWidget([{ type: 'miceKpis' }], miceNationalityPerformanceTemplate, 0, 24),
+  createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 33),
+  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 41)
 ];
 
 const createDefaultWorkspace = () => {
-  const dashboard = createDashboard('Dashboard 1', initialWidgets);
+  const dashboard = createDashboard('MICE Statistics', initialWidgets, {
+    filters: { ...MICE_FILTER_DEFAULTS }
+  });
 
   return {
     dashboards: [dashboard],
@@ -358,7 +557,8 @@ const normalizeWorkspace = (value) => {
             typeof dashboard.name === 'string' && dashboard.name.trim()
               ? dashboard.name.trim()
               : `Dashboard ${index + 1}`,
-          widgets: Array.isArray(dashboard.widgets) ? cloneWidgets(dashboard.widgets) : []
+          widgets: Array.isArray(dashboard.widgets) ? cloneWidgets(dashboard.widgets) : [],
+          filters: dashboard.filters ? { ...dashboard.filters } : undefined
         }))
     : [];
 
@@ -389,6 +589,31 @@ const loadWorkspaceFromStorage = () => {
 const hasDatasetTarget = (type) => !TEXT_WIDGET_TYPES.includes(type);
 const MAX_HISTORY_ENTRIES = 50;
 
+const MICE_DATASET = datasetLibrary.miceStatistics;
+const MICE_FILTER_OPTIONS = {
+  years: Array.from(new Set((MICE_DATASET?.records || []).map((record) => record.year))).sort((a, b) => a - b),
+  industries: Array.from(new Set((MICE_DATASET?.records || []).map((record) => record.industry))).sort(),
+  countries: Array.from(new Set((MICE_DATASET?.records || []).map((record) => record.country))).sort()
+};
+
+const applyMiceFilters = (records, filters = {}, options = {}) => {
+  const market = options.forceInternationalOnly ? 'International' : filters.market;
+  const yearMode = filters.yearMode;
+  const year = Number(filters.year);
+  const industry = filters.industry;
+  const country = filters.country;
+
+  return (records || []).filter((record) => {
+    if (market && market !== 'all' && record.market !== market) return false;
+    if (yearMode && yearMode !== 'all' && record.yearMode !== yearMode) return false;
+    if (!Number.isNaN(year) && year && Number(record.year) !== year) return false;
+    if (industry && industry !== 'all' && record.industry !== industry) return false;
+    if (country && country !== 'all' && record.country !== country) return false;
+
+    return true;
+  });
+};
+
 const getA4LandscapeFitScale = (contentWidthPx, contentHeightPx) => {
   const pageWidthPx = (297 - PRINT_PAGE_MARGIN_MM * 2) * PX_PER_MM;
   const pageHeightPx = (210 - PRINT_PAGE_MARGIN_MM * 2) * PX_PER_MM;
@@ -416,9 +641,8 @@ export default function App() {
   const [action, setAction] = useState(null);
   const [hoverGrid, setHoverGrid] = useState(null);
   const [readOnly, setReadOnly] = useState(true);
-  const [dropTargetWidgetId, setDropTargetWidgetId] = useState(null);
+  const [viewMode, setViewMode] = useState('list');
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
-  const [datasourceCollapsed, setDatasourceCollapsed] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [activeConfigWidgetId, setActiveConfigWidgetId] = useState(null);
   const [selectedWidgetIds, setSelectedWidgetIds] = useState([]);
@@ -436,7 +660,6 @@ export default function App() {
   const widgets = activeDashboard?.widgets || [];
   const effectiveSidebarHidden = readOnly || sidebarHidden;
   const cellWidth = GRID_COL_WIDTH;
-  const datasourceList = useMemo(() => Object.values(datasetLibrary), []);
   const maxOccupiedCol = useMemo(() => {
     if (!widgets.length) return MIN_GRID_COLS;
     return Math.max(...widgets.map((widget) => widget.x + widget.w), MIN_GRID_COLS);
@@ -464,6 +687,18 @@ export default function App() {
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
   const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
   const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
+  const activeDashboardFilters = activeDashboard?.filters || null;
+  const shouldRenderDashboardFilters = Boolean(activeDashboardFilters);
+  const dashboardFiltersHeight = shouldRenderDashboardFilters ? 168 : 0;
+  const dashboardCards = dashboards.map((dashboard) => {
+    const dashboardWidgetCount = dashboard.widgets?.length || 0;
+    const previewWidgets = (dashboard.widgets || []).slice(0, 3).map((widget) => widget.title || widget.type);
+    return {
+      ...dashboard,
+      widgetCount: dashboardWidgetCount,
+      previewWidgets
+    };
+  });
 
   const getWidgetRect = (widget) => ({
     x: widget.x * cellWidth + canvasShiftX,
@@ -484,7 +719,6 @@ export default function App() {
   const clearTransientSelectionState = () => {
     setActiveConfigWidgetId(null);
     setSelectedWidgetIds([]);
-    setDropTargetWidgetId(null);
     setSelectionBox(null);
     setHoverGrid(null);
     setAction(null);
@@ -783,14 +1017,97 @@ export default function App() {
     );
   };
 
+  const updateActiveDashboardFilters = (patch) => {
+    if (!activeDashboardFilters) return;
+
+    updateActiveDashboard((dashboard) => ({
+      ...dashboard,
+      filters: {
+        ...MICE_FILTER_DEFAULTS,
+        ...(dashboard.filters || {}),
+        ...patch
+      }
+    }));
+  };
+
+  const clearActiveDashboardFilters = () => {
+    if (!activeDashboardFilters) return;
+
+    updateActiveDashboard((dashboard) => ({
+      ...dashboard,
+      filters: { ...MICE_FILTER_DEFAULTS }
+    }));
+  };
+
+  const getWidgetRecords = (widget, dataset) => {
+    if (!dataset?.records?.length) return [];
+    if (dataset.id !== 'miceStatistics') return dataset.records;
+
+    const filteredRecords = applyMiceFilters(dataset.records, activeDashboardFilters || MICE_FILTER_DEFAULTS, {
+      forceInternationalOnly: Boolean(widget.mapping?.forceInternationalOnly)
+    });
+
+    return filteredRecords;
+  };
+
+  useLayoutEffect(() => {
+    if (!canvasRef.current) return undefined;
+
+    const textboxUpdates = {};
+
+    widgets.forEach((widget) => {
+      if (widget.type !== 'textbox' || widget.autoHeight === false) return;
+
+      const card = canvasRef.current.querySelector(`.widget-card[data-widget-id="${widget.id}"]`);
+      if (!(card instanceof HTMLElement)) return;
+
+      const label = card.querySelector('.label-widget.textbox-widget');
+      if (!(label instanceof HTMLElement)) return;
+
+      const visual = card.querySelector('.widget-visual');
+      const content = card.querySelector('.widget-content');
+      const visualPadding =
+        visual instanceof HTMLElement
+          ? 0
+          : 0;
+      const contentPadding = content instanceof HTMLElement ? 14 : 14;
+      const desiredHeight = Math.max(56, Math.ceil(label.scrollHeight + contentPadding + visualPadding));
+
+      if (!widget.heightPx || Math.abs(widget.heightPx - desiredHeight) > 1) {
+        textboxUpdates[widget.id] = {
+          heightPx: desiredHeight,
+          h: Math.max(MIN_H, Math.ceil(desiredHeight / GRID_ROW_HEIGHT))
+        };
+      }
+    });
+
+    const updateIds = Object.keys(textboxUpdates);
+    if (!updateIds.length) return undefined;
+
+    setWidgets(
+      (prev) =>
+        prev.map((widget) =>
+          textboxUpdates[widget.id]
+            ? {
+                ...widget,
+                ...textboxUpdates[widget.id]
+              }
+            : widget
+        ),
+      { recordHistory: false }
+    );
+
+    return undefined;
+  }, [widgets, canvasWidth, canvasShiftX, readOnly]);
+
   useEffect(() => {
     if (!action || readOnly) return undefined;
 
     const onMove = (event) => {
       const deltaX = event.clientX - action.startX;
       const deltaY = event.clientY - action.startY;
-      const snapX = Math.round(deltaX / cellWidth);
-      const snapY = Math.round(deltaY / GRID_ROW_HEIGHT);
+      const snapX = Math.round(deltaX / (cellWidth / GRID_SUBDIVISIONS)) / GRID_SUBDIVISIONS;
+      const snapY = Math.round(deltaY / (GRID_ROW_HEIGHT / GRID_SUBDIVISIONS)) / GRID_SUBDIVISIONS;
 
       if (action.kind === 'marquee') {
         if (!canvasRef.current) return;
@@ -827,6 +1144,19 @@ export default function App() {
                 ...item,
                 x: Math.max(0, action.origin.x + snapX),
                 y: Math.max(0, action.origin.y + snapY)
+              };
+            }
+
+            if (item.type === 'textbox') {
+              const baseHeightPx = action.origin.heightPx || action.origin.h * GRID_ROW_HEIGHT;
+              const nextHeightPx = Math.max(56, baseHeightPx + deltaY);
+
+              return {
+                ...item,
+                autoHeight: false,
+                w: Math.max(MIN_W, action.origin.w + snapX),
+                heightPx: nextHeightPx,
+                h: Math.max(MIN_H, Math.ceil(nextHeightPx / GRID_ROW_HEIGHT))
               };
             }
 
@@ -884,9 +1214,6 @@ export default function App() {
     };
   }, [action, cellWidth, readOnly, widgets]);
 
-  const getCompatibleDatasets = (widgetType) =>
-    datasourceList.filter((dataset) => isDatasetCompatible(widgetType, dataset));
-
   const onPaletteDragStart = (event, type) => {
     if (readOnly) {
       event.preventDefault();
@@ -894,16 +1221,6 @@ export default function App() {
     }
 
     event.dataTransfer.setData('widget/type', type);
-    event.dataTransfer.effectAllowed = 'copy';
-  };
-
-  const onDatasourceDragStart = (event, datasetId) => {
-    if (readOnly) {
-      event.preventDefault();
-      return;
-    }
-
-    event.dataTransfer.setData('datasource/id', datasetId);
     event.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -1155,27 +1472,14 @@ export default function App() {
     );
   };
 
-  const assignDatasourceToWidget = (widgetId, datasetId) => {
-    const dataset = datasetLibrary[datasetId];
-
-    setWidgets((prev) =>
-      prev.map((item) => {
-        if (item.id !== widgetId) return item;
-        if (!isDatasetCompatible(item.type, dataset)) return item;
-
-        return {
-          ...item,
-          dataset: datasetId,
-          mapping: buildDefaultMapping(item.type, dataset)
-        };
-      })
-    );
-  };
-
   const toggleWidgetPreview = (id) => {
     if (readOnly) return;
     setWidgets((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, preview: !item.preview } : item))
+      prev.map((item) =>
+        item.id === id && !NO_CONFIG_WIDGET_TYPES.includes(item.type)
+          ? { ...item, preview: !item.preview }
+          : item
+      )
     );
   };
 
@@ -1194,6 +1498,17 @@ export default function App() {
       activeDashboardId: dashboardId
     }));
     clearTransientSelectionState();
+  };
+
+  const openDashboardDetail = (dashboardId) => {
+    selectDashboard(dashboardId);
+    setReadOnly(false);
+    setViewMode('detail');
+  };
+
+  const openDashboardList = () => {
+    clearTransientSelectionState();
+    setViewMode('list');
   };
 
   const renameActiveDashboard = (name) => {
@@ -1215,17 +1530,22 @@ export default function App() {
       activeDashboardId: newDashboard.id
     }));
     clearTransientSelectionState();
+    setViewMode('detail');
+    setReadOnly(false);
   };
 
   const duplicateActiveDashboard = () => {
     if (readOnly || !activeDashboard) return;
 
-    const duplicatedDashboard = createDashboard(`${activeDashboard.name} Copy`, activeDashboard.widgets);
+    const duplicatedDashboard = createDashboard(`${activeDashboard.name} Copy`, activeDashboard.widgets, {
+      filters: activeDashboard.filters
+    });
     updateWorkspace((prev) => ({
       dashboards: [...prev.dashboards, duplicatedDashboard],
       activeDashboardId: duplicatedDashboard.id
     }));
     clearTransientSelectionState();
+    setViewMode('detail');
   };
 
   const deleteActiveDashboard = () => {
@@ -1239,6 +1559,7 @@ export default function App() {
       };
     });
     clearTransientSelectionState();
+    setViewMode('detail');
   };
 
   const renderMappingControls = (widget, dataset) => {
@@ -1246,11 +1567,27 @@ export default function App() {
 
     const { numericFields, dimensionFields } = getFieldGroups(dataset);
 
-    if (widget.type === 'line' || widget.type === 'bar') {
+    if (widget.type === 'line' || widget.type === 'bar' || widget.type === 'chart') {
       const yFields = widget.mapping?.yFields || [];
+      const selectedSeriesCount = yFields.length;
 
       return (
         <div className="mapping-grid">
+          {widget.type === 'chart' ? (
+            <label>
+              <span>Chart Type</span>
+              <select
+                value={widget.mapping?.chartKind || 'line'}
+                onChange={(event) => updateWidgetMapping(widget.id, { chartKind: event.target.value })}
+              >
+                <option value="line">Line</option>
+                <option value="bar">Bar</option>
+                <option value="area">Area</option>
+                <option value="stackedBar">Stacked Bar</option>
+              </select>
+            </label>
+          ) : null}
+
           <label>
             <span>X-Axis</span>
             <select
@@ -1266,13 +1603,17 @@ export default function App() {
           </label>
 
           <div className="mapping-group">
-            <span>Y-Axis Series</span>
+            <div className="mapping-group-header">
+              <span>Y-Axis Series</span>
+              <small>{selectedSeriesCount} selected</small>
+            </div>
+            <p className="mapping-group-note">Choose one or more measures to plot on the same chart.</p>
             <div className="checkbox-list">
               {numericFields.map((field) => {
                 const checked = yFields.includes(field.key);
 
                 return (
-                  <label key={field.key} className="checkbox-item">
+                  <label key={field.key} className={`checkbox-item ${checked ? 'checked' : ''}`}>
                     <input
                       type="checkbox"
                       checked={checked}
@@ -1324,6 +1665,20 @@ export default function App() {
                   {field.label}
                 </option>
               ))}
+            </select>
+          </label>
+
+          <label>
+            <span>Aggregation</span>
+            <select
+              value={widget.mapping?.aggregation || 'sum'}
+              onChange={(event) => updateWidgetMapping(widget.id, { aggregation: event.target.value })}
+            >
+              <option value="sum">Sum</option>
+              <option value="avg">Average</option>
+              <option value="min">Minimum</option>
+              <option value="max">Maximum</option>
+              <option value="count">Count Rows</option>
             </select>
           </label>
         </div>
@@ -1454,6 +1809,126 @@ export default function App() {
       );
     }
 
+    if (widget.type === 'kpiCard') {
+      return (
+        <div className="mapping-grid">
+          <label>
+            <span>Display Mode</span>
+            <select
+              value={widget.mapping?.displayMode || 'metric'}
+              onChange={(event) => updateWidgetMapping(widget.id, { displayMode: event.target.value })}
+            >
+              <option value="metric">Metric</option>
+              <option value="label">Top Label</option>
+            </select>
+          </label>
+
+          {widget.mapping?.displayMode === 'label' ? (
+            <>
+              <label>
+                <span>Group Field</span>
+                <select
+                  value={widget.mapping?.groupField || ''}
+                  onChange={(event) => updateWidgetMapping(widget.id, { groupField: event.target.value })}
+                >
+                  {dimensionFields.map((field) => (
+                    <option key={field.key} value={field.key}>
+                      {field.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Value Field</span>
+                <select
+                  value={widget.mapping?.valueField || ''}
+                  onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
+                >
+                  {numericFields.map((field) => (
+                    <option key={field.key} value={field.key}>
+                      {field.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Top N</span>
+                <input
+                  type="number"
+                  min="1"
+                  max={dataset.records.length}
+                  value={widget.mapping?.limit || 1}
+                  onChange={(event) =>
+                    updateWidgetMapping(widget.id, {
+                      limit: Math.max(1, Math.min(dataset.records.length, Number(event.target.value) || 1))
+                    })
+                  }
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label>
+                <span>Metric Field</span>
+                <select
+                  value={widget.mapping?.metricField || ''}
+                  onChange={(event) => updateWidgetMapping(widget.id, { metricField: event.target.value })}
+                >
+                  {numericFields.map((field) => (
+                    <option key={field.key} value={field.key}>
+                      {field.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>Aggregation</span>
+                <select
+                  value={widget.mapping?.aggregation || 'sum'}
+                  onChange={(event) => updateWidgetMapping(widget.id, { aggregation: event.target.value })}
+                >
+                  <option value="sum">Sum</option>
+                  <option value="avg">Average</option>
+                  <option value="min">Minimum</option>
+                  <option value="max">Maximum</option>
+                  <option value="count">Count Rows</option>
+                </select>
+              </label>
+            </>
+          )}
+
+          <label>
+            <span>Helper Text</span>
+            <input
+              type="text"
+              value={widget.mapping?.helperText || ''}
+              onChange={(event) => updateWidgetMapping(widget.id, { helperText: event.target.value })}
+            />
+          </label>
+
+          <label>
+            <span>Color Theme</span>
+            <select
+              value={widget.mapping?.colorTheme || 'auto'}
+              onChange={(event) => updateWidgetMapping(widget.id, { colorTheme: event.target.value })}
+            >
+              <option value="auto">Auto by Trend</option>
+              <option value="emerald">Emerald</option>
+              <option value="blue">Blue</option>
+              <option value="cyan">Cyan</option>
+              <option value="violet">Violet</option>
+              <option value="amber">Amber</option>
+              <option value="rose">Rose</option>
+              <option value="slate">Slate</option>
+            </select>
+          </label>
+        </div>
+      );
+    }
+
     if (widget.type === 'rankingList') {
       return (
         <div className="mapping-grid">
@@ -1520,13 +1995,17 @@ export default function App() {
       return (
         <div className="mapping-grid">
           <div className="mapping-group">
-            <span>Visible Columns</span>
+            <div className="mapping-group-header">
+              <span>Visible Columns</span>
+              <small>{visibleColumns.length} selected</small>
+            </div>
+            <p className="mapping-group-note">Pick the columns you want to show in the table.</p>
             <div className="checkbox-list">
               {dataset.fields.map((field) => {
                 const checked = visibleColumns.includes(field.key);
 
                 return (
-                  <label key={field.key} className="checkbox-item">
+                  <label key={field.key} className={`checkbox-item ${checked ? 'checked' : ''}`}>
                     <input
                       type="checkbox"
                       checked={checked}
@@ -1553,12 +2032,83 @@ export default function App() {
     return null;
   };
 
+  const renderDashboardListPage = () => (
+    <div className="dashboard-list-page">
+      <header className="topbar dashboard-list-topbar">
+        <div className="dashboard-list-heading">
+          <h1>Dashboard List</h1>
+          <p>คลิกชื่อ dashboard เพื่อดูรายละเอียด</p>
+        </div>
+        <div className="topbar-actions">
+          <button
+            type="button"
+            className="dashboard-action"
+            onClick={() => {
+              setViewMode('detail');
+              setReadOnly(true);
+              if (!activeDashboard) return;
+              clearTransientSelectionState();
+            }}
+            disabled={!activeDashboard}
+          >
+            Open current
+          </button>
+        </div>
+      </header>
+
+      <main className="dashboard-list-content">
+        <section className="dashboard-list-summary">
+          <strong>{dashboards.length} dashboards</strong>
+          <span>Select a dashboard card to open its detail view.</span>
+        </section>
+
+        <div className="dashboard-list-grid">
+          {dashboardCards.map((dashboard) => (
+            <button
+              key={dashboard.id}
+              type="button"
+              className={`dashboard-list-card ${dashboard.id === activeDashboardId ? 'active' : ''}`}
+              onClick={() => openDashboardDetail(dashboard.id)}
+            >
+              <div className="dashboard-list-card-header">
+                <strong>{dashboard.name}</strong>
+                {dashboard.id === activeDashboardId ? <span>Active</span> : null}
+              </div>
+              <div className="dashboard-list-meta">
+                <span>{dashboard.widgetCount} widgets</span>
+                {dashboard.filters ? <span>Has filters</span> : <span>No filters</span>}
+              </div>
+              <div className="dashboard-list-preview">
+                {dashboard.previewWidgets.length ? (
+                  dashboard.previewWidgets.map((label) => (
+                    <span key={label}>{label}</span>
+                  ))
+                ) : (
+                  <span>Empty dashboard</span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+
+  if (viewMode === 'list') {
+    return <div className="app-shell">{renderDashboardListPage()}</div>;
+  }
+
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div>
+      <header className={`topbar ${readOnly ? 'read-only' : ''}`}>
+        <div className="topbar-heading">
+          <div className="topbar-heading-row">
+            <button type="button" className="section-toggle topbar-back-button" onClick={openDashboardList}>
+              Dashboard List
+            </button>
+          </div>
           <h1>Dashboard Builder Prototype</h1>
-          <p>Drag widgets to the canvas, then attach one datasource and map fields per widget.</p>
+          <p>Drag widgets to the canvas, then configure titles and field mappings for each fixed datasource widget.</p>
         </div>
         <div className="dashboard-bar">
           <select
@@ -1647,7 +2197,7 @@ export default function App() {
             <div className="palette-section-header">
               <div>
                 <h3>Widget Palette</h3>
-                {!paletteCollapsed ? <p>ลาก widget ไปวางบน canvas</p> : null}
+                {!paletteCollapsed ? <p>ลาก widget พร้อมใช้ หรือ widget ที่ config ได้ไปวางบน canvas</p> : null}
               </div>
               <button
                 type="button"
@@ -1658,233 +2208,343 @@ export default function App() {
               </button>
             </div>
             {!paletteCollapsed ? (
-              <div className="palette-list">
-                {widgetCatalog.map((item) => (
-                  <button
-                    key={item.type}
-                    type="button"
-                    className="palette-item"
-                    draggable={!readOnly}
-                    disabled={readOnly}
-                    onDragStart={(event) => onPaletteDragStart(event, item.type)}
-                  >
-                    <strong>{item.label}</strong>
-                    <span>{item.description || item.title}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </section>
-
-          <section
-            className={`palette-section datasource-section ${paletteCollapsed ? 'priority' : ''} ${
-              datasourceCollapsed ? 'collapsed' : ''
-            }`}
-          >
-            <div className="palette-section-header">
-              <div>
-                <h3>Datasources</h3>
-                {!datasourceCollapsed ? <p>ลาก datasource ไปใส่ widget ได้ 1 ชุดต่อ widget</p> : null}
-              </div>
-              <button
-                type="button"
-                className="section-toggle"
-                onClick={() => setDatasourceCollapsed((prev) => !prev)}
-              >
-                {datasourceCollapsed ? 'Expand' : 'Collapse'}
-              </button>
-            </div>
-            {!datasourceCollapsed ? (
-              <div className="datasource-list">
-                {datasourceList.map((dataset) => (
-                  <div
-                    key={dataset.id}
-                    className="datasource-card"
-                    draggable={!readOnly}
-                    onDragStart={(event) => onDatasourceDragStart(event, dataset.id)}
-                  >
-                    <strong>{dataset.label}</strong>
-                    <span>{dataset.description}</span>
-                    <div className="datasource-meta">
-                      <span>{dataset.records.length} rows</span>
-                      <span>{dataset.fields.length} fields</span>
-                    </div>
+              <div className="palette-groups">
+                <section className="palette-subgroup">
+                  <h4>พร้อมใช้</h4>
+                  <div className="palette-list">
+                    {widgetCatalog
+                      .filter((item) => item.group === 'ready')
+                      .map((item) => (
+                          <button
+                            key={item.type}
+                            type="button"
+                            className="palette-item palette-item-ready"
+                            draggable={!readOnly}
+                            disabled={readOnly}
+                            onDragStart={(event) => onPaletteDragStart(event, item.type)}
+                          >
+                            <span className="palette-item-thumb" aria-hidden="true">
+                              <PaletteWidgetThumbnail type={item.type} />
+                            </span>
+                            <strong>{item.label}</strong>
+                          </button>
+                      ))}
                   </div>
-                ))}
+                </section>
+
+                <section className="palette-subgroup">
+                  <h4>กำหนดค่าได้</h4>
+                  <div className="palette-list">
+                    {widgetCatalog
+                      .filter((item) => item.group !== 'ready')
+                      .map((item) => (
+                          <button
+                            key={item.type}
+                            type="button"
+                            className="palette-item"
+                            draggable={!readOnly}
+                            disabled={readOnly}
+                            onDragStart={(event) => onPaletteDragStart(event, item.type)}
+                          >
+                            <span className="palette-item-thumb" aria-hidden="true">
+                              <PaletteWidgetThumbnail type={item.type} />
+                            </span>
+                            <strong>{item.label}</strong>
+                          </button>
+                      ))}
+                  </div>
+                </section>
               </div>
             ) : null}
           </section>
         </aside>
 
-        <main
-          ref={canvasRef}
-          className={`dashboard-canvas ${readOnly ? 'read-only' : ''}`}
+        <div
+          className={`dashboard-stage ${readOnly ? 'read-only' : ''}`}
           style={{
-            '--grid-cols': canvasCols,
-            '--row-size': `${GRID_ROW_HEIGHT}px`,
-            '--canvas-height': `${canvasHeight}px`,
-            '--canvas-width': `${canvasContentWidth}px`,
-            '--canvas-side-pad': `${canvasShiftX}px`,
-            '--print-scale': printScale,
             width: readOnly ? `${occupiedContentWidth}px` : undefined,
-            marginLeft: readOnly ? 'auto' : undefined,
-            marginRight: readOnly ? 'auto' : undefined
-          }}
-          onDragOver={onCanvasDragOver}
-          onDrop={onCanvasDrop}
-          onDragLeave={() => setHoverGrid(null)}
-          onMouseDown={(event) => {
-            if (readOnly) return;
-            if (event.target.closest('.widget-card')) return;
-            if (isInteractiveTarget(event.target)) return;
-
-            const point = getCanvasLocalPoint(event);
-            if (!point) return;
-
-            setActiveConfigWidgetId(null);
-            setDropTargetWidgetId(null);
-            setAction({
-              kind: 'marquee',
-              startX: event.clientX,
-              startY: event.clientY
-            });
-            selectionBoxRef.current = null;
-            setSelectionBox(null);
-            setSelectedWidgetIds([]);
+            height: readOnly ? `${canvasHeight + dashboardFiltersHeight}px` : undefined
           }}
         >
-          {!readOnly && hoverGrid ? (
-            <div
-              className="drop-preview"
-              style={{
-                left: hoverGrid.x * cellWidth + canvasShiftX,
-                top: hoverGrid.y * GRID_ROW_HEIGHT,
-                width: cellWidth * 4,
-                height: GRID_ROW_HEIGHT * 4
-              }}
-            />
+          {shouldRenderDashboardFilters ? (
+            <section className="dashboard-filters">
+              <div className="dashboard-filters-header">
+                <div>
+                  <strong>Filters</strong>
+                  <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
+                </div>
+                <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
+                  Clear Filters
+                </button>
+              </div>
+              <div className="dashboard-filters-grid">
+                <div className="filter-button-group">
+                  <span>Market</span>
+                  <div className="filter-chip-row">
+                    {['International', 'Domestic'].map((market) => (
+                      <button
+                        key={market}
+                        type="button"
+                        className={activeDashboardFilters.market === market ? 'active' : ''}
+                        onClick={() => updateActiveDashboardFilters({ market })}
+                      >
+                        {market}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="filter-button-group">
+                  <span>Year Basis</span>
+                  <div className="filter-chip-row">
+                    {[
+                      { value: 'calendar', label: 'Calendar Year' },
+                      { value: 'fiscal', label: 'Fiscal Year' }
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={activeDashboardFilters.yearMode === option.value ? 'active' : ''}
+                        onClick={() => updateActiveDashboardFilters({ yearMode: option.value })}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <label>
+                  <span>Year</span>
+                  <select
+                    value={activeDashboardFilters.year}
+                    onChange={(event) => updateActiveDashboardFilters({ year: Number(event.target.value) })}
+                  >
+                    {MICE_FILTER_OPTIONS.years.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span>Industry</span>
+                  <select
+                    value={activeDashboardFilters.industry}
+                    onChange={(event) => updateActiveDashboardFilters({ industry: event.target.value })}
+                  >
+                    <option value="all">All Industries</option>
+                    {MICE_FILTER_OPTIONS.industries.map((industry) => (
+                      <option key={industry} value={industry}>
+                        {industry}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label>
+                  <span>Country</span>
+                  <select
+                    value={activeDashboardFilters.country}
+                    onChange={(event) => updateActiveDashboardFilters({ country: event.target.value })}
+                  >
+                    <option value="all">All Countries</option>
+                    {MICE_FILTER_OPTIONS.countries.map((country) => (
+                      <option key={country} value={country}>
+                        {country}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
           ) : null}
 
-          {!readOnly && selectionBox ? (
-            <div
-              className="selection-marquee"
-              style={{
-                left: selectionBox.x + canvasShiftX,
-                top: selectionBox.y,
-                width: selectionBox.width,
-                height: selectionBox.height
-              }}
-            />
-          ) : null}
+          <main
+            ref={canvasRef}
+            className={`dashboard-canvas ${readOnly ? 'read-only' : ''}`}
+            style={{
+              '--grid-cols': canvasCols,
+              '--row-size': `${GRID_ROW_HEIGHT}px`,
+              '--canvas-height': `${canvasHeight}px`,
+              '--canvas-width': `${canvasContentWidth}px`,
+              '--canvas-side-pad': `${canvasShiftX}px`,
+              '--print-scale': printScale,
+              width: readOnly ? `${occupiedContentWidth}px` : undefined,
+              marginLeft: readOnly ? 'auto' : undefined,
+              marginRight: readOnly ? 'auto' : undefined
+            }}
+            onDragOver={onCanvasDragOver}
+            onDrop={onCanvasDrop}
+            onDragLeave={() => setHoverGrid(null)}
+            onMouseDown={(event) => {
+              if (readOnly) return;
+              if (event.target.closest('.widget-card')) return;
+              if (isInteractiveTarget(event.target)) return;
 
-          {widgets.map((widget) => {
-            const dataset = datasetLibrary[widget.dataset];
-            const compatibleDatasets = getCompatibleDatasets(widget.type);
-            const isWidgetPreview = readOnly || widget.preview;
-            const isChromelessPreview =
-              isWidgetPreview && CHROMELESS_PREVIEW_TYPES.includes(widget.type);
-            const isSelected = selectedWidgetIds.includes(widget.id);
+              const point = getCanvasLocalPoint(event);
+              if (!point) return;
 
-            return (
-              <section
-                key={widget.id}
-                className={`widget-card ${readOnly ? 'read-only' : ''} ${
-                  isChromelessPreview ? 'no-chrome' : ''
-                } ${dropTargetWidgetId === widget.id ? 'drop-target' : ''} ${
-                  isSelected ? 'selected' : ''
-                }`}
-                data-widget-type={widget.type}
-                data-widget-title={widget.title}
+              setActiveConfigWidgetId(null);
+              setAction({
+                kind: 'marquee',
+                startX: event.clientX,
+                startY: event.clientY
+              });
+              selectionBoxRef.current = null;
+              setSelectionBox(null);
+              setSelectedWidgetIds([]);
+            }}
+          >
+            {!readOnly && hoverGrid ? (
+              <div
+                className="drop-preview"
                 style={{
-                  left: widget.x * cellWidth + canvasShiftX,
-                  top: widget.y * GRID_ROW_HEIGHT,
-                  width: widget.w * cellWidth,
-                  height: widget.h * GRID_ROW_HEIGHT
+                  left: hoverGrid.x * cellWidth + canvasShiftX,
+                  top: hoverGrid.y * GRID_ROW_HEIGHT,
+                  width: cellWidth * 4,
+                  height: GRID_ROW_HEIGHT * 4
                 }}
-                onDragOver={(event) => {
-                  if (readOnly || !hasDatasetTarget(widget.type)) return;
-                  if (!Array.from(event.dataTransfer.types).includes('datasource/id')) return;
+              />
+            ) : null}
 
-                  const datasourceId = event.dataTransfer.getData('datasource/id');
-                  const droppedDataset = datasetLibrary[datasourceId];
-                  if (!droppedDataset || !isDatasetCompatible(widget.type, droppedDataset)) return;
-
-                  event.preventDefault();
-                  setDropTargetWidgetId(widget.id);
+            {!readOnly && selectionBox ? (
+              <div
+                className="selection-marquee"
+                style={{
+                  left: selectionBox.x + canvasShiftX,
+                  top: selectionBox.y,
+                  width: selectionBox.width,
+                  height: selectionBox.height
                 }}
-                onDragLeave={() => {
-                  if (dropTargetWidgetId === widget.id) setDropTargetWidgetId(null);
-                }}
-                onDrop={(event) => {
-                  if (readOnly || !hasDatasetTarget(widget.type)) return;
+              />
+            ) : null}
 
-                  const datasourceId = event.dataTransfer.getData('datasource/id');
-                  const droppedDataset = datasetLibrary[datasourceId];
-                  if (!droppedDataset || !isDatasetCompatible(widget.type, droppedDataset)) return;
+            {widgets.map((widget) => {
+              const dataset = datasetLibrary[widget.dataset];
+              const widgetRecords = getWidgetRecords(widget, dataset);
+              const isWidgetPreview = readOnly || widget.preview;
+              const isChromelessPreview =
+                isWidgetPreview && CHROMELESS_PREVIEW_TYPES.includes(widget.type);
+              const isSelected = selectedWidgetIds.includes(widget.id);
+              const isTextboxWidget = widget.type === 'textbox';
+              const showWidgetHeader = !isChromelessPreview && !isTextboxWidget;
+              const startWidgetMove = (event) => {
+                if (readOnly) return;
+                if (isInteractiveTarget(event.target) || event.target.closest('.resize-handle')) {
+                  return;
+                }
 
-                  event.preventDefault();
-                  assignDatasourceToWidget(widget.id, datasourceId);
-                  setDropTargetWidgetId(null);
-                }}
-                onMouseDown={(event) => {
-                  if (readOnly) return;
-                  if (isInteractiveTarget(event.target) || event.target.closest('.drag-handle')) return;
+                const movingIds =
+                  selectedWidgetIds.includes(widget.id) && selectedWidgetIds.length > 1
+                    ? selectedWidgetIds
+                    : [widget.id];
+                const originMap = Object.fromEntries(
+                  widgets
+                    .filter((item) => movingIds.includes(item.id))
+                    .map((item) => [item.id, { x: item.x, y: item.y }])
+                );
 
-                  event.stopPropagation();
+                setSelectedWidgetIds(movingIds);
+                gestureSnapshotRef.current = cloneWorkspace(workspace);
+                gestureChangedRef.current = false;
+                setAction({
+                  kind: movingIds.length > 1 ? 'move-selection' : 'move',
+                  id: widget.id,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  origin: { x: widget.x, y: widget.y },
+                  originMap
+                });
+              };
+              const widgetControls = (
+                <div className="widget-controls">
+                  {hasConfigPopup(widget.type) ? (
+                    <button
+                      type="button"
+                      className="icon-button config-toggle"
+                      aria-label="Configure widget"
+                      title="Configure"
+                      onClick={() => setActiveConfigWidgetId(widget.id)}
+                    >
+                      ⚙
+                    </button>
+                  ) : null}
+                  {!NO_CONFIG_WIDGET_TYPES.includes(widget.type) ? (
+                    <button
+                      type="button"
+                      className="icon-button preview-toggle"
+                      aria-label={widget.preview ? 'Edit widget' : 'Preview widget'}
+                      title={widget.preview ? 'Edit' : 'Preview'}
+                      onClick={() => toggleWidgetPreview(widget.id)}
+                    >
+                      {widget.preview ? '✎' : '◐'}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="icon-button remove-toggle"
+                    aria-label="Remove widget"
+                    title="Remove"
+                    onClick={() => removeWidget(widget.id)}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
 
-                  setActiveConfigWidgetId(null);
-                  setDropTargetWidgetId(null);
+              return (
+                <section
+                  key={widget.id}
+                  className={`widget-card ${readOnly ? 'read-only' : ''} ${
+                    isChromelessPreview ? 'no-chrome' : ''
+                  } ${isSelected ? 'selected' : ''}`}
+                  data-widget-type={widget.type}
+                  data-widget-id={widget.id}
+                  data-widget-title={widget.title}
+                  style={{
+                    left: widget.x * cellWidth + canvasShiftX,
+                    top: widget.y * GRID_ROW_HEIGHT,
+                    width: widget.w * cellWidth,
+                    height:
+                      widget.type === 'textbox'
+                        ? widget.heightPx ?? widget.h * GRID_ROW_HEIGHT
+                        : widget.h * GRID_ROW_HEIGHT
+                  }}
+                  onMouseDown={(event) => {
+                    if (readOnly) return;
+                    if (
+                      isInteractiveTarget(event.target) ||
+                      event.target.closest('.drag-handle') ||
+                      event.target.closest('.resize-handle')
+                    ) {
+                      return;
+                    }
 
-                  if (event.metaKey || event.ctrlKey) {
-                    setSelectedWidgetIds((prev) =>
-                      prev.includes(widget.id) ? prev.filter((id) => id !== widget.id) : [...prev, widget.id]
-                    );
-                    return;
-                  }
+                    event.stopPropagation();
 
-                  setSelectedWidgetIds([widget.id]);
-                }}
-              >
-                {isChromelessPreview ? null : (
+                    setActiveConfigWidgetId(null);
+
+                    if (event.metaKey || event.ctrlKey) {
+                      setSelectedWidgetIds((prev) =>
+                        prev.includes(widget.id)
+                          ? prev.filter((id) => id !== widget.id)
+                          : [...prev, widget.id]
+                      );
+                      return;
+                    }
+
+                    setSelectedWidgetIds([widget.id]);
+                  }}
+                >
+                {showWidgetHeader ? (
                   <div
                     className="widget-header drag-handle"
-                    onMouseDown={(event) => {
-                      if (readOnly) return;
-                      if (
-                        isInteractiveTarget(event.target) ||
-                        event.target.closest('.resize-handle')
-                      ) {
-                        return;
-                      }
-
-                      const movingIds =
-                        selectedWidgetIds.includes(widget.id) && selectedWidgetIds.length > 1
-                          ? selectedWidgetIds
-                          : [widget.id];
-                      const originMap = Object.fromEntries(
-                        widgets
-                          .filter((item) => movingIds.includes(item.id))
-                          .map((item) => [item.id, { x: item.x, y: item.y }])
-                      );
-
-                      setSelectedWidgetIds(movingIds);
-                      gestureSnapshotRef.current = cloneWorkspace(workspace);
-                      gestureChangedRef.current = false;
-                      setAction({
-                        kind: movingIds.length > 1 ? 'move-selection' : 'move',
-                        id: widget.id,
-                        startX: event.clientX,
-                        startY: event.clientY,
-                        origin: { x: widget.x, y: widget.y },
-                        originMap
-                      });
-                    }}
-                  >
+                    onMouseDown={startWidgetMove}
+                    >
                     {readOnly ? (
                       <div className="widget-title-block">
-                        <small>{widget.type.toUpperCase()}</small>
                         <strong>{widget.title}</strong>
-                        {dataset ? <span className="widget-dataset-badge">{dataset.label}</span> : null}
                       </div>
                     ) : (
                       <>
@@ -1898,53 +2558,20 @@ export default function App() {
                               value={widget.title}
                               onChange={(event) => updateWidgetField(widget.id, 'title', event.target.value)}
                             />
-                          )}
-                          {hasDatasetTarget(widget.type) ? (
-                            <div className="widget-dataset-dropzone">
-                              <span>{dataset?.label || 'Drop datasource here'}</span>
-                              <small>
-                                {dataset
-                                  ? `${dataset.records.length} rows / ${dataset.fields.length} fields`
-                                  : 'Only one datasource per widget'}
-                              </small>
-                            </div>
-                          ) : null}
+                            )}
                         </div>
-                        <div className="widget-controls">
-                          {hasConfigPopup(widget.type) ? (
-                            <button
-                              type="button"
-                              className="icon-button config-toggle"
-                              aria-label="Configure widget"
-                              title="Configure"
-                              onClick={() => setActiveConfigWidgetId(widget.id)}
-                            >
-                              ⚙
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="icon-button preview-toggle"
-                            aria-label={widget.preview ? 'Edit widget' : 'Preview widget'}
-                            title={widget.preview ? 'Edit' : 'Preview'}
-                            onClick={() => toggleWidgetPreview(widget.id)}
-                          >
-                            {widget.preview ? '✎' : '◐'}
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button remove-toggle"
-                            aria-label="Remove widget"
-                            title="Remove"
-                            onClick={() => removeWidget(widget.id)}
-                          >
-                            ×
-                          </button>
-                        </div>
+                        {widgetControls}
                       </>
                     )}
                   </div>
-                )}
+                ) : null}
+
+                {isTextboxWidget && !readOnly ? (
+                  <div className="textbox-edit-overlay" aria-hidden="true">
+                    <div className="textbox-drag-zone drag-handle" onMouseDown={startWidgetMove} />
+                    <div className="textbox-edit-controls">{widgetControls}</div>
+                  </div>
+                ) : null}
 
                 {!readOnly && isChromelessPreview ? (
                   <button
@@ -1959,25 +2586,12 @@ export default function App() {
                 ) : null}
 
                 <div className="widget-content">
-                  {!isWidgetPreview && hasDatasetTarget(widget.type) ? (
-                    <div className="widget-assignment-hint compact">
-                      <span>Compatible datasources:</span>
-                      <div className="hint-chip-list">
-                        {compatibleDatasets.slice(0, 4).map((item) => (
-                          <span key={item.id} className="hint-chip">
-                            {item.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
                   <div
                     className={`widget-visual ${
                       !isWidgetPreview && TEXT_WIDGET_TYPES.includes(widget.type) ? 'text-preview-visual' : ''
                     }`}
                   >
-                    <WidgetRenderer widget={widget} dataset={dataset} />
+                    <WidgetRenderer widget={widget} dataset={dataset} records={widgetRecords} />
                   </div>
                 </div>
 
@@ -1995,7 +2609,11 @@ export default function App() {
                         id: widget.id,
                         startX: event.clientX,
                         startY: event.clientY,
-                        origin: { w: widget.w, h: widget.h }
+                        origin: {
+                          w: widget.w,
+                          h: widget.h,
+                          heightPx: widget.heightPx || widget.h * GRID_ROW_HEIGHT
+                        }
                       });
                     }}
                   />
@@ -2004,6 +2622,7 @@ export default function App() {
             );
           })}
         </main>
+      </div>
       </div>
 
       {activeConfigWidget ? (
@@ -2015,8 +2634,16 @@ export default function App() {
                 <p>
                   {TEXT_WIDGET_TYPES.includes(activeConfigWidget.type)
                     ? 'Configure text content and formatting.'
-                    : 'Configure the widget datasource and field mapping.'}
+                    : 'Configure the widget field mapping for its fixed datasource.'}
                 </p>
+                {!TEXT_WIDGET_TYPES.includes(activeConfigWidget.type) && activeConfigDataset ? (
+                  <div className="config-modal-meta">
+                    <span className="config-modal-badge">{activeConfigDataset.label}</span>
+                    <span className="config-modal-caption">
+                      {activeConfigDataset.records.length} rows / {activeConfigDataset.fields.length} fields
+                    </span>
+                  </div>
+                ) : null}
               </div>
               <button type="button" className="section-toggle" onClick={() => setActiveConfigWidgetId(null)}>
                 Close
@@ -2028,22 +2655,6 @@ export default function App() {
                 renderTextWidgetControls(activeConfigWidget)
               ) : (
                 <>
-                  <div className="mapping-grid">
-                    <label>
-                      <span>Datasource</span>
-                      <select
-                        value={activeConfigWidget.dataset}
-                        onChange={(event) => assignDatasourceToWidget(activeConfigWidget.id, event.target.value)}
-                      >
-                        {getCompatibleDatasets(activeConfigWidget.type).map((dataset) => (
-                          <option key={dataset.id} value={dataset.id}>
-                            {dataset.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-
                   {renderMappingControls(activeConfigWidget, activeConfigDataset)}
                 </>
               )}
