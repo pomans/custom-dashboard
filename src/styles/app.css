@@ -941,6 +941,22 @@ button {
   border-color: #93c5fd;
 }
 
+.dashboard-list-card-action-btn.danger {
+  color: #dc2626;
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.dashboard-list-card-action-btn.danger:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.dashboard-list-card-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Dashboard List: New Card ── */
 .dashboard-list-card.new-card {
   display: flex;

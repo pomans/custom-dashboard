@@ -1808,17 +1808,22 @@ export default function App() {
     setViewMode('detail');
   };
 
-  const deleteActiveDashboard = () => {
-    if (readOnly || dashboards.length <= 1 || !activeDashboard) return;
+  const deleteDashboard = (dashboardId) => {
+    if (dashboards.length <= 1) return;
 
     updateWorkspace((prev) => {
-      const remainingDashboards = prev.dashboards.filter((dashboard) => dashboard.id !== prev.activeDashboardId);
-      return {
-        dashboards: remainingDashboards,
-        activeDashboardId: remainingDashboards[0].id
-      };
+      const remainingDashboards = prev.dashboards.filter((d) => d.id !== dashboardId);
+      const nextActiveId = prev.activeDashboardId === dashboardId
+        ? remainingDashboards[0].id
+        : prev.activeDashboardId;
+      return { dashboards: remainingDashboards, activeDashboardId: nextActiveId };
     });
     clearTransientSelectionState();
+  };
+
+  const deleteActiveDashboard = () => {
+    if (readOnly || dashboards.length <= 1 || !activeDashboard) return;
+    deleteDashboard(activeDashboard.id);
     setViewMode('detail');
   };
 
@@ -2423,6 +2428,22 @@ export default function App() {
                       <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                     Export
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-list-card-action-btn danger"
+                    onClick={() => {
+                      if (window.confirm(`ลบ "${dashboard.name}" ใช่หรือไม่?`)) {
+                        deleteDashboard(dashboard.id);
+                      }
+                    }}
+                    disabled={dashboards.length <= 1}
+                    title="ลบ Dashboard"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
+                      <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    ลบ
                   </button>
                 </div>
               </div>
