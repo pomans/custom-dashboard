@@ -957,6 +957,56 @@ button {
   cursor: not-allowed;
 }
 
+/* ── Confirm Delete Dialog ── */
+.confirm-delete-dialog {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  animation: dialog-in 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 28px 24px;
+  gap: 16px;
+  text-align: center;
+}
+
+.confirm-delete-icon {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.confirm-delete-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.confirm-delete-body h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.confirm-delete-body p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.confirm-delete-footer {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+}
+
 /* ── Dashboard List: New Card ── */
 .dashboard-list-card.new-card {
   display: flex;

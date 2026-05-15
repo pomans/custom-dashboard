@@ -832,6 +832,7 @@ export default function App() {
   const [newDashboardDraftName, setNewDashboardDraftName] = useState('');
   const [dashboardListLayout, setDashboardListLayout] = useState('card');
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const { wizardOpen, openWizard, closeWizard } = useWizard();
   const canvasRef = useRef(null);
   const stageWrapRef = useRef(null);
@@ -2432,18 +2433,14 @@ export default function App() {
                   <button
                     type="button"
                     className="dashboard-list-card-action-btn danger"
-                    onClick={() => {
-                      if (window.confirm(`ลบ "${dashboard.name}" ใช่หรือไม่?`)) {
-                        deleteDashboard(dashboard.id);
-                      }
-                    }}
+                    onClick={() => setConfirmDeleteId(dashboard.id)}
                     disabled={dashboards.length <= 1}
-                    title="ลบ Dashboard"
+                    title="Remove Dashboard"
                   >
                     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
                       <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    ลบ
+                    Remove
                   </button>
                 </div>
               </div>
@@ -2516,6 +2513,37 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {confirmDeleteId && (() => {
+        const target = dashboards.find((d) => d.id === confirmDeleteId);
+        return (
+          <div className="new-dashboard-overlay" onClick={() => setConfirmDeleteId(null)}>
+            <div className="confirm-delete-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="confirm-delete-icon" aria-hidden="true">
+                <svg viewBox="0 0 40 40" fill="none">
+                  <circle cx="20" cy="20" r="20" fill="#fee2e2"/>
+                  <path d="M12 14h16M16 14v-2h8v2M14 14v14a2 2 0 002 2h8a2 2 0 002-2V14" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M17 19v6M23 19v6" stroke="#dc2626" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <div className="confirm-delete-body">
+                <h3>Remove Dashboard</h3>
+                <p>ต้องการลบ <strong>"{target?.name}"</strong> ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+              </div>
+              <div className="confirm-delete-footer">
+                <button type="button" className="dashboard-action" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
+                <button
+                  type="button"
+                  className="dashboard-action danger"
+                  onClick={() => { deleteDashboard(confirmDeleteId); setConfirmDeleteId(null); }}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 
@@ -2676,6 +2704,9 @@ export default function App() {
                   <ToolbarIcon name="upload" />
                 </button>
                 <input ref={importFileInputRef} className="dashboard-file-input" type="file" accept="application/json,.json" onChange={importDashboardFile} />
+                <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="Save as PDF" data-tooltip="Save as PDF" data-tooltip-dir="down">
+                  <ToolbarIcon name="download" />
+                </button>
               </div>
               <div className="topbar-divider" />
             </>
