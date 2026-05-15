@@ -843,6 +843,7 @@ export default function App() {
   const gestureChangedRef = useRef(false);
 
   const dashboards = workspace.dashboards;
+  const dashboardsRef = useRef(dashboards);
   const activeDashboardId = workspace.activeDashboardId;
   const activeDashboard = dashboards.find((dashboard) => dashboard.id === activeDashboardId) || dashboards[0];
   const widgets = activeDashboard?.widgets || [];
@@ -1170,6 +1171,55 @@ export default function App() {
     setCanvasZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDashboardId, viewMode]);
+
+  // Keep dashboardsRef current for hashchange handler (avoids stale closure)
+  useEffect(() => { dashboardsRef.current = dashboards; }, [dashboards]);
+
+  // Init from URL hash on mount
+  useEffect(() => {
+    const hash = window.location.hash;
+    const match = hash.match(/^#\/([^/]+?)(\/edit)?$/);
+    if (!match) return;
+    const dashboardId = decodeURIComponent(match[1]);
+    const isEdit = !!match[2];
+    if (dashboards.find((d) => d.id === dashboardId)) {
+      selectDashboard(dashboardId);
+      setReadOnly(!isEdit);
+      setViewMode('detail');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync state → URL hash
+  useEffect(() => {
+    if (viewMode === 'list') {
+      const clean = window.location.pathname + window.location.search;
+      if (window.location.hash) window.history.replaceState(null, '', clean);
+    } else if (activeDashboardId) {
+      const newHash = `#/${encodeURIComponent(activeDashboardId)}${readOnly ? '' : '/edit'}`;
+      if (window.location.hash !== newHash) window.history.replaceState(null, '', newHash);
+    }
+  }, [viewMode, activeDashboardId, readOnly]);
+
+  // Browser back/forward → sync URL hash → state
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash;
+      if (!hash || hash === '#') { setViewMode('list'); return; }
+      const match = hash.match(/^#\/([^/]+?)(\/edit)?$/);
+      if (!match) return;
+      const dashboardId = decodeURIComponent(match[1]);
+      const isEdit = !!match[2];
+      if (dashboardsRef.current.find((d) => d.id === dashboardId)) {
+        selectDashboard(dashboardId);
+        setReadOnly(!isEdit);
+        setViewMode('detail');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event) => {
