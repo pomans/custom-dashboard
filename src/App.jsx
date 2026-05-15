@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
@@ -189,6 +189,15 @@ const ToolbarIcon = ({ name }) => {
           <circle {...c} cx="12" cy="12" r="9" />
           <path {...c} d="M9.5 9.5a2.5 2.5 0 0 1 4.9.8c0 1.6-2.4 2.2-2.4 4" />
           <circle fill="currentColor" stroke="none" cx="12" cy="17.5" r="1" />
+        </svg>
+      );
+
+    /* ── Fit to screen: arrows pointing inward to a rectangle ── */
+    case 'fitScreen':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...c} d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" />
+          <rect {...c} x="8" y="8" width="8" height="8" rx="1" />
         </svg>
       );
 
@@ -1159,16 +1168,19 @@ export default function App() {
     return () => observer.disconnect();
   }, [readOnly]);
 
-  useEffect(() => {
-    if (viewMode !== 'detail' || !widgets.length || !stageWrapRef.current) return;
+  const fitToScreen = useCallback(() => {
+    if (!widgets.length || !stageWrapRef.current) return;
     const rect = stageWrapRef.current.getBoundingClientRect();
     const vw = stageViewportWidth ?? rect.width;
     if (!vw) return;
-    // In read-only, zoom-wrap = occupiedContentWidth * zoom (trimmed, no growth padding).
-    // Fit so the content fills the viewport: occupiedContentWidth * zoom = vw - PADDING.
     const PADDING = 32;
     const zoom = (vw - PADDING) / occupiedContentWidth;
     setCanvasZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100)));
+  }, [stageViewportWidth, occupiedContentWidth, widgets.length]);
+
+  useEffect(() => {
+    if (viewMode !== 'detail') return;
+    fitToScreen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDashboardId, viewMode]);
 
@@ -2785,6 +2797,16 @@ export default function App() {
               aria-label="Zoom in"
             >+</button>
           </div>
+          <button
+            type="button"
+            className="zoom-btn fit-screen-btn"
+            onClick={fitToScreen}
+            aria-label="Fit to Screen"
+            data-tooltip="Fit to Screen"
+            data-tooltip-dir="down"
+          >
+            <ToolbarIcon name="fitScreen" />
+          </button>
           <div className="topbar-divider" />
           <button
             type="button"
@@ -3136,7 +3158,10 @@ export default function App() {
                       title="Configure"
                       onClick={() => setActiveConfigWidgetId(widget.id)}
                     >
-                      ⚙
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:16,height:16}}>
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                      </svg>
                     </button>
                   ) : null}
                   {!NO_CONFIG_WIDGET_TYPES.includes(widget.type) ? (
