@@ -353,7 +353,7 @@ const buildCategorySeries = (records, categoryField, metricField, aggregation = 
     .sort((a, b) => (b.value || 0) - (a.value || 0));
 };
 
-const formatAnnualTick = (value) => String(value);
+const formatAnnualTick = (value) => `'${String(value).slice(2)}`;
 
 const renderYoyBadge = ({ x, y, value }) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return null;
@@ -401,7 +401,14 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
             />
           ) : null
         )}
-        <XAxis dataKey="year" tickFormatter={formatAnnualTick} interval={0} tickMargin={10} />
+        <XAxis
+          dataKey="year"
+          tickFormatter={formatAnnualTick}
+          interval={0}
+          height={44}
+          tick={{ angle: -45, textAnchor: 'end', fontSize: 10 }}
+          tickMargin={4}
+        />
         <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
         <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
         <Line

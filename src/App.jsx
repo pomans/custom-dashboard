@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
+import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog } from './data/sampleData';
 
 const MIN_GRID_COLS = 12;
@@ -12,6 +13,10 @@ const MIN_H = 2;
 const MIN_CANVAS_ROWS = 20;
 const CANVAS_GROWTH_PADDING = 8;
 const GRID_SUBDIVISIONS = 8;
+const WIDGET_VISUAL_INSET = 6;
+const ZOOM_STEP = 0.25;
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 2.0;
 const PRINT_PAGE_MARGIN_MM = 12;
 const PX_PER_MM = 96 / 25.4;
 const MM_PER_PX = 25.4 / 96;
@@ -48,113 +53,145 @@ const EXPRESSION_SNIPPETS = [
 ];
 
 const ToolbarIcon = ({ name }) => {
-  const common = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
+  const c = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
 
   switch (name) {
+    /* ── New dashboard: layout grid + plus badge ── */
     case 'plus':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M12 5v14" />
-          <path {...common} d="M5 12h14" />
+          <rect {...c} x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect {...c} x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect {...c} x="3" y="14" width="7" height="7" rx="1.5" />
+          <path {...c} d="M17 14v6M14 17h6" strokeWidth="2.2" />
         </svg>
       );
+
+    /* ── Duplicate: two stacked pages, top offset ── */
     case 'copy':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect {...common} x="9" y="9" width="10" height="10" rx="2" />
-          <path {...common} d="M7 15H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+          <rect {...c} x="8" y="8" width="11" height="13" rx="2" />
+          <path {...c} d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" />
+          <path {...c} d="M11 12h5M11 15h3" />
         </svg>
       );
+
+    /* ── Delete: trash with warning lines ── */
     case 'trash':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M3 6h18" />
-          <path {...common} d="M8 6V4h8v2" />
-          <path {...common} d="M6 6l1 14h10l1-14" />
-          <path {...common} d="M10 11v6" />
-          <path {...common} d="M14 11v6" />
+          <path {...c} d="M3 6h18" />
+          <path {...c} d="M8 6V4h8v2" />
+          <path {...c} d="M19 6l-1 14H6L5 6" />
+          <path {...c} d="M10 10v7M14 10v7" />
         </svg>
       );
-    case 'print':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M7 9V4h10v5" />
-          <rect {...common} x="6" y="13" width="12" height="7" rx="2" />
-          <path {...common} d="M7 17h10" />
-        </svg>
-      );
-    case 'download':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M12 3v12" />
-          <path {...common} d="M7 10l5 5 5-5" />
-          <path {...common} d="M5 20h14" />
-        </svg>
-      );
+
+    /* ── Export JSON: file with arrow exiting right ── */
     case 'save':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M5 4h12l2 2v14H5Z" />
-          <path {...common} d="M8 4v6h8V4" />
-          <path {...common} d="M8 20v-6h8v6" />
+          <path {...c} d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <path {...c} d="M14 3v6h6" />
+          <path {...c} d="M9 17l3 3 3-3M12 12v8" strokeWidth="1.8" />
         </svg>
       );
+
+    /* ── Import JSON: file with arrow entering ── */
     case 'upload':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M12 21V9" />
-          <path {...common} d="M7 14l5-5 5 5" />
-          <path {...common} d="M5 4h14" />
+          <path {...c} d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+          <path {...c} d="M14 3v6h6" />
+          <path {...c} d="M12 20v-8M9 15l3-3 3 3" strokeWidth="1.8" />
         </svg>
       );
+
+    /* ── Print: printer with paper coming out ── */
+    case 'print':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...c} d="M6 9V3h12v6" />
+          <rect {...c} x="4" y="9" width="16" height="9" rx="2" />
+          <path {...c} d="M8 14h8M8 17h5" />
+          <circle fill="currentColor" stroke="none" cx="17" cy="13" r="1" />
+        </svg>
+      );
+
+    /* ── PDF Export: document with PDF badge + down arrow ── */
+    case 'download':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path {...c} d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z" />
+          <path {...c} d="M13 3v6h6" />
+          <path {...c} d="M8 13h1.5a1.5 1.5 0 0 1 0 3H8v-3z" strokeWidth="1.5" />
+          <path {...c} d="M13 13v3M16 13v3" strokeWidth="1.5" />
+          <path {...c} d="M16 13h-1.5a1 1 0 0 0 0 2H16" strokeWidth="1.5" />
+        </svg>
+      );
+
+    /* ── Panel toggle: layout with left panel open/close arrow ── */
     case 'sidebar':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect {...common} x="4" y="4" width="16" height="16" rx="2" />
-          <path {...common} d="M9 4v16" />
+          <rect {...c} x="3" y="3" width="18" height="18" rx="2" />
+          <path {...c} d="M9 3v18" />
+          <path {...c} d="M5.5 9l-2 3 2 3" strokeWidth="1.8" />
         </svg>
       );
+
+    /* ── Preview mode: eye with sparkle ── */
     case 'preview':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
-          <circle {...common} cx="12" cy="12" r="3" />
+          <path {...c} d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z" />
+          <circle {...c} cx="12" cy="12" r="3" />
+          <path {...c} d="M19 4l1.5-1.5M20.5 6H22M20.5 4.5l-1.5 1.5" strokeWidth="1.5" />
         </svg>
       );
+
+    /* ── Edit mode: pencil with grid dots ── */
     case 'edit':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M4 20h4l10-10a2.1 2.1 0 0 0-4-4L4 16v4Z" />
-          <path {...common} d="M13.5 6.5l4 4" />
+          <path {...c} d="M4 20h4l9.5-9.5a2.12 2.12 0 0 0-3-3L5 17v3Z" />
+          <path {...c} d="M14 6l3 3" />
+          <circle fill="currentColor" stroke="none" cx="19" cy="5" r="1.2" />
+          <circle fill="currentColor" stroke="none" cx="5" cy="5" r="1.2" />
+          <circle fill="currentColor" stroke="none" cx="5" cy="9" r="1.2" />
         </svg>
       );
+
     case 'align-left':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M4 6h16" />
-          <path {...common} d="M4 10h10" />
-          <path {...common} d="M4 14h16" />
-          <path {...common} d="M4 18h10" />
+          <path {...c} d="M4 6h16M4 10h10M4 14h16M4 18h10" />
         </svg>
       );
     case 'align-center':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M4 6h16" />
-          <path {...common} d="M7 10h10" />
-          <path {...common} d="M4 14h16" />
-          <path {...common} d="M7 18h10" />
+          <path {...c} d="M4 6h16M7 10h10M4 14h16M7 18h10" />
         </svg>
       );
     case 'align-right':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path {...common} d="M4 6h16" />
-          <path {...common} d="M10 10h10" />
-          <path {...common} d="M4 14h16" />
-          <path {...common} d="M10 18h10" />
+          <path {...c} d="M4 6h16M10 10h10M4 14h16M10 18h10" />
         </svg>
       );
+
+    /* ── Help: question mark in circle ── */
+    case 'help':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle {...c} cx="12" cy="12" r="9" />
+          <path {...c} d="M9.5 9.5a2.5 2.5 0 0 1 4.9.8c0 1.6-2.4 2.2-2.4 4" />
+          <circle fill="currentColor" stroke="none" cx="12" cy="17.5" r="1" />
+        </svg>
+      );
+
     default:
       return null;
   }
@@ -236,6 +273,146 @@ const WidgetThumbnail = ({ type }) => {
         </svg>
       );
   }
+};
+
+const MINIMAP_CHART_TYPES = new Set(['miceEventsChart','miceRevenueChart','miceVisitorsChart','miceVisitorsBreakdown','chart','line','bar','pie']);
+const MINIMAP_KPI_TYPES = new Set(['miceKpis','kpiCard','summaryCard']);
+const MINIMAP_TABLE_TYPES = new Set(['miceNationalityPerformance','miceNationalityIndustryMatrix','table','rankingList']);
+
+const MINIMAP_UID = Math.random().toString(36).slice(2, 7);
+
+const DashboardMiniMap = ({ widgets, uid = '' }) => {
+  if (!widgets?.length) return (
+    <div className="dashboard-list-card-thumb-wrap empty">
+      <span>ไม่มี widget</span>
+    </div>
+  );
+  const COLS = 12;
+  const maxRow = Math.max(...widgets.map((w) => w.y + w.h), 6);
+  const W = 300;
+  const H = 160;
+  const cw = W / COLS;
+  const ch = H / maxRow;
+  const gradId = `mm-${MINIMAP_UID}-${uid}`;
+
+  const typeConfig = (type) => {
+    if (MINIMAP_CHART_TYPES.has(type)) return { fill: `url(#${gradId}-chart)`, stroke: '#60a5fa', accent: '#3b82f6' };
+    if (MINIMAP_KPI_TYPES.has(type)) return { fill: `url(#${gradId}-kpi)`, stroke: '#4ade80', accent: '#22c55e' };
+    if (MINIMAP_TABLE_TYPES.has(type)) return { fill: `url(#${gradId}-table)`, stroke: '#fb923c', accent: '#f97316' };
+    if (type === 'textbox') return { fill: '#f8fafc', stroke: '#cbd5e1', accent: '#94a3b8' };
+    return { fill: '#f1f5f9', stroke: '#cbd5e1', accent: '#94a3b8' };
+  };
+
+  const renderInner = (type, bx, by, bw, bh) => {
+    if (bw < 6 || bh < 6) return null;
+    const pad = 3;
+    const iw = bw - pad * 2;
+    const ih = bh - pad * 2;
+    const ix = bx + pad;
+    const iy = by + pad;
+
+    if (MINIMAP_CHART_TYPES.has(type)) {
+      const pts = [[0,0.65],[0.18,0.45],[0.35,0.55],[0.52,0.25],[0.68,0.38],[0.85,0.15],[1,0.22]];
+      const d = pts.map(([px, py], i) => `${i === 0 ? 'M' : 'L'}${(ix + px * iw).toFixed(1)},${(iy + py * ih).toFixed(1)}`).join(' ');
+      const area = d + ` L${(ix + iw).toFixed(1)},${(iy + ih).toFixed(1)} L${ix.toFixed(1)},${(iy + ih).toFixed(1)} Z`;
+      return (
+        <g>
+          <path d={area} fill="#3b82f6" fillOpacity="0.12" />
+          <path d={d} fill="none" stroke="#3b82f6" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+          {pts.slice(1, -1).filter((_, i) => i % 2 === 1).map(([px, py], i) => (
+            <circle key={i} cx={(ix + px * iw).toFixed(1)} cy={(iy + py * ih).toFixed(1)} r="1.5" fill="#3b82f6" opacity="0.7" />
+          ))}
+        </g>
+      );
+    }
+    if (MINIMAP_KPI_TYPES.has(type)) {
+      const cols = Math.max(2, Math.round(bw / 28));
+      const cSize = iw / cols;
+      return (
+        <g>
+          {Array.from({ length: cols }).map((_, i) => (
+            <g key={i}>
+              <rect x={ix + i * cSize + 1} y={iy + ih * 0.1} width={cSize - 2} height={ih * 0.45} rx="2" fill="#22c55e" opacity="0.3" />
+              <rect x={ix + i * cSize + 2} y={iy + ih * 0.62} width={(cSize - 4) * (0.5 + i * 0.15)} height={ih * 0.18} rx="1" fill="#22c55e" opacity="0.45" />
+            </g>
+          ))}
+        </g>
+      );
+    }
+    if (MINIMAP_TABLE_TYPES.has(type)) {
+      const rows = Math.max(2, Math.round(bh / 10));
+      const rowH = ih / rows;
+      return (
+        <g>
+          <rect x={ix} y={iy} width={iw} height={rowH * 0.85} rx="1.5" fill="#f97316" opacity="0.4" />
+          {Array.from({ length: rows - 1 }).map((_, i) => (
+            <rect key={i} x={ix} y={iy + rowH * (i + 1)} width={iw * (0.9 - i * 0.05)} height={rowH * 0.65} rx="1" fill="#f97316" opacity={0.2 - i * 0.03} />
+          ))}
+          <line x1={ix + iw * 0.33} y1={iy} x2={ix + iw * 0.33} y2={iy + ih} stroke="#f97316" strokeWidth="0.5" opacity="0.3" />
+          <line x1={ix + iw * 0.66} y1={iy} x2={ix + iw * 0.66} y2={iy + ih} stroke="#f97316" strokeWidth="0.5" opacity="0.2" />
+        </g>
+      );
+    }
+    return (
+      <g>
+        <rect x={ix} y={iy + ih * 0.2} width={iw * 0.75} height="2" rx="1" fill="#94a3b8" opacity="0.5" />
+        <rect x={ix} y={iy + ih * 0.45} width={iw * 0.55} height="2" rx="1" fill="#94a3b8" opacity="0.35" />
+        <rect x={ix} y={iy + ih * 0.7} width={iw * 0.65} height="2" rx="1" fill="#94a3b8" opacity="0.25" />
+      </g>
+    );
+  };
+
+  return (
+    <svg
+      className="dashboard-list-card-thumb-svg"
+      viewBox={`0 0 ${W} ${H}`}
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id={`${gradId}-chart`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#eff6ff" />
+          <stop offset="100%" stopColor="#dbeafe" />
+        </linearGradient>
+        <linearGradient id={`${gradId}-kpi`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f0fdf4" />
+          <stop offset="100%" stopColor="#dcfce7" />
+        </linearGradient>
+        <linearGradient id={`${gradId}-table`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fff7ed" />
+          <stop offset="100%" stopColor="#ffedd5" />
+        </linearGradient>
+      </defs>
+
+      {/* Canvas background */}
+      <rect width={W} height={H} fill="#f8fafc" />
+      {/* Subtle dot grid */}
+      {Array.from({ length: Math.ceil(H / 12) }).map((_, row) =>
+        Array.from({ length: Math.ceil(W / 12) }).map((_, col) => (
+          <circle key={`${row}-${col}`} cx={col * 12 + 6} cy={row * 12 + 6} r="0.7" fill="#cbd5e1" opacity="0.5" />
+        ))
+      )}
+
+      {widgets.map((w) => {
+        const cfg = typeConfig(w.type);
+        const bx = w.x * cw + 2;
+        const by = w.y * ch + 2;
+        const bw = Math.max(6, w.w * cw - 4);
+        const bh = Math.max(6, w.h * ch - 4);
+        return (
+          <g key={w.id}>
+            {/* Shadow */}
+            <rect x={bx + 1} y={by + 1.5} width={bw} height={bh} rx="4" fill="rgba(15,23,42,0.07)" />
+            {/* Widget block */}
+            <rect x={bx} y={by} width={bw} height={bh} rx="4" fill={cfg.fill} stroke={cfg.stroke} strokeWidth="0.8" />
+            {/* Top accent bar */}
+            <rect x={bx} y={by} width={bw} height="3" rx="4" fill={cfg.accent} opacity="0.5" />
+            {renderInner(w.type, bx, by + 3, bw, bh - 3)}
+          </g>
+        );
+      })}
+    </svg>
+  );
 };
 
 const PaletteWidgetThumbnail = ({ type }) => {
@@ -525,7 +702,7 @@ const initialWidgets = [
   createWidget([{ type: 'miceVisitorsChart' }], miceKpisTemplate, 0, 21),
   createWidget([{ type: 'miceKpis' }], miceNationalityPerformanceTemplate, 0, 24),
   createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 33),
-  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 41)
+  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 42)
 ];
 
 const createDefaultWorkspace = () => {
@@ -648,7 +825,15 @@ export default function App() {
   const [selectedWidgetIds, setSelectedWidgetIds] = useState([]);
   const [selectionBox, setSelectionBox] = useState(null);
   const [printScale, setPrintScale] = useState(1);
+  const [stageViewportWidth, setStageViewportWidth] = useState(null);
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  const [newDashboardDialog, setNewDashboardDialog] = useState(false);
+  const [newDashboardDraftName, setNewDashboardDraftName] = useState('');
+  const [dashboardListLayout, setDashboardListLayout] = useState('card');
+  const [hamburgerOpen, setHamburgerOpen] = useState(false);
+  const { wizardOpen, openWizard, closeWizard } = useWizard();
   const canvasRef = useRef(null);
+  const stageWrapRef = useRef(null);
   const importFileInputRef = useRef(null);
   const selectionBoxRef = useRef(null);
   const gestureSnapshotRef = useRef(null);
@@ -681,9 +866,17 @@ export default function App() {
     : Math.max(MIN_GRID_COLS * cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth);
   const canvasShiftX = readOnly
     ? -minOccupiedCol * cellWidth
-    : sidebarHidden
-      ? Math.max(0, Math.floor((canvasWidth - occupiedContentWidth) / 2) - minOccupiedCol * cellWidth)
-      : 0;
+    : 0;
+
+  // In read-only mode on narrow screens, reflow widgets into a vertical stack
+  const NARROW_BREAKPOINT = 860;
+  const isNarrowView = readOnly && stageViewportWidth !== null && stageViewportWidth < NARROW_BREAKPOINT;
+
+  // Sort widgets top-to-bottom, left-to-right for narrow reflow
+  const displayWidgets = isNarrowView
+    ? [...widgets].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x)
+    : widgets;
+
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
   const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
   const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
@@ -782,8 +975,8 @@ export default function App() {
     if (!rect) return null;
 
     return {
-      x: Math.max(0, event.clientX - rect.left - canvasShiftX),
-      y: Math.max(0, event.clientY - rect.top)
+      x: Math.max(0, (event.clientX - rect.left) / canvasZoom - canvasShiftX),
+      y: Math.max(0, (event.clientY - rect.top) / canvasZoom)
     };
   };
 
@@ -948,6 +1141,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!stageWrapRef.current) return undefined;
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width;
+      if (width) setStageViewportWidth(width);
+    });
+
+    observer.observe(stageWrapRef.current);
+    return () => observer.disconnect();
+  }, [readOnly]);
+
+  useEffect(() => {
     const onKeyDown = (event) => {
       const key = event.key.toLowerCase();
       const isModifierPressed = event.ctrlKey || event.metaKey;
@@ -969,6 +1174,24 @@ export default function App() {
       if (key === 'y' || (key === 'z' && event.shiftKey)) {
         event.preventDefault();
         redoWorkspace();
+        return;
+      }
+
+      if (key === '=' || key === '+') {
+        event.preventDefault();
+        setCanvasZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 4) / 4));
+        return;
+      }
+
+      if (key === '-') {
+        event.preventDefault();
+        setCanvasZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 4) / 4));
+        return;
+      }
+
+      if (key === '0') {
+        event.preventDefault();
+        setCanvasZoom(1);
       }
     };
 
@@ -1104,8 +1327,8 @@ export default function App() {
     if (!action || readOnly) return undefined;
 
     const onMove = (event) => {
-      const deltaX = event.clientX - action.startX;
-      const deltaY = event.clientY - action.startY;
+      const deltaX = (event.clientX - action.startX) / canvasZoom;
+      const deltaY = (event.clientY - action.startY) / canvasZoom;
       const snapX = Math.round(deltaX / (cellWidth / GRID_SUBDIVISIONS)) / GRID_SUBDIVISIONS;
       const snapY = Math.round(deltaY / (GRID_ROW_HEIGHT / GRID_SUBDIVISIONS)) / GRID_SUBDIVISIONS;
 
@@ -1113,10 +1336,10 @@ export default function App() {
         if (!canvasRef.current) return;
         const rect = canvasRef.current.getBoundingClientRect();
         const nextBox = normalizeRect({
-          x1: action.startX - rect.left - canvasShiftX,
-          y1: action.startY - rect.top,
-          x2: event.clientX - rect.left - canvasShiftX,
-          y2: event.clientY - rect.top
+          x1: (action.startX - rect.left) / canvasZoom - canvasShiftX,
+          y1: (action.startY - rect.top) / canvasZoom,
+          x2: (event.clientX - rect.left) / canvasZoom - canvasShiftX,
+          y2: (event.clientY - rect.top) / canvasZoom
         });
         selectionBoxRef.current = nextBox;
         setSelectionBox(nextBox);
@@ -1502,8 +1725,9 @@ export default function App() {
 
   const openDashboardDetail = (dashboardId) => {
     selectDashboard(dashboardId);
-    setReadOnly(false);
+    setReadOnly(true);
     setViewMode('detail');
+    if (window.innerWidth <= 768) setSidebarHidden(true);
   };
 
   const openDashboardList = () => {
@@ -1530,6 +1754,24 @@ export default function App() {
       activeDashboardId: newDashboard.id
     }));
     clearTransientSelectionState();
+    setViewMode('detail');
+    setReadOnly(false);
+  };
+
+  const openNewDashboardDialog = () => {
+    setNewDashboardDraftName(`Dashboard ${dashboards.length + 1}`);
+    setNewDashboardDialog(true);
+  };
+
+  const confirmNewDashboard = () => {
+    const name = newDashboardDraftName.trim() || `Dashboard ${dashboards.length + 1}`;
+    const newDb = createDashboard(name, []);
+    updateWorkspace((prev) => ({
+      dashboards: [...prev.dashboards, newDb],
+      activeDashboardId: newDb.id
+    }));
+    clearTransientSelectionState();
+    setNewDashboardDialog(false);
     setViewMode('detail');
     setReadOnly(false);
   };
@@ -2034,15 +2276,32 @@ export default function App() {
 
   const renderDashboardListPage = () => (
     <div className="dashboard-list-page">
-      <header className="topbar dashboard-list-topbar">
-        <div className="dashboard-list-heading">
-          <h1>Dashboard List</h1>
-          <p>คลิกชื่อ dashboard เพื่อดูรายละเอียด</p>
+      <header className="dashboard-list-topbar">
+        <div className="dashboard-list-topbar-bg" aria-hidden="true">
+          <svg className="dashboard-list-topbar-deco" viewBox="0 0 600 90" fill="none" preserveAspectRatio="xMaxYMid slice">
+            <circle cx="520" cy="-10" r="110" fill="rgba(255,255,255,0.07)" />
+            <circle cx="420" cy="80" r="70" fill="rgba(255,255,255,0.05)" />
+            <circle cx="580" cy="60" r="50" fill="rgba(255,255,255,0.06)" />
+          </svg>
         </div>
-        <div className="topbar-actions">
+        <div className="dashboard-list-heading">
+          <div className="dashboard-list-heading-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="2" width="9" height="9" rx="2" fill="currentColor" opacity="0.9"/>
+              <rect x="13" y="2" width="9" height="9" rx="2" fill="currentColor" opacity="0.6"/>
+              <rect x="2" y="13" width="9" height="9" rx="2" fill="currentColor" opacity="0.6"/>
+              <rect x="13" y="13" width="9" height="9" rx="2" fill="currentColor" opacity="0.3"/>
+            </svg>
+          </div>
+          <div>
+            <h1>Dashboard List</h1>
+            <p>เลือก dashboard เพื่อดูหรือแก้ไข</p>
+          </div>
+        </div>
+        <div className="dashboard-list-header-actions">
           <button
             type="button"
-            className="dashboard-action"
+            className="dashboard-list-header-btn"
             onClick={() => {
               setViewMode('detail');
               setReadOnly(true);
@@ -2053,6 +2312,12 @@ export default function App() {
           >
             Open current
           </button>
+          <button type="button" className="dashboard-list-header-btn primary" onClick={openNewDashboardDialog}>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{width:14,height:14,flexShrink:0}}>
+              <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
+            </svg>
+            New Dashboard
+          </button>
         </div>
       </header>
 
@@ -2060,9 +2325,38 @@ export default function App() {
         <section className="dashboard-list-summary">
           <strong>{dashboards.length} dashboards</strong>
           <span>Select a dashboard card to open its detail view.</span>
+          <div className="dashboard-list-layout-toggle">
+            <button
+              type="button"
+              className={`layout-toggle-btn${dashboardListLayout === 'card' ? ' active' : ''}`}
+              onClick={() => setDashboardListLayout('card')}
+              aria-label="Card view"
+              title="Card view"
+            >
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor"/>
+                <rect x="9" y="1" width="6" height="6" rx="1.5" fill="currentColor"/>
+                <rect x="1" y="9" width="6" height="6" rx="1.5" fill="currentColor"/>
+                <rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor"/>
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`layout-toggle-btn${dashboardListLayout === 'list' ? ' active' : ''}`}
+              onClick={() => setDashboardListLayout('list')}
+              aria-label="List view"
+              title="List view"
+            >
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1" y="2" width="14" height="3" rx="1.5" fill="currentColor"/>
+                <rect x="1" y="7" width="14" height="3" rx="1.5" fill="currentColor"/>
+                <rect x="1" y="12" width="14" height="3" rx="1.5" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
         </section>
 
-        <div className="dashboard-list-grid">
+        <div className={`dashboard-list-grid${dashboardListLayout === 'list' ? ' list-view' : ''}`}>
           {dashboardCards.map((dashboard) => (
             <button
               key={dashboard.id}
@@ -2070,27 +2364,97 @@ export default function App() {
               className={`dashboard-list-card ${dashboard.id === activeDashboardId ? 'active' : ''}`}
               onClick={() => openDashboardDetail(dashboard.id)}
             >
-              <div className="dashboard-list-card-header">
-                <strong>{dashboard.name}</strong>
-                {dashboard.id === activeDashboardId ? <span>Active</span> : null}
+              <div className="dashboard-list-card-thumb-wrap">
+                <DashboardMiniMap widgets={dashboard.widgets} />
               </div>
-              <div className="dashboard-list-meta">
-                <span>{dashboard.widgetCount} widgets</span>
-                {dashboard.filters ? <span>Has filters</span> : <span>No filters</span>}
-              </div>
-              <div className="dashboard-list-preview">
-                {dashboard.previewWidgets.length ? (
-                  dashboard.previewWidgets.map((label) => (
-                    <span key={label}>{label}</span>
-                  ))
-                ) : (
-                  <span>Empty dashboard</span>
-                )}
+              <div className="dashboard-list-card-body">
+                <div className="dashboard-list-card-header">
+                  <strong>{dashboard.name}</strong>
+                  {dashboard.id === activeDashboardId ? <span className="dashboard-list-badge">Active</span> : null}
+                </div>
+                <div className="dashboard-list-meta">
+                  <span>{dashboard.widgetCount} widgets</span>
+                  {dashboard.filters ? <span>Has filters</span> : <span>No filters</span>}
+                </div>
+                <div className="dashboard-list-preview">
+                  {dashboard.previewWidgets.length ? (
+                    dashboard.previewWidgets.map((label) => (
+                      <span key={label}>{label}</span>
+                    ))
+                  ) : (
+                    <span>Empty dashboard</span>
+                  )}
+                </div>
               </div>
             </button>
           ))}
+
+          {/* New Dashboard card */}
+          <button type="button" className="dashboard-list-card new-card" onClick={openNewDashboardDialog}>
+            <div className="new-card-icon">
+              <svg viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                <circle cx="20" cy="20" r="19" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" />
+                <path d="M20 12v16M12 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div className="new-card-label">
+              <strong>New Dashboard</strong>
+              <span>สร้าง dashboard ใหม่</span>
+            </div>
+          </button>
         </div>
       </main>
+
+      {/* New Dashboard Dialog */}
+      {newDashboardDialog && (
+        <div className="new-dashboard-overlay" onClick={() => setNewDashboardDialog(false)}>
+          <div className="new-dashboard-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="new-dashboard-dialog-header">
+              <div className="new-dashboard-dialog-icon" aria-hidden="true">
+                <svg viewBox="0 0 28 28" fill="none">
+                  <rect x="2" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.9"/>
+                  <rect x="16" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
+                  <rect x="2" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
+                  <rect x="16" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.3"/>
+                </svg>
+              </div>
+              <div>
+                <h2>New Dashboard</h2>
+                <p>ตั้งชื่อ dashboard ใหม่ของคุณ</p>
+              </div>
+              <button type="button" className="new-dashboard-dialog-close" onClick={() => setNewDashboardDialog(false)} aria-label="ปิด">✕</button>
+            </div>
+
+            <div className="new-dashboard-dialog-body">
+              <label className="new-dashboard-name-label">
+                <span>ชื่อ Dashboard</span>
+                <input
+                  type="text"
+                  className="new-dashboard-name-input"
+                  value={newDashboardDraftName}
+                  onChange={(e) => setNewDashboardDraftName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') confirmNewDashboard(); if (e.key === 'Escape') setNewDashboardDialog(false); }}
+                  placeholder="ชื่อ dashboard…"
+                  autoFocus
+                  maxLength={80}
+                />
+              </label>
+            </div>
+
+            <div className="new-dashboard-dialog-footer">
+              <button type="button" className="dashboard-action" onClick={() => setNewDashboardDialog(false)}>ยกเลิก</button>
+              <button
+                type="button"
+                className="dashboard-action primary"
+                onClick={confirmNewDashboard}
+                disabled={!newDashboardDraftName.trim()}
+              >
+                สร้าง Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -2101,22 +2465,36 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className={`topbar ${readOnly ? 'read-only' : ''}`}>
-        <div className="topbar-heading">
-          <div className="topbar-heading-row">
-            <button type="button" className="section-toggle topbar-back-button" onClick={openDashboardList}>
-              Dashboard List
-            </button>
+
+        {/* ── Zone 1: Brand ── */}
+        <div className="topbar-brand">
+          <div className="topbar-brand-logo" aria-hidden="true">
+            <svg viewBox="0 0 28 28" fill="none">
+              <rect x="2" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.9"/>
+              <rect x="16" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
+              <rect x="2" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
+              <rect x="16" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.3"/>
+            </svg>
           </div>
-          <h1>Dashboard Builder Prototype</h1>
-          <p>Drag widgets to the canvas, then configure titles and field mappings for each fixed datasource widget.</p>
+          <div className="topbar-brand-text">
+            <button type="button" className="topbar-back-link" onClick={openDashboardList}>
+              ← รายการ Dashboard
+            </button>
+            <span className="topbar-brand-name">Data Hub Dashboard Builder</span>
+          </div>
         </div>
-        <div className="dashboard-bar">
+
+        <div className="topbar-divider" />
+
+        {/* ── Zone 2: Dashboard Selector ── */}
+        <div className="topbar-selector">
           <select
             className="dashboard-switcher"
             value={activeDashboardId}
             onChange={(event) => selectDashboard(event.target.value)}
-            aria-label="Dashboard"
-            title="Dashboard"
+            aria-label="เลือก Dashboard"
+            data-tooltip="เลือก Dashboard"
+            data-tooltip-dir="down"
           >
             {dashboards.map((dashboard) => (
               <option key={dashboard.id} value={dashboard.id}>
@@ -2128,68 +2506,170 @@ export default function App() {
             className="dashboard-name-input"
             type="text"
             value={activeDashboard?.name || ''}
-            aria-label="Dashboard name"
-            title="Dashboard name"
+            placeholder="ชื่อ Dashboard…"
+            aria-label="ชื่อ Dashboard"
+            data-tooltip="แก้ไขชื่อ Dashboard"
+            data-tooltip-dir="down"
             onChange={(event) => renameActiveDashboard(event.target.value)}
           />
-          <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label="Create new dashboard" title="Create new dashboard">
-            <ToolbarIcon name="plus" />
-          </button>
-          <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label="Duplicate dashboard" title="Duplicate dashboard">
-            <ToolbarIcon name="copy" />
-          </button>
-          <button
-            type="button"
-            className="dashboard-action danger icon-only"
-            onClick={deleteActiveDashboard}
-            disabled={dashboards.length <= 1}
-            aria-label="Delete dashboard"
-            title="Delete dashboard"
-          >
-            <ToolbarIcon name="trash" />
-          </button>
-          <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label="Save dashboard as file" title="Save dashboard as file">
-            <ToolbarIcon name="save" />
-          </button>
-          <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label="Import dashboard file" title="Import dashboard file">
-            <ToolbarIcon name="upload" />
-          </button>
-          <input
-            ref={importFileInputRef}
-            className="dashboard-file-input"
-            type="file"
-            accept="application/json,.json"
-            onChange={importDashboardFile}
-          />
-          <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="Print dashboard" title="Print dashboard">
-            <ToolbarIcon name="print" />
-          </button>
-          <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="Download dashboard as PDF" title="Download dashboard as PDF">
-            <ToolbarIcon name="download" />
-          </button>
         </div>
-        <div className="topbar-actions">
+
+        <div className="topbar-divider" />
+
+        {/* ── Zone 3: Action Button Groups ── */}
+        <div className="topbar-zone3">
+          {/* Hamburger button — visible only at narrow viewport */}
           <button
             type="button"
-            className="sidebar-toggle topbar-toggle icon-only"
+            className={`topbar-hamburger${hamburgerOpen ? ' open' : ''}`}
+            onClick={() => setHamburgerOpen((v) => !v)}
+            aria-label="เมนู"
+            aria-expanded={hamburgerOpen}
+          >
+            <span /><span /><span />
+          </button>
+
+          {/* Dropdown menu — shown when hamburger open (narrow) */}
+          {hamburgerOpen && (
+            <div className="topbar-hamburger-menu" onClick={() => setHamburgerOpen(false)}>
+              <div className="hamburger-menu-group">
+                <span className="hamburger-menu-label">Dashboard</span>
+                <button type="button" className="hamburger-menu-item" onClick={createNewDashboard}><ToolbarIcon name="plus" /> สร้างใหม่</button>
+                <button type="button" className="hamburger-menu-item" onClick={duplicateActiveDashboard}><ToolbarIcon name="copy" /> ทำสำเนา</button>
+                <button type="button" className="hamburger-menu-item danger" onClick={deleteActiveDashboard} disabled={dashboards.length <= 1}><ToolbarIcon name="trash" /> ลบ Dashboard</button>
+              </div>
+              <div className="hamburger-menu-divider" />
+              <div className="hamburger-menu-group">
+                <span className="hamburger-menu-label">ไฟล์</span>
+                <button type="button" className="hamburger-menu-item" onClick={saveActiveDashboardFile}><ToolbarIcon name="save" /> Export JSON</button>
+                <button type="button" className="hamburger-menu-item" onClick={openDashboardImportPicker}><ToolbarIcon name="upload" /> Import JSON</button>
+              </div>
+              <div className="hamburger-menu-divider" />
+              <div className="hamburger-menu-group">
+                <span className="hamburger-menu-label">ส่งออก</span>
+                <button type="button" className="hamburger-menu-item" onClick={printActiveDashboard}><ToolbarIcon name="print" /> พิมพ์</button>
+                <button type="button" className="hamburger-menu-item" onClick={downloadActiveDashboardPdf}><ToolbarIcon name="download" /> ดาวน์โหลด PDF</button>
+              </div>
+            </div>
+          )}
+
+          {/* Full button groups — visible at wide viewport */}
+          <div className="topbar-btn-groups">
+            {/* Group A: Manage */}
+            <div className="topbar-btn-group">
+              <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label="สร้าง Dashboard ใหม่" data-tooltip="สร้างใหม่" data-tooltip-dir="down">
+                <ToolbarIcon name="plus" />
+              </button>
+              <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label="ทำสำเนา" data-tooltip="ทำสำเนา" data-tooltip-dir="down">
+                <ToolbarIcon name="copy" />
+              </button>
+              <button
+                type="button"
+                className="dashboard-action danger icon-only"
+                onClick={deleteActiveDashboard}
+                disabled={dashboards.length <= 1}
+                aria-label="ลบ Dashboard"
+                data-tooltip="ลบ Dashboard"
+                data-tooltip-dir="down"
+              >
+                <ToolbarIcon name="trash" />
+              </button>
+            </div>
+
+            <div className="topbar-btn-sep" />
+
+            {/* Group B: File I/O */}
+            <div className="topbar-btn-group">
+              <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label="Export JSON" data-tooltip="Export JSON" data-tooltip-dir="down">
+                <ToolbarIcon name="save" />
+              </button>
+              <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label="Import JSON" data-tooltip="Import JSON" data-tooltip-dir="down">
+                <ToolbarIcon name="upload" />
+              </button>
+              <input ref={importFileInputRef} className="dashboard-file-input" type="file" accept="application/json,.json" onChange={importDashboardFile} />
+            </div>
+
+            <div className="topbar-btn-sep" />
+
+            {/* Group C: Output */}
+            <div className="topbar-btn-group">
+              <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="พิมพ์" data-tooltip="พิมพ์ (Print)" data-tooltip-dir="down">
+                <ToolbarIcon name="print" />
+              </button>
+              <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="ดาวน์โหลด PDF" data-tooltip="ดาวน์โหลด PDF" data-tooltip-dir="down">
+                <ToolbarIcon name="download" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Zone 4: View Controls (right) ── */}
+        <div className="topbar-view-controls">
+          <div className="zoom-controls" data-tooltip="Ctrl+Scroll หรือ Ctrl+/−" data-tooltip-dir="down">
+            <button
+              type="button"
+              className="zoom-btn"
+              onClick={() => setCanvasZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 4) / 4))}
+              disabled={canvasZoom <= ZOOM_MIN}
+              aria-label="Zoom out"
+            >−</button>
+            <button
+              type="button"
+              className="zoom-level"
+              onClick={() => setCanvasZoom(1)}
+              aria-label="Reset zoom"
+              data-tooltip="คลิกเพื่อ Reset เป็น 100%"
+              data-tooltip-dir="down"
+            >{Math.round(canvasZoom * 100)}%</button>
+            <button
+              type="button"
+              className="zoom-btn"
+              onClick={() => setCanvasZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 4) / 4))}
+              disabled={canvasZoom >= ZOOM_MAX}
+              aria-label="Zoom in"
+            >+</button>
+          </div>
+          <div className="topbar-divider" />
+          <button
+            type="button"
+            className="sidebar-toggle icon-only"
             onClick={() => setSidebarHidden((prev) => !prev)}
-            aria-label={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
-            title={sidebarHidden ? 'Show sidebar' : 'Hide sidebar'}
+            aria-label={sidebarHidden ? 'แสดง Palette' : 'ซ่อน Palette'}
+            data-tooltip={sidebarHidden ? 'แสดง Palette' : 'ซ่อน Palette'}
+            data-tooltip-dir="down"
             disabled={readOnly}
           >
             <ToolbarIcon name="sidebar" />
           </button>
           <button
             type="button"
-            className="mode-toggle icon-only"
-            onClick={() => setReadOnly((prev) => !prev)}
-            aria-label={readOnly ? 'Exit read only preview' : 'Open read only preview'}
-            title={readOnly ? 'Exit read only preview' : 'Open read only preview'}
+            className={`mode-toggle icon-only ${readOnly ? '' : 'active-edit'}`}
+            onClick={() => {
+              const goingToEdit = readOnly;
+              setReadOnly((prev) => !prev);
+              if (goingToEdit && window.innerWidth <= 768) setSidebarHidden(true);
+            }}
+            aria-label={readOnly ? 'เข้าสู่โหมดแก้ไข' : 'ดูตัวอย่าง'}
+            data-tooltip={readOnly ? 'เข้าสู่โหมดแก้ไข' : 'ดูตัวอย่าง'}
+            data-tooltip-dir="down"
           >
             <ToolbarIcon name={readOnly ? 'edit' : 'preview'} />
           </button>
+          <button
+            type="button"
+            className="wizard-help-btn"
+            onClick={openWizard}
+            aria-label="คู่มือการใช้งาน"
+            data-tooltip="คู่มือการใช้งาน"
+            data-tooltip-dir="down"
+          >
+            <ToolbarIcon name="help" />
+          </button>
         </div>
+
       </header>
+
+      {wizardOpen && <WizardOnboarding onClose={closeWizard} />}
 
       <div className={`builder-layout ${effectiveSidebarHidden ? 'sidebar-hidden' : ''} ${readOnly ? 'read-only-preview' : ''}`}>
         <aside className={`palette ${readOnly ? 'read-only' : ''} ${effectiveSidebarHidden ? 'hidden' : ''}`}>
@@ -2260,10 +2740,21 @@ export default function App() {
         </aside>
 
         <div
-          className={`dashboard-stage ${readOnly ? 'read-only' : ''}`}
+          ref={stageWrapRef}
+          className={`dashboard-stage-wrap ${readOnly ? 'read-only' : ''} ${isNarrowView ? 'narrow-wrap' : ''}`}
+          style={readOnly ? { width: '100%' } : undefined}
+          onWheel={(event) => {
+            if (!event.ctrlKey && !event.metaKey) return;
+            event.preventDefault();
+            const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
+            setCanvasZoom((z) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round((z + delta) * 4) / 4)));
+          }}
+        >
+        <div
+          className={`dashboard-stage ${readOnly ? 'read-only' : ''} ${isNarrowView ? 'narrow' : ''}`}
           style={{
-            width: readOnly ? `${occupiedContentWidth}px` : undefined,
-            height: readOnly ? `${canvasHeight + dashboardFiltersHeight}px` : undefined
+            width: readOnly && !isNarrowView ? `${occupiedContentWidth}px` : undefined,
+            height: readOnly && !isNarrowView ? `${canvasHeight + dashboardFiltersHeight}px` : undefined,
           }}
         >
           {shouldRenderDashboardFilters ? (
@@ -2360,16 +2851,38 @@ export default function App() {
             </section>
           ) : null}
 
+          <div
+            className="canvas-zoom-wrap"
+            style={isNarrowView ? undefined : {
+              width: `${canvasContentWidth * canvasZoom}px`,
+              height: `${canvasHeight * canvasZoom}px`,
+              flexShrink: 0,
+            }}
+          >
           <main
             ref={canvasRef}
-            className={`dashboard-canvas ${readOnly ? 'read-only' : ''}`}
-            style={{
+            className={`dashboard-canvas ${readOnly ? 'read-only' : ''} ${isNarrowView ? 'narrow-flow' : ''}`}
+            style={isNarrowView ? {
+              position: 'relative',
+              height: 'auto',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              padding: '12px',
+              background: 'transparent',
+              border: 'none',
+              backgroundImage: 'none',
+              overflow: 'visible',
+            } : {
               '--grid-cols': canvasCols,
               '--row-size': `${GRID_ROW_HEIGHT}px`,
               '--canvas-height': `${canvasHeight}px`,
               '--canvas-width': `${canvasContentWidth}px`,
               '--canvas-side-pad': `${canvasShiftX}px`,
               '--print-scale': printScale,
+              transform: canvasZoom !== 1 ? `scale(${canvasZoom})` : undefined,
+              transformOrigin: '0 0',
               width: readOnly ? `${occupiedContentWidth}px` : undefined,
               marginLeft: readOnly ? 'auto' : undefined,
               marginRight: readOnly ? 'auto' : undefined
@@ -2400,10 +2913,10 @@ export default function App() {
               <div
                 className="drop-preview"
                 style={{
-                  left: hoverGrid.x * cellWidth + canvasShiftX,
-                  top: hoverGrid.y * GRID_ROW_HEIGHT,
-                  width: cellWidth * 4,
-                  height: GRID_ROW_HEIGHT * 4
+                  left: hoverGrid.x * cellWidth + canvasShiftX + WIDGET_VISUAL_INSET,
+                  top: hoverGrid.y * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
+                  width: cellWidth * 4 - WIDGET_VISUAL_INSET * 2,
+                  height: GRID_ROW_HEIGHT * 4 - WIDGET_VISUAL_INSET * 2
                 }}
               />
             ) : null}
@@ -2420,7 +2933,7 @@ export default function App() {
               />
             ) : null}
 
-            {widgets.map((widget) => {
+            {displayWidgets.map((widget) => {
               const dataset = datasetLibrary[widget.dataset];
               const widgetRecords = getWidgetRecords(widget, dataset);
               const isWidgetPreview = readOnly || widget.preview;
@@ -2502,14 +3015,22 @@ export default function App() {
                   data-widget-type={widget.type}
                   data-widget-id={widget.id}
                   data-widget-title={widget.title}
-                  style={{
-                    left: widget.x * cellWidth + canvasShiftX,
-                    top: widget.y * GRID_ROW_HEIGHT,
-                    width: widget.w * cellWidth,
+                  style={isNarrowView ? {
+                    position: 'relative',
+                    left: 'auto',
+                    top: 'auto',
+                    width: '100%',
+                    height: isTextboxWidget ? 'auto' : `${Math.max(200, widget.h * GRID_ROW_HEIGHT)}px`,
+                    minHeight: isTextboxWidget ? undefined : `${Math.max(200, widget.h * GRID_ROW_HEIGHT)}px`,
+                    flexShrink: 0,
+                  } : {
+                    left: widget.x * cellWidth + canvasShiftX + WIDGET_VISUAL_INSET,
+                    top: widget.y * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
+                    width: widget.w * cellWidth - WIDGET_VISUAL_INSET * 2,
                     height:
-                      widget.type === 'textbox'
+                      (widget.type === 'textbox'
                         ? widget.heightPx ?? widget.h * GRID_ROW_HEIGHT
-                        : widget.h * GRID_ROW_HEIGHT
+                        : widget.h * GRID_ROW_HEIGHT) - WIDGET_VISUAL_INSET * 2
                   }}
                   onMouseDown={(event) => {
                     if (readOnly) return;
@@ -2622,6 +3143,8 @@ export default function App() {
             );
           })}
         </main>
+          </div>
+      </div>
       </div>
       </div>
 
