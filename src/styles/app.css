@@ -456,8 +456,8 @@ button {
 }
 
 .fit-screen-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .canvas-zoom-wrap {
@@ -3767,8 +3767,8 @@ th {
 }
 
 .wizard-help-btn svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .wizard-help-btn:hover {
