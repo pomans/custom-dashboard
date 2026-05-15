@@ -836,6 +836,7 @@ export default function App() {
   const canvasRef = useRef(null);
   const stageWrapRef = useRef(null);
   const importFileInputRef = useRef(null);
+  const listImportRef = useRef(null);
   const selectionBoxRef = useRef(null);
   const gestureSnapshotRef = useRef(null);
   const gestureChangedRef = useRef(false);
@@ -1083,14 +1084,14 @@ export default function App() {
     }
   };
 
-  const saveActiveDashboardFile = () => {
-    if (!activeDashboard) return;
+  const saveDashboardFile = (dashboard) => {
+    if (!dashboard) return;
 
     const exportPayload = {
       type: 'bi-dashboard.dashboard',
       version: 1,
       exportedAt: new Date().toISOString(),
-      dashboard: cloneDashboard(activeDashboard)
+      dashboard: cloneDashboard(dashboard)
     };
     const blob = new Blob([JSON.stringify(exportPayload, null, 2)], {
       type: 'application/json'
@@ -1099,12 +1100,14 @@ export default function App() {
     const link = document.createElement('a');
 
     link.href = url;
-    link.download = `${createSafeFileName(activeDashboard.name)}.json`;
+    link.download = `${createSafeFileName(dashboard.name)}.json`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
   };
+
+  const saveActiveDashboardFile = () => saveDashboardFile(activeDashboard);
 
   const openDashboardImportPicker = () => {
     importFileInputRef.current?.click();
@@ -1159,9 +1162,10 @@ export default function App() {
     const rect = stageWrapRef.current.getBoundingClientRect();
     const vw = stageViewportWidth ?? rect.width;
     if (!vw) return;
-    const contentW = Math.max(cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth);
+    // In read-only, zoom-wrap = occupiedContentWidth * zoom (trimmed, no growth padding).
+    // Fit so the content fills the viewport: occupiedContentWidth * zoom = vw - PADDING.
     const PADDING = 32;
-    const zoom = (vw - PADDING) / contentW;
+    const zoom = (vw - PADDING) / occupiedContentWidth;
     setCanvasZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100)));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeDashboardId, viewMode]);
@@ -2326,6 +2330,13 @@ export default function App() {
           >
             Open current
           </button>
+          <button type="button" className="dashboard-list-header-btn" onClick={() => listImportRef.current?.click()}>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{width:14,height:14,flexShrink:0}}>
+              <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Import
+          </button>
+          <input ref={listImportRef} type="file" accept="application/json,.json" style={{display:'none'}} onChange={importDashboardFile} />
           <button type="button" className="dashboard-list-header-btn primary" onClick={openNewDashboardDialog}>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{width:14,height:14,flexShrink:0}}>
               <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
@@ -2372,11 +2383,13 @@ export default function App() {
 
         <div className={`dashboard-list-grid${dashboardListLayout === 'list' ? ' list-view' : ''}`}>
           {dashboardCards.map((dashboard) => (
-            <button
+            <div
               key={dashboard.id}
-              type="button"
               className={`dashboard-list-card ${dashboard.id === activeDashboardId ? 'active' : ''}`}
               onClick={() => openDashboardDetail(dashboard.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && openDashboardDetail(dashboard.id)}
             >
               <div className="dashboard-list-card-thumb-wrap">
                 <DashboardMiniMap widgets={dashboard.widgets} />
@@ -2399,8 +2412,21 @@ export default function App() {
                     <span>Empty dashboard</span>
                   )}
                 </div>
+                <div className="dashboard-list-card-actions" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="dashboard-list-card-action-btn"
+                    onClick={() => saveDashboardFile(dashboard)}
+                    title="Export JSON"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
+                      <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Export
+                  </button>
+                </div>
               </div>
-            </button>
+            </div>
           ))}
 
           {/* New Dashboard card */}
@@ -2619,6 +2645,20 @@ export default function App() {
 
         {/* ── Zone 4: View Controls (right) ── */}
         <div className="topbar-view-controls">
+          {readOnly && (
+            <>
+              <div className="topbar-btn-group">
+                <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label="Export JSON" data-tooltip="Export JSON" data-tooltip-dir="down">
+                  <ToolbarIcon name="save" />
+                </button>
+                <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label="Import JSON" data-tooltip="Import JSON" data-tooltip-dir="down">
+                  <ToolbarIcon name="upload" />
+                </button>
+                <input ref={importFileInputRef} className="dashboard-file-input" type="file" accept="application/json,.json" onChange={importDashboardFile} />
+              </div>
+              <div className="topbar-divider" />
+            </>
+          )}
           <div className="zoom-controls" data-tooltip="Ctrl+Scroll หรือ Ctrl+/−" data-tooltip-dir="down">
             <button
               type="button"
@@ -2767,8 +2807,8 @@ export default function App() {
         <div
           className={`dashboard-stage ${readOnly ? 'read-only' : ''} ${isNarrowView ? 'narrow' : ''}`}
           style={{
-            width: readOnly && !isNarrowView ? `${occupiedContentWidth}px` : undefined,
-            height: readOnly && !isNarrowView ? `${canvasHeight + dashboardFiltersHeight}px` : undefined,
+            width: readOnly && !isNarrowView ? `${occupiedContentWidth * canvasZoom}px` : undefined,
+            height: readOnly && !isNarrowView ? `${canvasHeight * canvasZoom + dashboardFiltersHeight}px` : undefined,
           }}
         >
           {shouldRenderDashboardFilters ? (
@@ -2868,7 +2908,7 @@ export default function App() {
           <div
             className="canvas-zoom-wrap"
             style={isNarrowView ? undefined : {
-              width: `${canvasContentWidth * canvasZoom}px`,
+              width: readOnly ? `${occupiedContentWidth * canvasZoom}px` : `${canvasContentWidth * canvasZoom}px`,
               height: `${canvasHeight * canvasZoom}px`,
               flexShrink: 0,
             }}

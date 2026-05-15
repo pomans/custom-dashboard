@@ -914,6 +914,33 @@ button {
   border: 1px solid #bfdbfe;
 }
 
+/* ── Dashboard List: Card actions (export etc.) ── */
+.dashboard-list-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.dashboard-list-card-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1px solid #d1e3fa;
+  background: #f0f6ff;
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.dashboard-list-card-action-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
 /* ── Dashboard List: New Card ── */
 .dashboard-list-card.new-card {
   display: flex;
