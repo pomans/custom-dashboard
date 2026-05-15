@@ -826,6 +826,7 @@ export default function App() {
   const [selectionBox, setSelectionBox] = useState(null);
   const [printScale, setPrintScale] = useState(1);
   const [stageViewportWidth, setStageViewportWidth] = useState(null);
+  const [stageViewportHeight, setStageViewportHeight] = useState(null);
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [newDashboardDialog, setNewDashboardDialog] = useState(false);
   const [newDashboardDraftName, setNewDashboardDraftName] = useState('');
@@ -1144,13 +1145,26 @@ export default function App() {
     if (!stageWrapRef.current) return undefined;
 
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect?.width;
-      if (width) setStageViewportWidth(width);
+      const rect = entries[0]?.contentRect;
+      if (rect?.width) setStageViewportWidth(rect.width);
+      if (rect?.height) setStageViewportHeight(rect.height);
     });
 
     observer.observe(stageWrapRef.current);
     return () => observer.disconnect();
   }, [readOnly]);
+
+  useEffect(() => {
+    if (viewMode !== 'detail' || !widgets.length || !stageWrapRef.current) return;
+    const rect = stageWrapRef.current.getBoundingClientRect();
+    const vw = stageViewportWidth ?? rect.width;
+    if (!vw) return;
+    const contentW = Math.max(cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth);
+    const PADDING = 32;
+    const zoom = (vw - PADDING) / contentW;
+    setCanvasZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDashboardId, viewMode]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
