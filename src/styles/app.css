@@ -45,13 +45,14 @@ button {
 .app-shell {
   min-height: 100vh;
   padding: 12px 20px 20px;
+  padding-top: 88px;
 }
 
 .topbar {
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: fixed;
+  top: 12px;
+  left: 20px;
+  right: 20px;
   z-index: 900;
   display: flex;
   align-items: center;
@@ -1568,7 +1569,7 @@ button {
 .dashboard-stage-wrap.read-only {
   /* Allow horizontal scroll when canvas is wider than viewport */
   overflow-x: auto;
-  overflow-y: visible;
+  overflow-y: clip;
   width: 100%;
   /* Styled scrollbar */
   scrollbar-width: thin;
@@ -1720,6 +1721,38 @@ button {
   background: #0f172a;
   color: #fff;
   border-color: #0f172a;
+}
+
+.dashboard-filters.on-canvas {
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.07);
+}
+
+.dashboard-filters.on-canvas.editable {
+  border: 1.5px solid #93c5fd;
+  cursor: default;
+}
+
+.filter-drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: move;
+  padding-bottom: 2px;
+}
+
+.filter-drag-handle strong {
+  font-size: 1.05rem;
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
+.filter-drag-handle span {
+  color: #64748b;
+  font-size: 0.84rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drop-preview {
@@ -3962,6 +3995,42 @@ th {
   /* ── Filters widget ── */
   .dashboard-filters-grid { grid-template-columns: 1fr; }
   .filter-chip-row { flex-wrap: wrap; gap: 6px; }
+}
+
+/* ── Narrow view (isNarrowView) filter + topbar compact styles ── */
+.narrow-wrap .dashboard-filters {
+  padding: 12px 14px;
+  gap: 8px;
+  border-radius: 14px;
+}
+
+.narrow-wrap .dashboard-filters-header strong {
+  font-size: 0.95rem;
+}
+
+.narrow-wrap .dashboard-filters-header span {
+  display: none;
+}
+
+.narrow-wrap .dashboard-filters-grid {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.narrow-wrap .filter-chip-row button {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.8rem;
+}
+
+.narrow-wrap .filter-button-group span {
+  font-size: 0.75rem;
+}
+
+.narrow-wrap .dashboard-filters label select {
+  height: 32px;
+  font-size: 0.82rem;
+  padding: 0 8px;
 }
 
 /* ── Responsive builder: narrow viewport ── */

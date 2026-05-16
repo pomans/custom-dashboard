@@ -657,13 +657,16 @@ const createDashboard = (name, widgets = [], options = {}) => ({
   id: crypto.randomUUID(),
   name,
   widgets: cloneWidgets(widgets),
-  filters: options.filters ? { ...options.filters } : undefined
+  filters: options.filters ? { ...options.filters } : undefined,
+  filterPanel: options.filterPanel ? { ...options.filterPanel }
+    : (options.filters ? { x: 0, y: 0, w: 12, h: 3 } : undefined)
 });
 
 const cloneDashboard = (dashboard) => ({
   ...dashboard,
   widgets: cloneWidgets(dashboard.widgets || []),
-  filters: dashboard.filters ? { ...dashboard.filters } : undefined
+  filters: dashboard.filters ? { ...dashboard.filters } : undefined,
+  filterPanel: dashboard.filterPanel ? { ...dashboard.filterPanel } : undefined
 });
 
 const cloneWorkspace = (workspace) => ({
@@ -692,7 +695,8 @@ const normalizeImportedDashboard = (value) => {
         ? dashboardValue.name.trim()
         : 'Imported Dashboard',
     widgets: cloneWidgets(dashboardValue.widgets),
-    filters: dashboardValue.filters ? { ...dashboardValue.filters } : undefined
+    filters: dashboardValue.filters ? { ...dashboardValue.filters } : undefined,
+    filterPanel: dashboardValue.filterPanel ? { ...dashboardValue.filterPanel } : undefined
   };
 };
 
@@ -705,13 +709,13 @@ const miceNationalityIndustryMatrixTemplate = widgetCatalog.find((widget) => wid
 const miceVisitorsBreakdownTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsBreakdown');
 
 const initialWidgets = [
-  createWidget([], miceEventsChartTemplate, 0, 0),
-  createWidget([{ type: 'miceEventsChart' }], miceRevenueChartTemplate, 0, 7),
-  createWidget([{ type: 'miceRevenueChart' }], miceVisitorsChartTemplate, 0, 14),
-  createWidget([{ type: 'miceVisitorsChart' }], miceKpisTemplate, 0, 21),
-  createWidget([{ type: 'miceKpis' }], miceNationalityPerformanceTemplate, 0, 24),
-  createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 33),
-  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 42)
+  createWidget([], miceEventsChartTemplate, 0, 3),
+  createWidget([{ type: 'miceEventsChart' }], miceRevenueChartTemplate, 0, 10),
+  createWidget([{ type: 'miceRevenueChart' }], miceVisitorsChartTemplate, 0, 17),
+  createWidget([{ type: 'miceVisitorsChart' }], miceKpisTemplate, 0, 24),
+  createWidget([{ type: 'miceKpis' }], miceNationalityPerformanceTemplate, 0, 27),
+  createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 36),
+  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 45)
 ];
 
 const createDefaultWorkspace = () => {
@@ -744,7 +748,8 @@ const normalizeWorkspace = (value) => {
               ? dashboard.name.trim()
               : `Dashboard ${index + 1}`,
           widgets: Array.isArray(dashboard.widgets) ? cloneWidgets(dashboard.widgets) : [],
-          filters: dashboard.filters ? { ...dashboard.filters } : undefined
+          filters: dashboard.filters ? { ...dashboard.filters } : undefined,
+          filterPanel: dashboard.filterPanel ? { ...dashboard.filterPanel } : undefined
         }))
     : [];
 
@@ -871,9 +876,7 @@ export default function App() {
     return Math.max(...widgets.map((widget) => widget.y + widget.h), MIN_CANVAS_ROWS);
   }, [widgets]);
   const canvasCols = maxOccupiedCol + CANVAS_GROWTH_PADDING;
-  const canvasRows = readOnly ? maxOccupiedRow : maxOccupiedRow + CANVAS_GROWTH_PADDING;
   const canvasContentWidth = canvasCols * cellWidth;
-  const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
   const occupiedContentWidth = readOnly
     ? Math.max(cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth)
     : Math.max(MIN_GRID_COLS * cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth);
@@ -893,9 +896,16 @@ export default function App() {
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
   const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
   const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
-  const activeDashboardFilters = activeDashboard?.filters || null;
+  const activeDashboardFilters = activeDashboard?.filters || { ...MICE_FILTER_DEFAULTS };
   const shouldRenderDashboardFilters = Boolean(activeDashboardFilters);
-  const dashboardFiltersHeight = shouldRenderDashboardFilters ? 168 : 0;
+  const filterPanelLayout = shouldRenderDashboardFilters
+    ? (activeDashboard?.filterPanel || { x: 0, y: 0, w: 12, h: 3 })
+    : null;
+  const effectiveMaxRow = filterPanelLayout
+    ? Math.max(maxOccupiedRow, filterPanelLayout.y + filterPanelLayout.h)
+    : maxOccupiedRow;
+  const canvasRows = readOnly ? effectiveMaxRow : effectiveMaxRow + CANVAS_GROWTH_PADDING;
+  const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
   const dashboardCards = dashboards.map((dashboard) => {
     const dashboardWidgetCount = dashboard.widgets?.length || 0;
     const previewWidgets = (dashboard.widgets || []).slice(0, 3).map((widget) => widget.title || widget.type);
@@ -1166,7 +1176,7 @@ export default function App() {
 
     observer.observe(stageWrapRef.current);
     return () => observer.disconnect();
-  }, [readOnly]);
+  }, [readOnly, viewMode]);
 
   const fitToScreen = useCallback(() => {
     if (!widgets.length || !stageWrapRef.current) return;
@@ -1180,9 +1190,10 @@ export default function App() {
 
   useEffect(() => {
     if (viewMode !== 'detail') return;
+    if (isNarrowView) return;
     fitToScreen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDashboardId, viewMode]);
+  }, [activeDashboardId, viewMode, isNarrowView]);
 
   // Keep dashboardsRef current for hashchange handler (avoids stale closure)
   useEffect(() => { dashboardsRef.current = dashboards; }, [dashboards]);
@@ -1322,8 +1333,6 @@ export default function App() {
   };
 
   const updateActiveDashboardFilters = (patch) => {
-    if (!activeDashboardFilters) return;
-
     updateActiveDashboard((dashboard) => ({
       ...dashboard,
       filters: {
@@ -1335,7 +1344,6 @@ export default function App() {
   };
 
   const clearActiveDashboardFilters = () => {
-    if (!activeDashboardFilters) return;
 
     updateActiveDashboard((dashboard) => ({
       ...dashboard,
@@ -1427,6 +1435,32 @@ export default function App() {
         return;
       }
 
+      if (action.kind === 'move-filter') {
+        updateActiveDashboard((dash) => ({
+          ...dash,
+          filterPanel: {
+            ...(dash.filterPanel || { x: 0, y: 0, w: 12, h: 3 }),
+            x: Math.max(0, action.origin.x + snapX),
+            y: Math.max(0, action.origin.y + snapY)
+          }
+        }), { recordHistory: false });
+        if (snapX !== 0 || snapY !== 0) gestureChangedRef.current = true;
+        return;
+      }
+
+      if (action.kind === 'resize-filter') {
+        updateActiveDashboard((dash) => ({
+          ...dash,
+          filterPanel: {
+            ...(dash.filterPanel || { x: 0, y: 0, w: 12, h: 3 }),
+            w: Math.max(4, action.origin.w + snapX),
+            h: Math.max(2, action.origin.h + snapY)
+          }
+        }), { recordHistory: false });
+        if (snapX !== 0 || snapY !== 0) gestureChangedRef.current = true;
+        return;
+      }
+
       setWidgets(
         (prev) =>
           prev.map((item) => {
@@ -1497,7 +1531,8 @@ export default function App() {
       if (
         gestureChangedRef.current &&
         gestureSnapshotRef.current &&
-        (action.kind === 'move' || action.kind === 'move-selection' || action.kind === 'resize')
+        (action.kind === 'move' || action.kind === 'move-selection' || action.kind === 'resize' ||
+         action.kind === 'move-filter' || action.kind === 'resize-filter')
       ) {
         pushHistorySnapshot(gestureSnapshotRef.current);
       }
@@ -2773,41 +2808,45 @@ export default function App() {
               <div className="topbar-divider" />
             </>
           )}
-          <div className="zoom-controls" data-tooltip="Ctrl+Scroll หรือ Ctrl+/−" data-tooltip-dir="down">
-            <button
-              type="button"
-              className="zoom-btn"
-              onClick={() => setCanvasZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 4) / 4))}
-              disabled={canvasZoom <= ZOOM_MIN}
-              aria-label="Zoom out"
-            >−</button>
-            <button
-              type="button"
-              className="zoom-level"
-              onClick={() => setCanvasZoom(1)}
-              aria-label="Reset zoom"
-              data-tooltip="คลิกเพื่อ Reset เป็น 100%"
-              data-tooltip-dir="down"
-            >{Math.round(canvasZoom * 100)}%</button>
-            <button
-              type="button"
-              className="zoom-btn"
-              onClick={() => setCanvasZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 4) / 4))}
-              disabled={canvasZoom >= ZOOM_MAX}
-              aria-label="Zoom in"
-            >+</button>
-          </div>
-          <button
-            type="button"
-            className="zoom-btn fit-screen-btn"
-            onClick={fitToScreen}
-            aria-label="Fit to Screen"
-            data-tooltip="Fit to Screen"
-            data-tooltip-dir="down"
-          >
-            <ToolbarIcon name="fitScreen" />
-          </button>
-          <div className="topbar-divider" />
+          {!isNarrowView && (
+            <>
+              <div className="zoom-controls" data-tooltip="Ctrl+Scroll หรือ Ctrl+/−" data-tooltip-dir="down">
+                <button
+                  type="button"
+                  className="zoom-btn"
+                  onClick={() => setCanvasZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 4) / 4))}
+                  disabled={canvasZoom <= ZOOM_MIN}
+                  aria-label="Zoom out"
+                >−</button>
+                <button
+                  type="button"
+                  className="zoom-level"
+                  onClick={() => setCanvasZoom(1)}
+                  aria-label="Reset zoom"
+                  data-tooltip="คลิกเพื่อ Reset เป็น 100%"
+                  data-tooltip-dir="down"
+                >{Math.round(canvasZoom * 100)}%</button>
+                <button
+                  type="button"
+                  className="zoom-btn"
+                  onClick={() => setCanvasZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 4) / 4))}
+                  disabled={canvasZoom >= ZOOM_MAX}
+                  aria-label="Zoom in"
+                >+</button>
+              </div>
+              <button
+                type="button"
+                className="zoom-btn fit-screen-btn"
+                onClick={fitToScreen}
+                aria-label="Fit to Screen"
+                data-tooltip="Fit to Screen"
+                data-tooltip-dir="down"
+              >
+                <ToolbarIcon name="fitScreen" />
+              </button>
+              <div className="topbar-divider" />
+            </>
+          )}
           <button
             type="button"
             className="sidebar-toggle icon-only"
@@ -2932,103 +2971,9 @@ export default function App() {
           className={`dashboard-stage ${readOnly ? 'read-only' : ''} ${isNarrowView ? 'narrow' : ''}`}
           style={{
             width: readOnly && !isNarrowView ? `${occupiedContentWidth * canvasZoom}px` : undefined,
-            height: readOnly && !isNarrowView ? `${canvasHeight * canvasZoom + dashboardFiltersHeight}px` : undefined,
+            height: readOnly && !isNarrowView ? `${canvasHeight * canvasZoom}px` : undefined,
           }}
         >
-          {shouldRenderDashboardFilters ? (
-            <section className="dashboard-filters">
-              <div className="dashboard-filters-header">
-                <div>
-                  <strong>Filters</strong>
-                  <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
-                </div>
-                <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
-                  Clear Filters
-                </button>
-              </div>
-              <div className="dashboard-filters-grid">
-                <div className="filter-button-group">
-                  <span>Market</span>
-                  <div className="filter-chip-row">
-                    {['International', 'Domestic'].map((market) => (
-                      <button
-                        key={market}
-                        type="button"
-                        className={activeDashboardFilters.market === market ? 'active' : ''}
-                        onClick={() => updateActiveDashboardFilters({ market })}
-                      >
-                        {market}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="filter-button-group">
-                  <span>Year Basis</span>
-                  <div className="filter-chip-row">
-                    {[
-                      { value: 'calendar', label: 'Calendar Year' },
-                      { value: 'fiscal', label: 'Fiscal Year' }
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={activeDashboardFilters.yearMode === option.value ? 'active' : ''}
-                        onClick={() => updateActiveDashboardFilters({ yearMode: option.value })}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <label>
-                  <span>Year</span>
-                  <select
-                    value={activeDashboardFilters.year}
-                    onChange={(event) => updateActiveDashboardFilters({ year: Number(event.target.value) })}
-                  >
-                    {MICE_FILTER_OPTIONS.years.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  <span>Industry</span>
-                  <select
-                    value={activeDashboardFilters.industry}
-                    onChange={(event) => updateActiveDashboardFilters({ industry: event.target.value })}
-                  >
-                    <option value="all">All Industries</option>
-                    {MICE_FILTER_OPTIONS.industries.map((industry) => (
-                      <option key={industry} value={industry}>
-                        {industry}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  <span>Country</span>
-                  <select
-                    value={activeDashboardFilters.country}
-                    onChange={(event) => updateActiveDashboardFilters({ country: event.target.value })}
-                  >
-                    <option value="all">All Countries</option>
-                    {MICE_FILTER_OPTIONS.countries.map((country) => (
-                      <option key={country} value={country}>
-                        {country}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            </section>
-          ) : null}
-
           <div
             className="canvas-zoom-wrap"
             style={isNarrowView ? undefined : {
@@ -3323,6 +3268,147 @@ export default function App() {
               </section>
             );
           })}
+
+          {filterPanelLayout && activeDashboardFilters ? (() => {
+            const fp = filterPanelLayout;
+            const fpStyle = isNarrowView ? {
+              position: 'relative',
+              order: -1,
+              borderRadius: '16px',
+            } : {
+              position: 'absolute',
+              left: fp.x * cellWidth + canvasShiftX + WIDGET_VISUAL_INSET,
+              top: fp.y * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
+              width: fp.w * cellWidth - WIDGET_VISUAL_INSET * 2,
+              height: fp.h * GRID_ROW_HEIGHT - WIDGET_VISUAL_INSET * 2,
+              zIndex: 10,
+            };
+            return (
+              <section
+                className={`dashboard-filters on-canvas ${!readOnly ? 'editable' : ''}`}
+                style={fpStyle}
+              >
+                {!readOnly ? (
+                  <div
+                    className="filter-drag-handle drag-handle"
+                    onMouseDown={(event) => {
+                      if (isInteractiveTarget(event.target)) return;
+                      event.preventDefault();
+                      gestureSnapshotRef.current = cloneWorkspace(workspace);
+                      gestureChangedRef.current = false;
+                      setAction({
+                        kind: 'move-filter',
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        origin: { x: fp.x, y: fp.y }
+                      });
+                    }}
+                  >
+                    <strong>Filters</strong>
+                    <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
+                  </div>
+                ) : (
+                  <div className="dashboard-filters-header">
+                    <div>
+                      <strong>Filters</strong>
+                      <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
+                    </div>
+                    <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
+                      Clear Filters
+                    </button>
+                  </div>
+                )}
+                <div className="dashboard-filters-grid">
+                  <div className="filter-button-group">
+                    <span>Market</span>
+                    <div className="filter-chip-row">
+                      {['International', 'Domestic'].map((market) => (
+                        <button
+                          key={market}
+                          type="button"
+                          className={activeDashboardFilters.market === market ? 'active' : ''}
+                          onClick={() => updateActiveDashboardFilters({ market })}
+                        >
+                          {market}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="filter-button-group">
+                    <span>Year Basis</span>
+                    <div className="filter-chip-row">
+                      {[
+                        { value: 'calendar', label: 'Calendar Year' },
+                        { value: 'fiscal', label: 'Fiscal Year' }
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={activeDashboardFilters.yearMode === option.value ? 'active' : ''}
+                          onClick={() => updateActiveDashboardFilters({ yearMode: option.value })}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <label>
+                    <span>Year</span>
+                    <select
+                      value={activeDashboardFilters.year}
+                      onChange={(event) => updateActiveDashboardFilters({ year: Number(event.target.value) })}
+                    >
+                      {MICE_FILTER_OPTIONS.years.map((year) => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Industry</span>
+                    <select
+                      value={activeDashboardFilters.industry}
+                      onChange={(event) => updateActiveDashboardFilters({ industry: event.target.value })}
+                    >
+                      <option value="all">All Industries</option>
+                      {MICE_FILTER_OPTIONS.industries.map((industry) => (
+                        <option key={industry} value={industry}>{industry}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Country</span>
+                    <select
+                      value={activeDashboardFilters.country}
+                      onChange={(event) => updateActiveDashboardFilters({ country: event.target.value })}
+                    >
+                      <option value="all">All Countries</option>
+                      {MICE_FILTER_OPTIONS.countries.map((country) => (
+                        <option key={country} value={country}>{country}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                {!readOnly ? (
+                  <button
+                    type="button"
+                    aria-label="Resize filter panel"
+                    className="resize-handle"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      gestureSnapshotRef.current = cloneWorkspace(workspace);
+                      gestureChangedRef.current = false;
+                      setAction({
+                        kind: 'resize-filter',
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        origin: { w: fp.w, h: fp.h }
+                      });
+                    }}
+                  />
+                ) : null}
+              </section>
+            );
+          })() : null}
         </main>
           </div>
       </div>
