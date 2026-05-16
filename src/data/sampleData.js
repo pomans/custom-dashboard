@@ -373,7 +373,7 @@ export const widgetCatalog = [
     label: 'MICE Events Chart',
     dataset: 'miceStatistics',
     title: 'จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)',
-    description: 'กราฟเส้นสำเร็จรูปตามภาพ'
+    description: 'แนวโน้มจำนวนงาน Meetings · Incentives · Conventions · Exhibitions รายปี แยก International/Domestic'
   },
   {
     type: 'miceRevenueChart',
@@ -384,7 +384,7 @@ export const widgetCatalog = [
     label: 'MICE Revenue Chart',
     dataset: 'miceStatistics',
     title: 'รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)',
-    description: 'กราฟเส้นสำเร็จรูปตามภาพ'
+    description: 'รายได้รวมจากอุตสาหกรรม MICE ทั้ง 4 ประเภท แสดงแนวโน้มและ %YoY'
   },
   {
     type: 'miceVisitorsChart',
@@ -395,7 +395,7 @@ export const widgetCatalog = [
     label: 'MICE Visitors Chart',
     dataset: 'miceStatistics',
     title: 'จำนวนนักเดินทางไมซ์ (MICE Visitors)',
-    description: 'กราฟเส้นสำเร็จรูปตามภาพ'
+    description: 'นักเดินทางที่เข้าร่วมงาน Meetings, Incentive Travel, Conventions & Exhibitions'
   },
   {
     type: 'miceKpis',
@@ -406,7 +406,7 @@ export const widgetCatalog = [
     label: 'MICE KPI Strip',
     dataset: 'miceStatistics',
     title: 'MICE KPI Summary',
-    description: 'ชุด KPI พร้อมใช้ตามภาพ'
+    description: 'สรุป Events, Revenue, Visitors และ Avg. Spend ของอุตสาหกรรม MICE'
   },
   {
     type: 'miceNationalityPerformance',
@@ -417,7 +417,7 @@ export const widgetCatalog = [
     label: 'Nationality Performance',
     dataset: 'miceStatistics',
     title: 'Nationality Performance',
-    description: 'ตารางพร้อมใช้ตามภาพ'
+    description: 'จำนวน MICE Visitors แยกสัญชาติ เปรียบเทียบปีปัจจุบันกับปีก่อน'
   },
   {
     type: 'miceNationalityIndustryMatrix',
@@ -428,7 +428,7 @@ export const widgetCatalog = [
     label: 'Industry Matrix',
     dataset: 'miceStatistics',
     title: 'Nationality by MICE Industry',
-    description: 'เมทริกซ์ nationality x industry'
+    description: 'Visitors แยกตาม Nationality × ประเภทงาน Meetings · Incentives · Conventions · Exhibitions'
   },
   {
     type: 'miceVisitorsBreakdown',
@@ -439,7 +439,7 @@ export const widgetCatalog = [
     label: 'Visitors Breakdown',
     dataset: 'miceStatistics',
     title: 'MICE Visitors Breakdown',
-    description: 'สรุป visitors แบบ breakdown'
+    description: 'Breakdown นักเดินทาง MICE แยก Nationality, Continent และ Industry'
   },
   {
     type: 'chart',

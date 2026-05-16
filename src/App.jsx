@@ -855,6 +855,8 @@ export default function App() {
   const selectionBoxRef = useRef(null);
   const gestureSnapshotRef = useRef(null);
   const gestureChangedRef = useRef(false);
+  const filterPanelRef = useRef(null);
+  const [filterPanelActualPx, setFilterPanelActualPx] = useState(null);
 
   const dashboards = workspace.dashboards;
   const dashboardsRef = useRef(dashboards);
@@ -877,11 +879,19 @@ export default function App() {
   }, [widgets]);
   const canvasCols = maxOccupiedCol + CANVAS_GROWTH_PADDING;
   const canvasContentWidth = canvasCols * cellWidth;
+  const activeDashboardFilters = activeDashboard?.filters || { ...MICE_FILTER_DEFAULTS };
+  const shouldRenderDashboardFilters = Boolean(activeDashboardFilters);
+  const filterPanelLayout = shouldRenderDashboardFilters
+    ? (activeDashboard?.filterPanel || { x: 0, y: 0, w: 12, h: 3 })
+    : null;
+  // In read-only mode expand the occupied range to include the filter panel
+  const effectiveMinCol = filterPanelLayout ? Math.min(minOccupiedCol, filterPanelLayout.x) : minOccupiedCol;
+  const effectiveMaxCol = filterPanelLayout ? Math.max(maxOccupiedCol, filterPanelLayout.x + filterPanelLayout.w) : maxOccupiedCol;
   const occupiedContentWidth = readOnly
-    ? Math.max(cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth)
+    ? Math.max(cellWidth, (effectiveMaxCol - effectiveMinCol) * cellWidth)
     : Math.max(MIN_GRID_COLS * cellWidth, (maxOccupiedCol - minOccupiedCol) * cellWidth);
   const canvasShiftX = readOnly
-    ? -minOccupiedCol * cellWidth
+    ? -effectiveMinCol * cellWidth
     : 0;
 
   // In read-only mode on narrow screens, reflow widgets into a vertical stack
@@ -896,13 +906,11 @@ export default function App() {
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
   const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
   const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
-  const activeDashboardFilters = activeDashboard?.filters || { ...MICE_FILTER_DEFAULTS };
-  const shouldRenderDashboardFilters = Boolean(activeDashboardFilters);
-  const filterPanelLayout = shouldRenderDashboardFilters
-    ? (activeDashboard?.filterPanel || { x: 0, y: 0, w: 12, h: 3 })
-    : null;
+  const filterPanelActualRows = filterPanelLayout && filterPanelActualPx != null
+    ? Math.ceil(filterPanelActualPx / GRID_ROW_HEIGHT)
+    : filterPanelLayout?.h ?? 0;
   const effectiveMaxRow = filterPanelLayout
-    ? Math.max(maxOccupiedRow, filterPanelLayout.y + filterPanelLayout.h)
+    ? Math.max(maxOccupiedRow, filterPanelLayout.y + filterPanelActualRows)
     : maxOccupiedRow;
   const canvasRows = readOnly ? effectiveMaxRow : effectiveMaxRow + CANVAS_GROWTH_PADDING;
   const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
@@ -1198,6 +1206,17 @@ export default function App() {
   // Keep dashboardsRef current for hashchange handler (avoids stale closure)
   useEffect(() => { dashboardsRef.current = dashboards; }, [dashboards]);
 
+  // Track filter panel actual rendered height so canvas can accommodate it
+  useEffect(() => {
+    const el = filterPanelRef.current;
+    if (!el) { setFilterPanelActualPx(null); return; }
+    const ro = new ResizeObserver(([entry]) => {
+      setFilterPanelActualPx(entry.contentRect.height + WIDGET_VISUAL_INSET * 2);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [filterPanelLayout ? filterPanelLayout.w : null, filterPanelLayout?.orientation]);
+
   // Init from URL hash on mount
   useEffect(() => {
     const hash = window.location.hash;
@@ -1454,10 +1473,9 @@ export default function App() {
           filterPanel: {
             ...(dash.filterPanel || { x: 0, y: 0, w: 12, h: 3 }),
             w: Math.max(4, action.origin.w + snapX),
-            h: Math.max(2, action.origin.h + snapY)
           }
         }), { recordHistory: false });
-        if (snapX !== 0 || snapY !== 0) gestureChangedRef.current = true;
+        if (snapX !== 0) gestureChangedRef.current = true;
         return;
       }
 
@@ -2923,7 +2941,10 @@ export default function App() {
                             <span className="palette-item-thumb" aria-hidden="true">
                               <PaletteWidgetThumbnail type={item.type} />
                             </span>
-                            <strong>{item.label}</strong>
+                            <span className="palette-item-text">
+                              <strong>{item.label}</strong>
+                              {item.description ? <small>{item.description}</small> : null}
+                            </span>
                           </button>
                       ))}
                   </div>
@@ -2946,7 +2967,10 @@ export default function App() {
                             <span className="palette-item-thumb" aria-hidden="true">
                               <PaletteWidgetThumbnail type={item.type} />
                             </span>
-                            <strong>{item.label}</strong>
+                            <span className="palette-item-text">
+                              <strong>{item.label}</strong>
+                              {item.description ? <small>{item.description}</small> : null}
+                            </span>
                           </button>
                       ))}
                   </div>
@@ -3271,6 +3295,7 @@ export default function App() {
 
           {filterPanelLayout && activeDashboardFilters ? (() => {
             const fp = filterPanelLayout;
+            const fpOrientation = fp.orientation || 'horizontal';
             const fpStyle = isNarrowView ? {
               position: 'relative',
               order: -1,
@@ -3280,12 +3305,12 @@ export default function App() {
               left: fp.x * cellWidth + canvasShiftX + WIDGET_VISUAL_INSET,
               top: fp.y * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
               width: fp.w * cellWidth - WIDGET_VISUAL_INSET * 2,
-              height: fp.h * GRID_ROW_HEIGHT - WIDGET_VISUAL_INSET * 2,
               zIndex: 10,
             };
             return (
               <section
-                className={`dashboard-filters on-canvas ${!readOnly ? 'editable' : ''}`}
+                ref={filterPanelRef}
+                className={`dashboard-filters on-canvas ${fpOrientation} ${!readOnly ? 'editable' : ''}`}
                 style={fpStyle}
               >
                 {!readOnly ? (
@@ -3294,6 +3319,7 @@ export default function App() {
                     onMouseDown={(event) => {
                       if (isInteractiveTarget(event.target)) return;
                       event.preventDefault();
+                      event.stopPropagation();
                       gestureSnapshotRef.current = cloneWorkspace(workspace);
                       gestureChangedRef.current = false;
                       setAction({
@@ -3306,6 +3332,31 @@ export default function App() {
                   >
                     <strong>Filters</strong>
                     <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
+                    <button
+                      type="button"
+                      className="filter-orientation-btn"
+                      title={fpOrientation === 'horizontal' ? 'เปลี่ยนเป็น vertical' : 'เปลี่ยนเป็น horizontal'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        updateActiveDashboard((dash) => ({
+                          ...dash,
+                          filterPanel: {
+                            ...(dash.filterPanel || { x: 0, y: 0, w: 12, h: 3 }),
+                            orientation: fpOrientation === 'horizontal' ? 'vertical' : 'horizontal'
+                          }
+                        }));
+                      }}
+                    >
+                      {fpOrientation === 'horizontal' ? (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                          <line x1="2" y1="4" x2="14" y2="4"/><line x1="2" y1="8" x2="14" y2="8"/><line x1="2" y1="12" x2="14" y2="12"/>
+                        </svg>
+                      ) : (
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                          <line x1="4" y1="2" x2="4" y2="14"/><line x1="8" y1="2" x2="8" y2="14"/><line x1="12" y1="2" x2="12" y2="14"/>
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 ) : (
                   <div className="dashboard-filters-header">
@@ -3395,13 +3446,14 @@ export default function App() {
                     className="resize-handle"
                     onMouseDown={(event) => {
                       event.preventDefault();
+                      event.stopPropagation();
                       gestureSnapshotRef.current = cloneWorkspace(workspace);
                       gestureChangedRef.current = false;
                       setAction({
                         kind: 'resize-filter',
                         startX: event.clientX,
                         startY: event.clientY,
-                        origin: { w: fp.w, h: fp.h }
+                        origin: { w: fp.w }
                       });
                     }}
                   />
