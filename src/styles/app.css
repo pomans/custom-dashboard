@@ -1672,8 +1672,14 @@ button {
 .dashboard-filters-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 14px;
+}
+
+.dashboard-filters-header .section-toggle {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  flex-shrink: 0;
 }
 
 .dashboard-filters-header strong {
@@ -1687,6 +1693,24 @@ button {
   margin-top: 4px;
   color: #64748b;
   font-size: 0.84rem;
+}
+
+.filter-header-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.filter-header-label strong {
+  flex-shrink: 0;
+}
+
+.filter-header-label span {
+  margin-top: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dashboard-filters-grid {
@@ -1733,6 +1757,16 @@ button {
 
 .dashboard-filters.on-canvas {
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.07);
+}
+
+/* View mode: more spacious padding so the panel is visibly taller than in edit mode */
+.dashboard-filters.on-canvas:not(.editable) {
+  padding: 24px 28px 28px;
+  gap: 20px;
+}
+
+.dashboard-filters.on-canvas:not(.editable) .dashboard-filters-grid {
+  gap: 16px;
 }
 
 .dashboard-filters.on-canvas .resize-handle {

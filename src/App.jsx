@@ -909,8 +909,13 @@ export default function App() {
   const filterPanelActualRows = filterPanelLayout && filterPanelActualPx != null
     ? Math.ceil(filterPanelActualPx / GRID_ROW_HEIGHT)
     : filterPanelLayout?.h ?? 0;
+  // In view mode the filter panel is taller (extra CSS padding). Shift widgets down so they
+  // always start below the filter panel's actual rendered bottom edge.
+  const filterViewModeShift = readOnly && filterPanelLayout
+    ? Math.max(0, filterPanelLayout.y + filterPanelActualRows - Math.min(...widgets.map((w) => w.y), filterPanelLayout.y + (filterPanelLayout.h ?? 3)))
+    : 0;
   const effectiveMaxRow = filterPanelLayout
-    ? Math.max(maxOccupiedRow, filterPanelLayout.y + filterPanelActualRows)
+    ? Math.max(maxOccupiedRow + filterViewModeShift, filterPanelLayout.y + filterPanelActualRows)
     : maxOccupiedRow;
   const canvasRows = readOnly ? effectiveMaxRow : effectiveMaxRow + CANVAS_GROWTH_PADDING;
   const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
@@ -1193,7 +1198,7 @@ export default function App() {
     if (!vw) return;
     const PADDING = 32;
     const zoom = (vw - PADDING) / occupiedContentWidth;
-    setCanvasZoom(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Math.round(zoom * 100) / 100)));
+    setCanvasZoom(Math.max(ZOOM_MIN, Math.min(1, Math.round(zoom * 100) / 100)));
   }, [stageViewportWidth, occupiedContentWidth, widgets.length]);
 
   useEffect(() => {
@@ -3031,8 +3036,7 @@ export default function App() {
               transform: canvasZoom !== 1 ? `scale(${canvasZoom})` : undefined,
               transformOrigin: '0 0',
               width: readOnly ? `${occupiedContentWidth}px` : undefined,
-              marginLeft: readOnly ? 'auto' : undefined,
-              marginRight: readOnly ? 'auto' : undefined
+              justifySelf: readOnly ? 'start' : undefined,
             }}
             onDragOver={onCanvasDragOver}
             onDrop={onCanvasDrop}
@@ -3175,7 +3179,7 @@ export default function App() {
                     flexShrink: 0,
                   } : {
                     left: widget.x * cellWidth + canvasShiftX + WIDGET_VISUAL_INSET,
-                    top: widget.y * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
+                    top: (widget.y + filterViewModeShift) * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
                     width: widget.w * cellWidth - WIDGET_VISUAL_INSET * 2,
                     height:
                       (widget.type === 'textbox'
@@ -3360,7 +3364,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="dashboard-filters-header">
-                    <div>
+                    <div className="filter-header-label">
                       <strong>Filters</strong>
                       <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
                     </div>
