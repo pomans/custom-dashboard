@@ -31,7 +31,7 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceNationalityIndustryMatrix',
   'miceVisitorsBreakdown'
 ];
-const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
+const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard', 'rankingList'];
 const MICE_FILTER_DEFAULTS = {
   market: 'International',
   yearMode: 'calendar',
