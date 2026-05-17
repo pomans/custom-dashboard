@@ -31,7 +31,7 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceNationalityIndustryMatrix',
   'miceVisitorsBreakdown'
 ];
-const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard', 'rankingList'];
+const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {
   market: 'International',
   yearMode: 'calendar',
@@ -3266,7 +3266,7 @@ export default function App() {
                       !isWidgetPreview && TEXT_WIDGET_TYPES.includes(widget.type) ? 'text-preview-visual' : ''
                     }`}
                   >
-                    <WidgetRenderer widget={widget} dataset={dataset} records={widgetRecords} />
+                    <WidgetRenderer widget={widget} dataset={dataset} records={widgetRecords} isPreview={isWidgetPreview} />
                   </div>
                 </div>
 

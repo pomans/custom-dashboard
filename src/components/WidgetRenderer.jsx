@@ -603,7 +603,7 @@ const formatYoY = (currentValue, previousValue) => {
   return ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
 };
 
-export default function WidgetRenderer({ widget, dataset, records: overrideRecords }) {
+export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview }) {
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
     const fallback =
       widget.type === 'date' ? '${format_date(current_date)}' : widget.title || 'Text';
@@ -1127,8 +1127,8 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
 
     return (
       <div className="ranking-list">
-        <div className="ranking-list-header">
-          <strong>{widget.title || 'Ranking'}</strong>
+        <div className="ranking-list-header" style={isPreview ? { justifyContent: 'flex-end' } : undefined}>
+          {!isPreview && <strong>{widget.title || 'Ranking'}</strong>}
           <span>{fieldsByKey[valueField]?.label || valueField}</span>
         </div>
         <ol>
