@@ -906,16 +906,9 @@ export default function App() {
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
   const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
   const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
-  const filterPanelActualRows = filterPanelLayout && filterPanelActualPx != null
-    ? Math.ceil(filterPanelActualPx / GRID_ROW_HEIGHT)
-    : filterPanelLayout?.h ?? 0;
-  // In view mode the filter panel is taller (extra CSS padding). Shift widgets down so they
-  // always start below the filter panel's actual rendered bottom edge.
-  const filterViewModeShift = readOnly && filterPanelLayout
-    ? Math.max(0, filterPanelLayout.y + filterPanelActualRows - Math.min(...widgets.map((w) => w.y), filterPanelLayout.y + (filterPanelLayout.h ?? 3)))
-    : 0;
+  const filterPanelGridH = filterPanelLayout ? Math.max(2, filterPanelLayout.h ?? 3) : 0;
   const effectiveMaxRow = filterPanelLayout
-    ? Math.max(maxOccupiedRow + filterViewModeShift, filterPanelLayout.y + filterPanelActualRows)
+    ? Math.max(maxOccupiedRow, filterPanelLayout.y + filterPanelGridH)
     : maxOccupiedRow;
   const canvasRows = readOnly ? effectiveMaxRow : effectiveMaxRow + CANVAS_GROWTH_PADDING;
   const canvasHeight = canvasRows * GRID_ROW_HEIGHT;
@@ -1477,7 +1470,7 @@ export default function App() {
           ...dash,
           filterPanel: {
             ...(dash.filterPanel || { x: 0, y: 0, w: 12, h: 3 }),
-            w: Math.max(4, action.origin.w + snapX),
+            w: Math.max(5, action.origin.w + snapX),
           }
         }), { recordHistory: false });
         if (snapX !== 0) gestureChangedRef.current = true;
@@ -3179,7 +3172,7 @@ export default function App() {
                     flexShrink: 0,
                   } : {
                     left: widget.x * cellWidth + canvasShiftX + WIDGET_VISUAL_INSET,
-                    top: (widget.y + filterViewModeShift) * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
+                    top: widget.y * GRID_ROW_HEIGHT + WIDGET_VISUAL_INSET,
                     width: widget.w * cellWidth - WIDGET_VISUAL_INSET * 2,
                     height:
                       (widget.type === 'textbox'

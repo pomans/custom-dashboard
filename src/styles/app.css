@@ -1759,14 +1759,8 @@ button {
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.07);
 }
 
-/* View mode: more spacious padding so the panel is visibly taller than in edit mode */
-.dashboard-filters.on-canvas:not(.editable) {
-  padding: 24px 28px 28px;
-  gap: 20px;
-}
-
 .dashboard-filters.on-canvas:not(.editable) .dashboard-filters-grid {
-  gap: 16px;
+  gap: 12px;
 }
 
 .dashboard-filters.on-canvas .resize-handle {
@@ -1848,7 +1842,7 @@ button {
 }
 
 .dashboard-filters.vertical {
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .dashboard-filters.vertical .dashboard-filters-grid {
@@ -2388,7 +2382,7 @@ button {
   z-index: 2;
   min-width: 0;
   width: fit-content;
-  max-width: min(340px, 100%);
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

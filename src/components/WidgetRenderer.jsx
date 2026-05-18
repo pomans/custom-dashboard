@@ -355,6 +355,64 @@ const buildCategorySeries = (records, categoryField, metricField, aggregation = 
 
 const formatAnnualTick = (value) => `'${String(value).slice(2)}`;
 
+const renderQuarterlyLegend = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', gap: 24, fontSize: 13, color: '#374151', marginBottom: 4 }}>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <svg width="28" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#081f68" strokeWidth="2.5" /><circle cx="14" cy="6" r="4" fill="#081f68" /></svg>
+      This Year
+    </span>
+    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <svg width="28" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#7ec8e3" strokeWidth="2" strokeDasharray="5 3" /><circle cx="14" cy="6" r="4" fill="#7ec8e3" /></svg>
+      Last Year
+    </span>
+  </div>
+);
+
+const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter }) => {
+  const withYoy = data.map((row) => ({
+    ...row,
+    yoy: row.lastYear !== 0 ? ((row.thisYear - row.lastYear) / Math.abs(row.lastYear)) * 100 : null
+  }));
+  return (
+    <div className="fixed-mice-chart">
+      <div className="fixed-mice-chart-header">
+        <div className="fixed-mice-chart-title" style={{ background: color }}>{title}</div>
+        <div className="fixed-mice-chart-rule" />
+      </div>
+      {renderQuarterlyLegend()}
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={withYoy} margin={{ top: 32, right: 24, bottom: 24, left: 18 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
+          <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
+          <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
+          <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
+          <Line
+            type="monotone"
+            dataKey="thisYear"
+            name="This Year"
+            stroke="#081f68"
+            strokeWidth={3}
+            dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }}
+            activeDot={{ r: 7 }}
+          >
+            <LabelList dataKey="yoy" content={renderYoyBadge} />
+          </Line>
+          <Line
+            type="monotone"
+            dataKey="lastYear"
+            name="Last Year"
+            stroke="#7ec8e3"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="fixed-mice-chart-axis-label">{yLabel}</div>
+    </div>
+  );
+};
+
 const renderYoyBadge = ({ x, y, value }) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return null;
 
@@ -722,6 +780,26 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
       actualSeries,
       forecastSeries,
       yTickFormatter: formatYAxisTickMillions
+    });
+  }
+
+  if (widget.type === 'miceEventsQuarterlyChart') {
+    return renderQuarterlyChartPanel({
+      title: 'MICE Events Performance Over Time',
+      color: '#081f68',
+      yLabel: 'No. of Events',
+      data: fixedProfile.chartsQuarterly?.events || [],
+      yTickFormatter: formatYAxisTickThousands
+    });
+  }
+
+  if (widget.type === 'miceVisitorsQuarterlyChart') {
+    return renderQuarterlyChartPanel({
+      title: 'MICE International Visitors Performance Over Time',
+      color: '#1d6fe8',
+      yLabel: 'No. of Visitors',
+      data: fixedProfile.chartsQuarterly?.visitors || [],
+      yTickFormatter: formatYAxisTickThousands
     });
   }
 

@@ -209,6 +209,20 @@ const MICE_FIXED_PROFILE = {
       { label: 'Q2', value: 20627 },
       { label: 'Q3', value: 20504 }
     ]
+  },
+  chartsQuarterly: {
+    events: [
+      { quarter: 'Q1', thisYear: 4500, lastYear: 1494 },
+      { quarter: 'Q2', thisYear: 4200, lastYear: 5024 },
+      { quarter: 'Q3', thisYear: 4550, lastYear: 5254 },
+      { quarter: 'Q4', thisYear: 4800, lastYear: 5150 }
+    ],
+    visitors: [
+      { quarter: 'Q1', thisYear: 200000, lastYear: 146199 },
+      { quarter: 'Q2', thisYear: 152000, lastYear: 202937 },
+      { quarter: 'Q3', thisYear: 148000, lastYear: 216691 },
+      { quarter: 'Q4', thisYear: 60000, lastYear: 234375 }
+    ]
   }
 };
 
@@ -364,6 +378,28 @@ export const datasetLibrary = {
 };
 
 export const widgetCatalog = [
+  {
+    type: 'miceEventsQuarterlyChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 7,
+    label: 'MICE Events Quarterly Chart',
+    dataset: 'miceStatistics',
+    title: 'MICE Events Performance Over Time',
+    description: 'จำนวนงาน MICE แยกรายไตรมาส เปรียบเทียบ This Year vs Last Year พร้อม %YoY'
+  },
+  {
+    type: 'miceVisitorsQuarterlyChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 7,
+    label: 'MICE Visitors Quarterly Chart',
+    dataset: 'miceStatistics',
+    title: 'MICE International Visitors Performance Over Time',
+    description: 'จำนวนนักเดินทาง MICE International แยกรายไตรมาส เปรียบเทียบ This Year vs Last Year พร้อม %YoY'
+  },
   {
     type: 'miceEventsChart',
     group: 'ready',
