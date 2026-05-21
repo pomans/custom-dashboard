@@ -22,20 +22,26 @@ const PX_PER_MM = 96 / 25.4;
 const MM_PER_PX = 25.4 / 96;
 const LOCAL_STORAGE_KEY = 'bi-dashboard.workspace.v1';
 const TEXT_WIDGET_TYPES = ['textbox'];
+const toKebabLabel = (str) => str.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
 const NO_CONFIG_WIDGET_TYPES = [
+  'miceStatCard',
   'miceEventsChart',
   'miceRevenueChart',
   'miceVisitorsChart',
   'miceKpis',
   'miceNationalityPerformance',
   'miceNationalityIndustryMatrix',
-  'miceVisitorsBreakdown'
+  'miceNationalityMatrixView',
+  'miceVisitorsBreakdown',
+  'miceDrillFlow'
 ];
 const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {
   market: 'International',
   yearMode: 'calendar',
   year: 2025,
+  yearMin: 2007,
+  yearMax: 2025,
   industry: 'all',
   country: 'all'
 };
@@ -284,198 +290,308 @@ const WidgetThumbnail = ({ type }) => {
   }
 };
 
-const MINIMAP_CHART_TYPES = new Set(['miceEventsChart','miceRevenueChart','miceVisitorsChart','miceVisitorsBreakdown','chart','line','bar','pie']);
-const MINIMAP_KPI_TYPES = new Set(['miceKpis','kpiCard','summaryCard']);
-const MINIMAP_TABLE_TYPES = new Set(['miceNationalityPerformance','miceNationalityIndustryMatrix','table','rankingList']);
 
-const MINIMAP_UID = Math.random().toString(36).slice(2, 7);
+const DashboardMiniMap = () => (
+  <svg
+    className="dashboard-list-card-thumb-svg"
+    viewBox="0 0 200 110"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden="true"
+  >
+    {/* Background */}
+    <rect width="200" height="110" rx="10" fill="#eef0f4" />
+    {/* Top-left cell */}
+    <rect x="10" y="10" width="84" height="40" rx="6" fill="#ffffff" />
+    {/* Top-right cell */}
+    <rect x="106" y="10" width="84" height="40" rx="6" fill="#ffffff" />
+    {/* Bottom-left cell */}
+    <rect x="10" y="60" width="84" height="40" rx="6" fill="#ffffff" />
+    {/* Bottom-right cell */}
+    <rect x="106" y="60" width="84" height="40" rx="6" fill="#ffffff" />
+  </svg>
+);
 
-const DashboardMiniMap = ({ widgets, uid = '' }) => {
-  if (!widgets?.length) return (
-    <div className="dashboard-list-card-thumb-wrap empty">
-      <span>ไม่มี widget</span>
-    </div>
-  );
-  const COLS = 12;
-  const maxRow = Math.max(...widgets.map((w) => w.y + w.h), 6);
-  const W = 300;
-  const H = 160;
-  const cw = W / COLS;
-  const ch = H / maxRow;
-  const gradId = `mm-${MINIMAP_UID}-${uid}`;
+const PaletteWidgetThumbnail = ({ type }) => {
+  const B = '#2457cf';   // brand blue
+  const LB = '#93c5fd';  // light blue
+  const BG = '#eef2f8';  // background
+  const LG = '#dde3ee';  // light gray
+  const GY = '#94a3b8';  // gray text
 
-  const typeConfig = (type) => {
-    if (MINIMAP_CHART_TYPES.has(type)) return { fill: `url(#${gradId}-chart)`, stroke: '#60a5fa', accent: '#3b82f6' };
-    if (MINIMAP_KPI_TYPES.has(type)) return { fill: `url(#${gradId}-kpi)`, stroke: '#4ade80', accent: '#22c55e' };
-    if (MINIMAP_TABLE_TYPES.has(type)) return { fill: `url(#${gradId}-table)`, stroke: '#fb923c', accent: '#f97316' };
-    if (type === 'textbox') return { fill: '#f8fafc', stroke: '#cbd5e1', accent: '#94a3b8' };
-    return { fill: '#f1f5f9', stroke: '#cbd5e1', accent: '#94a3b8' };
-  };
-
-  const renderInner = (type, bx, by, bw, bh) => {
-    if (bw < 6 || bh < 6) return null;
-    const pad = 3;
-    const iw = bw - pad * 2;
-    const ih = bh - pad * 2;
-    const ix = bx + pad;
-    const iy = by + pad;
-
-    if (MINIMAP_CHART_TYPES.has(type)) {
-      const pts = [[0,0.65],[0.18,0.45],[0.35,0.55],[0.52,0.25],[0.68,0.38],[0.85,0.15],[1,0.22]];
-      const d = pts.map(([px, py], i) => `${i === 0 ? 'M' : 'L'}${(ix + px * iw).toFixed(1)},${(iy + py * ih).toFixed(1)}`).join(' ');
-      const area = d + ` L${(ix + iw).toFixed(1)},${(iy + ih).toFixed(1)} L${ix.toFixed(1)},${(iy + ih).toFixed(1)} Z`;
-      return (
-        <g>
-          <path d={area} fill="#3b82f6" fillOpacity="0.12" />
-          <path d={d} fill="none" stroke="#3b82f6" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
-          {pts.slice(1, -1).filter((_, i) => i % 2 === 1).map(([px, py], i) => (
-            <circle key={i} cx={(ix + px * iw).toFixed(1)} cy={(iy + py * ih).toFixed(1)} r="1.5" fill="#3b82f6" opacity="0.7" />
-          ))}
-        </g>
-      );
-    }
-    if (MINIMAP_KPI_TYPES.has(type)) {
-      const cols = Math.max(2, Math.round(bw / 28));
-      const cSize = iw / cols;
-      return (
-        <g>
-          {Array.from({ length: cols }).map((_, i) => (
-            <g key={i}>
-              <rect x={ix + i * cSize + 1} y={iy + ih * 0.1} width={cSize - 2} height={ih * 0.45} rx="2" fill="#22c55e" opacity="0.3" />
-              <rect x={ix + i * cSize + 2} y={iy + ih * 0.62} width={(cSize - 4) * (0.5 + i * 0.15)} height={ih * 0.18} rx="1" fill="#22c55e" opacity="0.45" />
-            </g>
-          ))}
-        </g>
-      );
-    }
-    if (MINIMAP_TABLE_TYPES.has(type)) {
-      const rows = Math.max(2, Math.round(bh / 10));
-      const rowH = ih / rows;
-      return (
-        <g>
-          <rect x={ix} y={iy} width={iw} height={rowH * 0.85} rx="1.5" fill="#f97316" opacity="0.4" />
-          {Array.from({ length: rows - 1 }).map((_, i) => (
-            <rect key={i} x={ix} y={iy + rowH * (i + 1)} width={iw * (0.9 - i * 0.05)} height={rowH * 0.65} rx="1" fill="#f97316" opacity={0.2 - i * 0.03} />
-          ))}
-          <line x1={ix + iw * 0.33} y1={iy} x2={ix + iw * 0.33} y2={iy + ih} stroke="#f97316" strokeWidth="0.5" opacity="0.3" />
-          <line x1={ix + iw * 0.66} y1={iy} x2={ix + iw * 0.66} y2={iy + ih} stroke="#f97316" strokeWidth="0.5" opacity="0.2" />
-        </g>
-      );
-    }
-    return (
-      <g>
-        <rect x={ix} y={iy + ih * 0.2} width={iw * 0.75} height="2" rx="1" fill="#94a3b8" opacity="0.5" />
-        <rect x={ix} y={iy + ih * 0.45} width={iw * 0.55} height="2" rx="1" fill="#94a3b8" opacity="0.35" />
-        <rect x={ix} y={iy + ih * 0.7} width={iw * 0.65} height="2" rx="1" fill="#94a3b8" opacity="0.25" />
-      </g>
-    );
-  };
-
-  return (
-    <svg
-      className="dashboard-list-card-thumb-svg"
-      viewBox={`0 0 ${W} ${H}`}
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      <defs>
-        <linearGradient id={`${gradId}-chart`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#eff6ff" />
-          <stop offset="100%" stopColor="#dbeafe" />
-        </linearGradient>
-        <linearGradient id={`${gradId}-kpi`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#f0fdf4" />
-          <stop offset="100%" stopColor="#dcfce7" />
-        </linearGradient>
-        <linearGradient id={`${gradId}-table`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fff7ed" />
-          <stop offset="100%" stopColor="#ffedd5" />
-        </linearGradient>
-      </defs>
-
-      {/* Canvas background */}
-      <rect width={W} height={H} fill="#f8fafc" />
-      {/* Subtle dot grid */}
-      {Array.from({ length: Math.ceil(H / 12) }).map((_, row) =>
-        Array.from({ length: Math.ceil(W / 12) }).map((_, col) => (
-          <circle key={`${row}-${col}`} cx={col * 12 + 6} cy={row * 12 + 6} r="0.7" fill="#cbd5e1" opacity="0.5" />
-        ))
-      )}
-
-      {widgets.map((w) => {
-        const cfg = typeConfig(w.type);
-        const bx = w.x * cw + 2;
-        const by = w.y * ch + 2;
-        const bw = Math.max(6, w.w * cw - 4);
-        const bh = Math.max(6, w.h * ch - 4);
-        return (
-          <g key={w.id}>
-            {/* Shadow */}
-            <rect x={bx + 1} y={by + 1.5} width={bw} height={bh} rx="4" fill="rgba(15,23,42,0.07)" />
-            {/* Widget block */}
-            <rect x={bx} y={by} width={bw} height={bh} rx="4" fill={cfg.fill} stroke={cfg.stroke} strokeWidth="0.8" />
-            {/* Top accent bar */}
-            <rect x={bx} y={by} width={bw} height="3" rx="4" fill={cfg.accent} opacity="0.5" />
-            {renderInner(w.type, bx, by + 3, bw, bh - 3)}
-          </g>
-        );
-      })}
+  const Wrap = ({ children }) => (
+    <svg viewBox="0 0 80 54" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+      style={{ width: '100%', height: '100%', display: 'block' }}>
+      <rect width="80" height="54" rx="5" fill={BG} />
+      {children}
     </svg>
+  );
+
+  /* ── KPI / Stat card ─────────────────────────── */
+  if (type === 'miceStatCard' || type === 'kpiCard' || type === 'summaryCard') {
+    return (
+      <Wrap>
+        <rect x="0" y="0" width="80" height="3" rx="1.5" fill={B} />
+        <text x="40" y="30" textAnchor="middle" fill={B} fontSize="18" fontWeight="bold" fontFamily="sans-serif">201K</text>
+        <rect x="18" y="35" width="44" height="3" rx="1.5" fill={LG} />
+        <rect x="26" y="42" width="28" height="3" rx="1.5" fill={LG} />
+      </Wrap>
+    );
+  }
+
+  /* ── Annual line chart ───────────────────────── */
+  if (type === 'miceEventsChart' || type === 'miceRevenueChart' || type === 'miceVisitorsChart' || type === 'line' || type === 'chart') {
+    const pts = [[10,40],[18,34],[26,29],[34,31],[42,20],[50,15],[58,17],[66,13]];
+    const d = pts.map(([x,y],i) => `${i===0?'M':'L'}${x},${y}`).join(' ');
+    const fd = pts.slice(-3).map(([x,y]) => `L${x},${y}`).join(' ').replace('L','M') + ' L72,11';
+    return (
+      <Wrap>
+        <line x1="8" y1="45" x2="74" y2="45" stroke={LG} strokeWidth="1" />
+        <line x1="8" y1="10" x2="8" y2="45" stroke={LG} strokeWidth="1" />
+        {[10,18,26,34,42,50].map((x,i) => (
+          <line key={i} x1={x+8} y1="45" x2={x+8} y2="43" stroke={LG} strokeWidth="1" />
+        ))}
+        <path d={d} fill="none" stroke={B} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={`M50,15 L58,17 L66,13 L72,11`} fill="none" stroke={B} strokeWidth="1.5" strokeDasharray="3 2" strokeLinecap="round" />
+        {pts.slice(0,5).map(([x,y],i) => <circle key={i} cx={x} cy={y} r="2" fill={B} />)}
+      </Wrap>
+    );
+  }
+
+  /* ── Bar chart ───────────────────────────────── */
+  if (type === 'bar') {
+    const bars = [{x:12,h:18},{x:22,h:28},{x:32,h:14},{x:42,h:34},{x:52,h:22},{x:62,h:30}];
+    return (
+      <Wrap>
+        <line x1="8" y1="45" x2="74" y2="45" stroke={LG} strokeWidth="1" />
+        {bars.map((b,i) => (
+          <rect key={i} x={b.x} y={45-b.h} width="7" height={b.h} rx="1.5" fill={i===3 ? B : LB} />
+        ))}
+      </Wrap>
+    );
+  }
+
+  /* ── Quarterly dual-line chart ───────────────── */
+  if (type === 'miceEventsQuarterlyChart' || type === 'miceVisitorsQuarterlyChart') {
+    return (
+      <Wrap>
+        <line x1="8" y1="45" x2="74" y2="45" stroke={LG} strokeWidth="1" />
+        {['Q1','Q2','Q3','Q4'].map((q,i) => (
+          <text key={q} x={17+i*16} y="50" textAnchor="middle" fill={GY} fontSize="6" fontFamily="sans-serif">{q}</text>
+        ))}
+        <polyline points="17,36 33,26 49,30 65,16" fill="none" stroke={B} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {[[17,36],[33,26],[49,30],[65,16]].map(([x,y],i) => <circle key={i} cx={x} cy={y} r="2.5" fill={B} />)}
+        <polyline points="17,40 33,37 49,38 65,32" fill="none" stroke={LB} strokeWidth="1.5" strokeDasharray="4 2" strokeLinejoin="round" strokeLinecap="round" />
+        {[[17,40],[33,37],[49,38],[65,32]].map(([x,y],i) => <circle key={i} cx={x} cy={y} r="2" fill={LB} />)}
+      </Wrap>
+    );
+  }
+
+  /* ── Table / Performance table ───────────────── */
+  if (type === 'table' || type === 'miceNationalityPerformance') {
+    return (
+      <Wrap>
+        <rect x="6" y="7" width="68" height="7" rx="2" fill={B} opacity="0.85" />
+        {[18,27,36,45].map((y,i) => (
+          <React.Fragment key={y}>
+            <rect x="6" y={y} width="68" height="7" rx="1" fill={i%2===0 ? '#fff' : LG} opacity="0.9" />
+            <rect x="8" y={y+2} width={[30,24,36,20][i]} height="3" rx="1" fill={LG} />
+            <rect x={55} y={y+2} width={[16,20,12,24][i]} height="3" rx="1" fill={LB} />
+          </React.Fragment>
+        ))}
+      </Wrap>
+    );
+  }
+
+  /* ── Matrix / heatmap ────────────────────────── */
+  if (type === 'miceNationalityIndustryMatrix' || type === 'miceNationalityMatrixView' || type === 'rankingList') {
+    if (type === 'rankingList') {
+      return (
+        <Wrap>
+          {[8,17,26,35,44].map((y,i) => (
+            <React.Fragment key={y}>
+              <text x="9" y={y+7} fill={GY} fontSize="7" fontFamily="sans-serif" fontWeight="bold">{i+1}</text>
+              <rect x="16" y={y+1} width={[54,44,34,28,20][i]} height="6" rx="2" fill={i===0 ? B : LB} opacity={1-i*0.1} />
+            </React.Fragment>
+          ))}
+        </Wrap>
+      );
+    }
+    const cells = [[0.9,0.3,0.6],[0.4,0.8,0.2],[0.7,0.2,0.9],[0.3,0.6,0.4]];
+    return (
+      <Wrap>
+        {[28,42,56].map((x,i) => (
+          <rect key={i} x={x} y="6" width="12" height="5" rx="1" fill={GY} opacity="0.5" />
+        ))}
+        {cells.map((row,ri) =>
+          row.map((v,ci) => (
+            <rect key={`${ri}-${ci}`} x={28+ci*14} y={16+ri*9} width="12" height="7" rx="1.5"
+              fill={B} opacity={0.15 + v * 0.85} />
+          ))
+        )}
+        {[16,25,34,43].map((y,i) => (
+          <rect key={i} x="6" y={y} width="18" height="3" rx="1" fill={LG} />
+        ))}
+      </Wrap>
+    );
+  }
+
+  /* ── Breakdown columns ───────────────────────── */
+  if (type === 'miceVisitorsBreakdown') {
+    return (
+      <Wrap>
+        <rect x="4" y="19" width="13" height="18" rx="3" fill={B} />
+        {[[22,9],[22,22],[22,35]].map(([x,y],i) => (
+          <React.Fragment key={i}>
+            <path d={`M17,28 C19,28 20,${y+7} ${x},${y+7}`} fill="none" stroke={LB} strokeWidth="1.5" />
+            <rect x={x} y={y} width="13" height="12" rx="2.5" fill={LB} opacity={0.9-i*0.1} />
+          </React.Fragment>
+        ))}
+        {[[40,12],[40,24],[40,36]].map(([x,y],i) => (
+          <React.Fragment key={i}>
+            <path d={`M35,15 C37,15 38,${y+6} ${x},${y+6}`} fill="none" stroke={LB} strokeWidth="1" opacity="0.5" />
+            <rect x={x} y={y} width="13" height="10" rx="2.5" fill={LB} opacity={0.5-i*0.08} />
+          </React.Fragment>
+        ))}
+      </Wrap>
+    );
+  }
+
+  /* ── Drill-down flow (Sankey) ────────────────── */
+  if (type === 'miceDrillFlow') {
+    return (
+      <Wrap>
+        {/* Total */}
+        <rect x="4" y="22" width="12" height="12" rx="2.5" fill={B} />
+        {/* Nationality bars */}
+        {[[22,9,14],[22,19,11],[22,29,9],[22,38,6]].map(([x,y,w],i) => (
+          <rect key={i} x={x} y={y} width={w} height="6" rx="1.5" fill={i===2 ? B : LB} opacity={i===2?1:0.75} />
+        ))}
+        {/* Industry bars */}
+        {[[44,14,16],[44,24,10]].map(([x,y,w],i) => (
+          <rect key={i} x={x} y={y} width={w} height="6" rx="1.5" fill={i===0 ? B : LB} opacity={i===0?1:0.7} />
+        ))}
+        {/* Quarters */}
+        {[[64,10,12],[64,18,11],[64,26,10],[64,34,9]].map(([x,y,w],i) => (
+          <rect key={i} x={x} y={y} width={w} height="6" rx="1.5" fill={LB} opacity={0.85-i*0.05} />
+        ))}
+        {/* Bezier lines: total → nats */}
+        <path d="M16,28 C19,28 19,12 22,12" fill="none" stroke={LB} strokeWidth="1.5" opacity="0.6" />
+        <path d="M16,28 C19,28 19,22 22,22" fill="none" stroke={LB} strokeWidth="1" opacity="0.4" />
+        <path d="M16,28 C19,28 19,32 22,32" fill="none" stroke={B} strokeWidth="2" opacity="0.9" />
+        <path d="M16,28 C19,28 19,41 22,41" fill="none" stroke={LB} strokeWidth="1" opacity="0.3" />
+        {/* nat→ind */}
+        <path d="M36,32 C40,32 40,17 44,17" fill="none" stroke={B} strokeWidth="1.5" opacity="0.9" />
+        <path d="M36,32 C40,32 40,27 44,27" fill="none" stroke={LB} strokeWidth="1" opacity="0.4" />
+        {/* ind→quarters */}
+        <path d="M60,17 C62,17 62,13 64,13" fill="none" stroke={B} strokeWidth="1.5" opacity="0.85" />
+        <path d="M60,17 C62,17 62,21 64,21" fill="none" stroke={B} strokeWidth="1.2" opacity="0.7" />
+        <path d="M60,17 C62,17 62,29 64,29" fill="none" stroke={B} strokeWidth="1" opacity="0.55" />
+        <path d="M60,17 C62,17 62,37 64,37" fill="none" stroke={B} strokeWidth="0.8" opacity="0.4" />
+      </Wrap>
+    );
+  }
+
+  /* ── Pie / donut ─────────────────────────────── */
+  if (type === 'pie') {
+    return (
+      <Wrap>
+        <circle cx="40" cy="27" r="20" fill={LG} />
+        <path d="M40,27 L40,7 A20,20 0 0,1 57.3,37 Z" fill={B} />
+        <path d="M40,27 L57.3,37 A20,20 0 0,1 22.7,37 Z" fill={LB} />
+        <path d="M40,27 L22.7,37 A20,20 0 0,1 40,7 Z" fill="#bfdbfe" />
+        <circle cx="40" cy="27" r="10" fill={BG} />
+      </Wrap>
+    );
+  }
+
+  /* ── Treemap ─────────────────────────────────── */
+  if (type === 'treemap') {
+    return (
+      <Wrap>
+        <rect x="5" y="6" width="38" height="30" rx="3" fill={B} opacity="0.9" />
+        <rect x="47" y="6" width="28" height="14" rx="3" fill={LB} opacity="0.85" />
+        <rect x="47" y="24" width="28" height="12" rx="3" fill={LB} opacity="0.55" />
+        <rect x="5" y="40" width="22" height="9" rx="3" fill={LB} opacity="0.45" />
+        <rect x="31" y="40" width="16" height="9" rx="3" fill={LB} opacity="0.35" />
+        <rect x="51" y="40" width="24" height="9" rx="3" fill={LB} opacity="0.25" />
+      </Wrap>
+    );
+  }
+
+  /* ── Textbox / label / date ──────────────────── */
+  if (type === 'textbox' || type === 'label' || type === 'date') {
+    return (
+      <Wrap>
+        <rect x="14" y="10" width="38" height="7" rx="2.5" fill={GY} opacity="0.45" />
+        <rect x="8" y="23" width="64" height="4" rx="2" fill={LG} />
+        <rect x="8" y="31" width="56" height="4" rx="2" fill={LG} />
+        <rect x="8" y="39" width="44" height="4" rx="2" fill={LG} />
+      </Wrap>
+    );
+  }
+
+  /* ── Generic fallback ────────────────────────── */
+  return (
+    <Wrap>
+      <rect x="10" y="10" width="60" height="34" rx="4" fill={LG} />
+    </Wrap>
   );
 };
 
-const PaletteWidgetThumbnail = ({ type }) => {
-  if (type === 'miceEventsChart' || type === 'miceRevenueChart' || type === 'miceVisitorsChart' || type === 'chart' || type === 'line' || type === 'bar') {
-    return (
-      <div className="palette-thumb palette-thumb-chart" aria-hidden="true">
-        <span className="palette-thumb-bars">
-          <i />
-          <i />
-          <i />
-          <i />
-        </span>
-        <svg viewBox="0 0 40 24" aria-hidden="true">
-          <path d="M2 18L10 15L18 9L26 11L34 5L38 7" />
-        </svg>
-      </div>
-    );
-  }
+/* ─────────────────────────────────────────────────────────
+   YearRangeSlider — dual-thumb range input for year filter
+───────────────────────────────────────────────────────── */
+const YearRangeSlider = ({ minYear, maxYear, valueMin, valueMax, onChange }) => {
+  const trackRef = useRef(null);
 
-  if (type === 'miceKpis' || type === 'kpiCard' || type === 'summaryCard') {
-    return (
-      <div className="palette-thumb palette-thumb-kpi" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-    );
-  }
+  const pct = (v) => ((v - minYear) / (maxYear - minYear)) * 100;
+  const leftPct  = pct(valueMin);
+  const rightPct = pct(valueMax);
 
-  if (type === 'miceNationalityPerformance' || type === 'miceNationalityIndustryMatrix' || type === 'table') {
-    return (
-      <div className="palette-thumb palette-thumb-table" aria-hidden="true">
-        <span className="row" />
-        <span className="row" />
-        <span className="row" />
-        <span className="row" />
-      </div>
-    );
-  }
-
-  if (type === 'miceVisitorsBreakdown') {
-    return (
-      <div className="palette-thumb palette-thumb-breakdown" aria-hidden="true">
-        <span className="root" />
-        <span className="branch a" />
-        <span className="branch b" />
-        <span className="branch c" />
-      </div>
-    );
-  }
+  const handleMin = (e) => {
+    const v = Math.min(Number(e.target.value), valueMax);
+    onChange(v, valueMax);
+  };
+  const handleMax = (e) => {
+    const v = Math.max(Number(e.target.value), valueMin);
+    onChange(valueMin, v);
+  };
 
   return (
-    <div className="palette-thumb palette-thumb-generic" aria-hidden="true">
-      <span />
+    <div className="yr-range-wrap">
+      <div className="yr-range-labels">
+        <span className="yr-range-val">{valueMin}</span>
+        <span className="yr-range-val">{valueMax}</span>
+      </div>
+      <div className="yr-range-track-wrap" ref={trackRef}>
+        {/* Filled track between thumbs */}
+        <div
+          className="yr-range-fill"
+          style={{ left: `${leftPct}%`, width: `${rightPct - leftPct}%` }}
+        />
+        {/* Min thumb */}
+        <input
+          type="range"
+          className="yr-range-input yr-range-min"
+          min={minYear}
+          max={maxYear}
+          value={valueMin}
+          onChange={handleMin}
+        />
+        {/* Max thumb */}
+        <input
+          type="range"
+          className="yr-range-input yr-range-max"
+          min={minYear}
+          max={maxYear}
+          value={valueMax}
+          onChange={handleMax}
+        />
+      </div>
+      <div className="yr-range-ticks">
+        <span>{minYear}</span>
+        <span>{maxYear}</span>
+      </div>
     </div>
   );
 };
@@ -643,7 +759,8 @@ const createWidget = (prev, template, x, y, overrides = {}) => {
     w: overrides.w || template.defaultW || (isKpiWidget ? 3 : isSummaryWidget ? 3 : isChartWidget ? 6 : 4),
     h: overrides.h || template.defaultH || (isTextWidget || isSummaryWidget || isKpiWidget ? 2 : isChartWidget ? 5 : 5),
     autoHeight: isTextWidget ? overrides.autoHeight !== false : undefined,
-    heightPx: isTextWidget ? overrides.heightPx || null : undefined
+    heightPx: isTextWidget ? overrides.heightPx || null : undefined,
+    ...(template.metric !== undefined ? { metric: template.metric } : {})
   };
 };
 
@@ -703,7 +820,6 @@ const normalizeImportedDashboard = (value) => {
 const miceEventsChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceEventsChart');
 const miceRevenueChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceRevenueChart');
 const miceVisitorsChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsChart');
-const miceKpisTemplate = widgetCatalog.find((widget) => widget.type === 'miceKpis');
 const miceNationalityPerformanceTemplate = widgetCatalog.find((widget) => widget.type === 'miceNationalityPerformance');
 const miceNationalityIndustryMatrixTemplate = widgetCatalog.find((widget) => widget.type === 'miceNationalityIndustryMatrix');
 const miceVisitorsBreakdownTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsBreakdown');
@@ -712,10 +828,9 @@ const initialWidgets = [
   createWidget([], miceEventsChartTemplate, 0, 3),
   createWidget([{ type: 'miceEventsChart' }], miceRevenueChartTemplate, 0, 10),
   createWidget([{ type: 'miceRevenueChart' }], miceVisitorsChartTemplate, 0, 17),
-  createWidget([{ type: 'miceVisitorsChart' }], miceKpisTemplate, 0, 24),
-  createWidget([{ type: 'miceKpis' }], miceNationalityPerformanceTemplate, 0, 27),
-  createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 36),
-  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 45)
+  createWidget([{ type: 'miceVisitorsChart' }], miceNationalityPerformanceTemplate, 0, 24),
+  createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 33),
+  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 42)
 ];
 
 const createDefaultWorkspace = () => {
@@ -788,19 +903,21 @@ const MICE_FILTER_OPTIONS = {
 };
 
 const applyMiceFilters = (records, filters = {}, options = {}) => {
-  const market = options.forceInternationalOnly ? 'International' : filters.market;
+  const market  = options.forceInternationalOnly ? 'International' : filters.market;
   const yearMode = filters.yearMode;
-  const year = Number(filters.year);
   const industry = filters.industry;
-  const country = filters.country;
+  const country  = filters.country;
+  // Support both single-year (legacy) and range (yearMin/yearMax)
+  const yearMin = filters.yearMin != null ? Number(filters.yearMin) : (filters.year ? Number(filters.year) : null);
+  const yearMax = filters.yearMax != null ? Number(filters.yearMax) : (filters.year ? Number(filters.year) : null);
 
   return (records || []).filter((record) => {
     if (market && market !== 'all' && record.market !== market) return false;
     if (yearMode && yearMode !== 'all' && record.yearMode !== yearMode) return false;
-    if (!Number.isNaN(year) && year && Number(record.year) !== year) return false;
+    if (yearMin != null && !Number.isNaN(yearMin) && Number(record.year) < yearMin) return false;
+    if (yearMax != null && !Number.isNaN(yearMax) && Number(record.year) > yearMax) return false;
     if (industry && industry !== 'all' && record.industry !== industry) return false;
     if (country && country !== 'all' && record.country !== country) return false;
-
     return true;
   });
 };
@@ -915,10 +1032,12 @@ export default function App() {
   const dashboardCards = dashboards.map((dashboard) => {
     const dashboardWidgetCount = dashboard.widgets?.length || 0;
     const previewWidgets = (dashboard.widgets || []).slice(0, 3).map((widget) => widget.title || widget.type);
+    const hasFilters = Boolean(dashboard.filters || dashboard.filterPanel);
     return {
       ...dashboard,
       widgetCount: dashboardWidgetCount,
-      previewWidgets
+      previewWidgets,
+      hasFilters
     };
   });
 
@@ -1569,13 +1688,13 @@ export default function App() {
     };
   }, [action, cellWidth, readOnly, widgets]);
 
-  const onPaletteDragStart = (event, type) => {
+  const onPaletteDragStart = (event, paletteKey) => {
     if (readOnly) {
       event.preventDefault();
       return;
     }
 
-    event.dataTransfer.setData('widget/type', type);
+    event.dataTransfer.setData('widget/type', paletteKey);
     event.dataTransfer.effectAllowed = 'copy';
   };
 
@@ -1597,8 +1716,8 @@ export default function App() {
     if (readOnly) return;
     event.preventDefault();
 
-    const type = event.dataTransfer.getData('widget/type');
-    const template = widgetCatalog.find((item) => item.type === type);
+    const paletteKey = event.dataTransfer.getData('widget/type');
+    const template = widgetCatalog.find((item) => (item.paletteKey || item.type) === paletteKey);
     if (!template || !canvasRef.current) return;
 
     const point = getCanvasLocalPoint(event);
@@ -2436,19 +2555,6 @@ export default function App() {
           </div>
         </div>
         <div className="dashboard-list-header-actions">
-          <button
-            type="button"
-            className="dashboard-list-header-btn"
-            onClick={() => {
-              setViewMode('detail');
-              setReadOnly(true);
-              if (!activeDashboard) return;
-              clearTransientSelectionState();
-            }}
-            disabled={!activeDashboard}
-          >
-            Open current
-          </button>
           <button type="button" className="dashboard-list-header-btn" onClick={() => listImportRef.current?.click()}>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{width:14,height:14,flexShrink:0}}>
               <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -2504,7 +2610,7 @@ export default function App() {
           {dashboardCards.map((dashboard) => (
             <div
               key={dashboard.id}
-              className={`dashboard-list-card ${dashboard.id === activeDashboardId ? 'active' : ''}`}
+              className={`dashboard-list-card${dashboard.id === activeDashboardId ? ' active' : ''}`}
               onClick={() => openDashboardDetail(dashboard.id)}
               role="button"
               tabIndex={0}
@@ -2515,21 +2621,11 @@ export default function App() {
               </div>
               <div className="dashboard-list-card-body">
                 <div className="dashboard-list-card-header">
-                  <strong>{dashboard.name}</strong>
-                  {dashboard.id === activeDashboardId ? <span className="dashboard-list-badge">Active</span> : null}
+                  <strong className="dashboard-list-card-name">{dashboard.name}</strong>
+                  <span className="dashboard-list-badge">Active</span>
                 </div>
                 <div className="dashboard-list-meta">
-                  <span>{dashboard.widgetCount} widgets</span>
-                  {dashboard.filters ? <span>Has filters</span> : <span>No filters</span>}
-                </div>
-                <div className="dashboard-list-preview">
-                  {dashboard.previewWidgets.length ? (
-                    dashboard.previewWidgets.map((label) => (
-                      <span key={label}>{label}</span>
-                    ))
-                  ) : (
-                    <span>Empty dashboard</span>
-                  )}
+                  <span>{dashboard.widgetCount} widgets{dashboard.hasFilters ? ' · Has filters' : ''}</span>
                 </div>
                 <div className="dashboard-list-card-actions" onClick={(e) => e.stopPropagation()}>
                   <button
@@ -2554,6 +2650,22 @@ export default function App() {
                       <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                     Remove
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-list-card-action-btn icon-only"
+                    title="Copy link"
+                    onClick={() => {
+                      const url = window.location.origin + window.location.pathname + '#/' + encodeURIComponent(dashboard.id);
+                      navigator.clipboard?.writeText(url);
+                    }}
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
+                      <circle cx="13" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                      <circle cx="3" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                      <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                      <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -2929,12 +3041,12 @@ export default function App() {
                       .filter((item) => item.group === 'ready')
                       .map((item) => (
                           <button
-                            key={item.type}
+                            key={item.paletteKey || item.type}
                             type="button"
                             className="palette-item palette-item-ready"
                             draggable={!readOnly}
                             disabled={readOnly}
-                            onDragStart={(event) => onPaletteDragStart(event, item.type)}
+                            onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
                           >
                             <span className="palette-item-thumb" aria-hidden="true">
                               <PaletteWidgetThumbnail type={item.type} />
@@ -2955,12 +3067,12 @@ export default function App() {
                       .filter((item) => item.group !== 'ready')
                       .map((item) => (
                           <button
-                            key={item.type}
+                            key={item.paletteKey || item.type}
                             type="button"
                             className="palette-item"
                             draggable={!readOnly}
                             disabled={readOnly}
-                            onDragStart={(event) => onPaletteDragStart(event, item.type)}
+                            onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
                           >
                             <span className="palette-item-thumb" aria-hidden="true">
                               <PaletteWidgetThumbnail type={item.type} />
@@ -3116,29 +3228,18 @@ export default function App() {
               };
               const widgetControls = (
                 <div className="widget-controls">
-                  {hasConfigPopup(widget.type) ? (
+                  {!TEXT_WIDGET_TYPES.includes(widget.type) ? (
                     <button
                       type="button"
                       className="icon-button config-toggle"
-                      aria-label="Configure widget"
-                      title="Configure"
+                      aria-label="Widget settings"
+                      title="Settings"
                       onClick={() => setActiveConfigWidgetId(widget.id)}
                     >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:18,height:18}}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:16,height:16}}>
                         <circle cx="12" cy="12" r="3" />
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                       </svg>
-                    </button>
-                  ) : null}
-                  {!NO_CONFIG_WIDGET_TYPES.includes(widget.type) ? (
-                    <button
-                      type="button"
-                      className="icon-button preview-toggle"
-                      aria-label={widget.preview ? 'Edit widget' : 'Preview widget'}
-                      title={widget.preview ? 'Edit' : 'Preview'}
-                      onClick={() => toggleWidgetPreview(widget.id)}
-                    >
-                      {widget.preview ? '✎' : '◐'}
                     </button>
                   ) : null}
                   <button
@@ -3217,16 +3318,8 @@ export default function App() {
                     ) : (
                       <>
                         <div className="widget-title-block">
-                          <small>{widget.type.toUpperCase()}</small>
-                          {TEXT_WIDGET_TYPES.includes(widget.type) ? (
-                            <strong>{widget.title}</strong>
-                          ) : (
-                            <input
-                              type="text"
-                              value={widget.title}
-                              onChange={(event) => updateWidgetField(widget.id, 'title', event.target.value)}
-                            />
-                            )}
+                          <strong className="widget-title-label">{widget.title}</strong>
+                          <small className="widget-type-label">{toKebabLabel(widget.type)}</small>
                         </div>
                         {widgetControls}
                       </>
@@ -3328,7 +3421,7 @@ export default function App() {
                     }}
                   >
                     <strong>Filters</strong>
-                    <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
+                    <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
                     <button
                       type="button"
                       className="filter-orientation-btn"
@@ -3359,7 +3452,7 @@ export default function App() {
                   <div className="dashboard-filters-header">
                     <div className="filter-header-label">
                       <strong>Filters</strong>
-                      <span>ควบคุม market, ปี, อุตสาหกรรม และประเทศ</span>
+                      <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
                     </div>
                     <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
                       Clear Filters
@@ -3400,41 +3493,16 @@ export default function App() {
                       ))}
                     </div>
                   </div>
-                  <label>
-                    <span>Year</span>
-                    <select
-                      value={activeDashboardFilters.year}
-                      onChange={(event) => updateActiveDashboardFilters({ year: Number(event.target.value) })}
-                    >
-                      {MICE_FILTER_OPTIONS.years.map((year) => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Industry</span>
-                    <select
-                      value={activeDashboardFilters.industry}
-                      onChange={(event) => updateActiveDashboardFilters({ industry: event.target.value })}
-                    >
-                      <option value="all">All Industries</option>
-                      {MICE_FILTER_OPTIONS.industries.map((industry) => (
-                        <option key={industry} value={industry}>{industry}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    <span>Country</span>
-                    <select
-                      value={activeDashboardFilters.country}
-                      onChange={(event) => updateActiveDashboardFilters({ country: event.target.value })}
-                    >
-                      <option value="all">All Countries</option>
-                      {MICE_FILTER_OPTIONS.countries.map((country) => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </select>
-                  </label>
+                  <div className="filter-button-group">
+                    <span>Year Range</span>
+                    <YearRangeSlider
+                      minYear={MICE_FILTER_OPTIONS.years[0] || 2007}
+                      maxYear={MICE_FILTER_OPTIONS.years[MICE_FILTER_OPTIONS.years.length - 1] || 2025}
+                      valueMin={activeDashboardFilters.yearMin ?? 2007}
+                      valueMax={activeDashboardFilters.yearMax ?? 2025}
+                      onChange={(min, max) => updateActiveDashboardFilters({ yearMin: min, yearMax: max })}
+                    />
+                  </div>
                 </div>
                 {!readOnly ? (
                   <button
@@ -3469,12 +3537,7 @@ export default function App() {
           <div className="config-modal" onClick={(event) => event.stopPropagation()}>
             <div className="config-modal-header">
               <div>
-                <h2>{activeConfigWidget.title}</h2>
-                <p>
-                  {TEXT_WIDGET_TYPES.includes(activeConfigWidget.type)
-                    ? 'Configure text content and formatting.'
-                    : 'Configure the widget field mapping for its fixed datasource.'}
-                </p>
+                <h2>Widget Settings</h2>
                 {!TEXT_WIDGET_TYPES.includes(activeConfigWidget.type) && activeConfigDataset ? (
                   <div className="config-modal-meta">
                     <span className="config-modal-badge">{activeConfigDataset.label}</span>
@@ -3485,7 +3548,7 @@ export default function App() {
                 ) : null}
               </div>
               <button type="button" className="section-toggle" onClick={() => setActiveConfigWidgetId(null)}>
-                Close
+                ×
               </button>
             </div>
 
@@ -3494,7 +3557,18 @@ export default function App() {
                 renderTextWidgetControls(activeConfigWidget)
               ) : (
                 <>
-                  {renderMappingControls(activeConfigWidget, activeConfigDataset)}
+                  <div className="config-title-row">
+                    <label className="config-title-label" htmlFor="cfg-widget-title">Widget Name</label>
+                    <input
+                      id="cfg-widget-title"
+                      type="text"
+                      className="config-title-input"
+                      value={activeConfigWidget.title}
+                      onChange={(e) => updateWidgetField(activeConfigWidget.id, 'title', e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {hasConfigPopup(activeConfigWidget.type) ? renderMappingControls(activeConfigWidget, activeConfigDataset) : null}
                 </>
               )}
             </div>

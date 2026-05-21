@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Bar,
   BarChart,
@@ -661,6 +661,541 @@ const formatYoY = (currentValue, previousValue) => {
   return ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
 };
 
+/* ─────────────────────────────────────────────
+   MiceNationalityMatrixView
+   Industry / Period toggle matrix
+───────────────────────────────────────────── */
+const fmt = new Intl.NumberFormat('en-US');
+
+/* ─── Widget inline filter chip bar ─────────────────────────── */
+function WidgetFilterBar({ label, options, value, onChange }) {
+  return (
+    <div className="wfb-wrap">
+      {label && <span className="wfb-label">{label}</span>}
+      <div className="wfb-chips">
+        {options.map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`wfb-chip${value === opt.value ? ' active' : ''}`}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Nationality Performance with Continent filter ─────────── */
+function MiceNationalityPerformanceWidget({ fixedProfile }) {
+  const [selContinent, setSelContinent] = useState('all');
+  const allRows = fixedProfile.nationalityPerformance || [];
+  const continents = Array.from(new Set(allRows.map(r => r.continent))).sort();
+  const continentOptions = [
+    { value: 'all', label: 'ทั้งหมด' },
+    ...continents.map(c => ({ value: c, label: c }))
+  ];
+  const rows = selContinent === 'all' ? allRows : allRows.filter(r => r.continent === selContinent);
+  const maxValue = Math.max(...rows.map(r => r.current), 1);
+  const totalCurrent = rows.reduce((s, r) => s + r.current, 0);
+  const totalPrev    = rows.reduce((s, r) => s + r.previous, 0);
+
+  return (
+    <div className="fixed-mice-table-shell">
+      <div className="fixed-mice-chart-title fixed-mice-chart-title-table">Nationality Performance</div>
+      <WidgetFilterBar
+        label="ทวีป"
+        options={continentOptions}
+        value={selContinent}
+        onChange={setSelContinent}
+      />
+      <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
+        <table className="fixed-mice-table fixed-mice-table-heavy">
+          <thead>
+            <tr>
+              <th>Continent</th>
+              <th>Nationality</th>
+              <th>No. of Visitors</th>
+              <th>Last Year</th>
+              <th>%YoY</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.nationality}>
+                <td>{row.continent}</td>
+                <td>{row.nationality}</td>
+                <td>
+                  <div className="table-cell-bar">
+                    <span style={{ width: `${Math.max(10, (row.current / maxValue) * 100)}%` }} />
+                    <strong>{formatMetricValue(row.current)}</strong>
+                  </div>
+                </td>
+                <td>{formatMetricValue(row.previous)}</td>
+                <td className={row.yoy >= 0 ? 'positive' : 'negative'}>
+                  {`${row.yoy >= 0 ? '▲' : '▼'} ${Math.abs(row.yoy).toFixed(1)}%`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan="2">Total</td>
+              <td>{formatMetricValue(totalCurrent)}</td>
+              <td>{formatMetricValue(totalPrev)}</td>
+              <td className={formatYoY(totalCurrent, totalPrev) >= 0 ? 'positive' : 'negative'}>
+                {formatYoY(totalCurrent, totalPrev) === null
+                  ? '-'
+                  : `${formatYoY(totalCurrent, totalPrev) >= 0 ? '▲' : '▼'} ${Math.abs(formatYoY(totalCurrent, totalPrev)).toFixed(1)}%`}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Nationality × Industry Matrix with Industry filter ──────── */
+function MiceNationalityIndustryMatrixWidget({ fixedProfile }) {
+  const [selInd, setSelInd] = useState('all');
+  const rowData = fixedProfile.nationalityIndustryMatrix || [];
+  const industries = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions'];
+  const indOptions = [
+    { value: 'all', label: 'ทั้งหมด' },
+    ...industries.map(i => ({ value: i, label: i }))
+  ];
+  // When industry selected: keep only rows that have visitors in that industry
+  const filteredRows = selInd === 'all'
+    ? rowData
+    : rowData.filter(r => (r[selInd] || 0) > 0);
+  const visibleCols = selInd === 'all' ? industries : [selInd];
+  const columnTotals = Object.fromEntries(
+    [...industries, 'Total'].map(key => [key, filteredRows.reduce((s, r) => s + (r[key] || 0), 0)])
+  );
+  const maxCell = Math.max(...filteredRows.flatMap(r => industries.map(i => r[i] || 0)), 1);
+
+  return (
+    <div className="fixed-mice-table-shell">
+      <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">Nationality by MICE Industry</div>
+      <WidgetFilterBar
+        label="อุตสาหกรรม"
+        options={indOptions}
+        value={selInd}
+        onChange={setSelInd}
+      />
+      <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
+        <table className="fixed-mice-table fixed-mice-table-matrix">
+          <thead>
+            <tr>
+              <th>Nationality</th>
+              {visibleCols.map(i => <th key={i}>{i}</th>)}
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRows.map(row => (
+              <tr key={row.nationality}>
+                <td>{row.nationality}</td>
+                {visibleCols.map(i => (
+                  <td key={i} className={row[i] ? 'filled' : 'empty'}>
+                    <div className="matrix-cell">
+                      <span style={{ width: `${Math.max(0, (row[i] / maxCell) * 100)}%` }} />
+                      <strong>{row[i] ? formatMetricValue(row[i]) : ''}</strong>
+                    </div>
+                  </td>
+                ))}
+                <td className="total-cell">{formatMetricValue(row.Total)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              {visibleCols.map(i => <td key={i}>{formatMetricValue(columnTotals[i] || 0)}</td>)}
+              <td>{formatMetricValue(columnTotals.Total || 0)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MiceNationalityMatrixView({ fixedProfile }) {
+  const [view, setView] = useState('industry');
+  const industryRows = fixedProfile.nationalityIndustryMatrix2025 || [];
+  const periodRows   = fixedProfile.nationalityQuarterMatrix || [];
+
+  const industryCols = ['Meetings', 'Conventions'];
+  const periodCols   = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const cols = view === 'industry' ? industryCols : periodCols;
+  const rows = view === 'industry' ? industryRows : periodRows;
+  const maxTotal = Math.max(...rows.map(r => r.Total), 1);
+
+  return (
+    <div className="mice-matrix-view">
+      <div className="mice-matrix-toolbar">
+        <span className="mice-matrix-toolbar-label">เลือกมุมมอง :</span>
+        <div className="mice-matrix-toggle">
+          {['industry', 'period'].map(mode => (
+            <button
+              key={mode}
+              type="button"
+              className={`mice-matrix-toggle-btn${view === mode ? ' active' : ''}`}
+              onClick={() => setView(mode)}
+            >
+              {mode === 'industry' ? 'Industry' : 'Period'}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="mice-matrix-table-wrap">
+        <table className="mice-matrix-table">
+          <thead>
+            <tr>
+              <th>Nationality</th>
+              {cols.map(c => <th key={c}>{c}</th>)}
+              <th className="col-total">Total <span className="sort-arrow">▼</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => {
+              const maxCol = Math.max(...cols.map(c => row[c] || 0), 1);
+              return (
+                <tr key={row.nationality}>
+                  <td className="cell-nationality">{row.nationality}</td>
+                  {cols.map(c => {
+                    const v = row[c] || 0;
+                    const pct = v ? Math.max(8, (v / maxCol) * 100) : 0;
+                    return (
+                      <td key={c} className={`cell-val${v ? ' has-val' : ''}`}>
+                        {v ? (
+                          <div className="cell-bar-wrap">
+                            <div className="cell-bar-fill" style={{ width: `${pct}%` }} />
+                            <span>{fmt.format(v)}</span>
+                          </div>
+                        ) : null}
+                      </td>
+                    );
+                  })}
+                  <td className="cell-total">
+                    <div className="cell-total-inner">
+                      <div className="cell-total-track">
+                        <div className="cell-total-fill" style={{ width: `${Math.max(4, (row.Total / maxTotal) * 100)}%` }} />
+                      </div>
+                      <strong>{fmt.format(row.Total)}</strong>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td><strong>Total</strong></td>
+              {cols.map(c => (
+                <td key={c}><strong>{fmt.format(rows.reduce((s, r) => s + (r[c] || 0), 0))}</strong></td>
+              ))}
+              <td className="cell-total"><strong>{fmt.format(rows.reduce((s, r) => s + r.Total, 0))}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   MiceDrillFlow  v2
+   Sankey-style drill-down with SVG bezier connectors
+   Total → Nationality → Industry → Quarter
+───────────────────────────────────────────── */
+function MiceDrillFlow({ fixedProfile }) {
+  const data = fixedProfile.sankeyFlow || { total: 0, nationality: [] };
+  const [selNat, setSelNat] = useState(null);
+  const [selInd, setSelInd] = useState(null);
+  const [showAllNat, setShowAllNat] = useState(false);
+  const INIT_SHOW = 7;
+
+  const containerRef   = useRef(null);
+  const columnsRef     = useRef(null);   // scrollable columns wrapper
+  // Track refs — bezier y-position anchors at bar track center
+  const totalTrackRef  = useRef(null);
+  const natTrackRefs   = useRef({});
+  const indTrackRefs   = useRef({});
+  const qTrackRefs     = useRef({});
+  // Node refs — used for x-position (column edge)
+  const totalNodeRef   = useRef(null);
+  const natNodeRefs    = useRef({});
+  const indNodeRefs    = useRef({});
+  const qNodeRefs      = useRef({});
+  const [paths, setPaths]               = useState([]);
+  const [indColOffset, setIndColOffset] = useState(0);
+  const [qColOffset,   setQColOffset]   = useState(0);
+  const [scrollTick,   setScrollTick]   = useState(0);
+
+  /* ── Re-trigger calculations on scroll ── */
+  useEffect(() => {
+    const el = columnsRef.current;
+    if (!el) return;
+    const onScroll = () => setScrollTick(t => t + 1);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  const natRows   = data.nationality || [];
+  const visNat    = showAllNat ? natRows : natRows.slice(0, INIT_SHOW);
+  const selNatRow = natRows.find(n => n.label === selNat);
+  const indRows   = selNatRow?.industry || [];
+  const selIndRow = indRows.find(i => i.label === selInd);
+  const qRows     = selIndRow?.quarter || [];
+
+  const maxNat = Math.max(...natRows.map(n => n.value), 1);
+  const maxInd = Math.max(...indRows.map(i => i.value), 1);
+  const maxQ   = Math.max(...qRows.map(q => q.value), 1);
+
+  /* ── Recompute SVG bezier paths after DOM settles ── */
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) { setPaths([]); return; }
+
+    const cr = container.getBoundingClientRect();
+    const scaleX = cr.width  > 0 ? container.offsetWidth  / cr.width  : 1;
+    const scaleY = cr.height > 0 ? container.offsetHeight / cr.height : 1;
+
+    // x from node edge, y from track vertical center
+    const pt = (nodeEl, trackEl, side) => {
+      if (!nodeEl || !trackEl) return null;
+      const nr = nodeEl.getBoundingClientRect();
+      const tr = trackEl.getBoundingClientRect();
+      const x = side === 'right'
+        ? (nr.right - cr.left) * scaleX
+        : (nr.left  - cr.left) * scaleX;
+      const y = ((tr.top + tr.bottom) / 2 - cr.top) * scaleY;
+      return { x, y };
+    };
+
+    // S-curve bezier via horizontal midpoint
+    const bez = (x1, y1, x2, y2) => {
+      const mx = (x1 + x2) / 2;
+      return `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+    };
+
+    const newPaths = [];
+    const totPt = pt(totalNodeRef.current, totalTrackRef.current, 'right');
+
+    /* ── Total → each visible nationality ── */
+    visNat.forEach(row => {
+      const nPt = pt(natNodeRefs.current[row.label], natTrackRefs.current[row.label], 'left');
+      if (!totPt || !nPt) return;
+      const isSel = selNat === row.label;
+      newPaths.push({
+        key: `tot-${row.label}`,
+        d: bez(totPt.x, totPt.y, nPt.x, nPt.y),
+        stroke: isSel ? '#2457cf' : '#dde5f0',
+        strokeWidth: isSel ? 2.5 : 0.8,
+        opacity: isSel ? 1 : (selNat ? 0.5 : 0.65),
+      });
+    });
+
+    /* ── Selected nat → industries ── */
+    if (selNat) {
+      const nPt = pt(natNodeRefs.current[selNat], natTrackRefs.current[selNat], 'right');
+      indRows.forEach(row => {
+        const iPt = pt(indNodeRefs.current[row.label], indTrackRefs.current[row.label], 'left');
+        if (!nPt || !iPt) return;
+        const isSel = selInd === row.label;
+        newPaths.push({
+          key: `nat-${row.label}`,
+          d: bez(nPt.x, nPt.y, iPt.x, iPt.y),
+          stroke: isSel ? '#2457cf' : '#93c5fd',
+          strokeWidth: isSel ? 2.5 : 1,
+          opacity: isSel ? 1 : 0.5,
+        });
+      });
+    }
+
+    /* ── Selected industry → quarters ── */
+    if (selInd) {
+      const iPt = pt(indNodeRefs.current[selInd], indTrackRefs.current[selInd], 'right');
+      qRows.forEach(row => {
+        const qPt = pt(qNodeRefs.current[row.label], qTrackRefs.current[row.label], 'left');
+        if (!iPt || !qPt) return;
+        newPaths.push({
+          key: `q-${row.label}`,
+          d: bez(iPt.x, iPt.y, qPt.x, qPt.y),
+          stroke: '#2457cf',
+          strokeWidth: 2,
+          opacity: 0.75,
+        });
+      });
+    }
+
+    setPaths(newPaths);
+  }, [selNat, selInd, showAllNat, visNat.length, indRows.length, qRows.length, indColOffset, qColOffset, scrollTick]);
+
+  /* ── Industry column offset: align with selected nationality ── */
+  useEffect(() => {
+    if (!selNat || !visNat.length) { setIndColOffset(0); return; }
+    const container = containerRef.current;
+    if (!container) return;
+    const cr   = container.getBoundingClientRect();
+    const scaleY = cr.height > 0 ? container.offsetHeight / cr.height : 1;
+    const firstT = natTrackRefs.current[visNat[0].label];
+    const selT   = natTrackRefs.current[selNat];
+    if (!firstT || !selT) return;
+    setIndColOffset(Math.max(0, (selT.getBoundingClientRect().top - firstT.getBoundingClientRect().top) * scaleY));
+  }, [selNat, visNat.length, showAllNat, scrollTick]);
+
+  /* ── Quarter column offset: align with selected industry ── */
+  useEffect(() => {
+    if (!selInd || !indRows.length) { setQColOffset(indColOffset); return; }
+    const container = containerRef.current;
+    if (!container) return;
+    const cr   = container.getBoundingClientRect();
+    const scaleY = cr.height > 0 ? container.offsetHeight / cr.height : 1;
+    const firstT = indTrackRefs.current[indRows[0].label];
+    const selT   = indTrackRefs.current[selInd];
+    if (!firstT || !selT) return;
+    setQColOffset(indColOffset + Math.max(0, (selT.getBoundingClientRect().top - firstT.getBoundingClientRect().top) * scaleY));
+  }, [selInd, indRows.length, indColOffset, scrollTick]);
+
+  const handleNatClick = (label) => {
+    if (selNat === label) { setSelNat(null); setSelInd(null); }
+    else {
+      const row = natRows.find(n => n.label === label);
+      setSelNat(label);
+      setSelInd(row?.industry?.[0]?.label || null);
+    }
+  };
+  const handleIndClick = (label) => setSelInd(selInd === label ? null : label);
+  const clearNat = () => { setSelNat(null); setSelInd(null); };
+  const clearInd = () => setSelInd(null);
+
+  return (
+    <div className="df2-shell" ref={containerRef}>
+      {/* SVG overlay */}
+      <svg className="df2-svg" aria-hidden="true">
+        {paths.map(p => (
+          <path key={p.key} d={p.d} fill="none"
+            stroke={p.stroke} strokeWidth={p.strokeWidth} opacity={p.opacity} />
+        ))}
+      </svg>
+
+      {/* Filter chips */}
+      <div className="df2-chips">
+        <div className={`df2-chip${selNat ? ' df2-chip-active' : ''}`}>
+          <div className="df2-chip-top">
+            <span className="df2-chip-field">Nationality</span>
+            {selNat && <button type="button" className="df2-chip-clear" onClick={clearNat}>×</button>}
+          </div>
+          <span className="df2-chip-val">{selNat || '—'}</span>
+        </div>
+        <div className={`df2-chip${selInd ? ' df2-chip-active' : ''}`}>
+          <div className="df2-chip-top">
+            <span className="df2-chip-field">Industry</span>
+            {selInd && <button type="button" className="df2-chip-clear" onClick={clearInd}>×</button>}
+          </div>
+          <span className="df2-chip-val">{selInd || '—'}</span>
+        </div>
+        <div className="df2-chip">
+          <div className="df2-chip-top">
+            <span className="df2-chip-field">Quarter</span>
+          </div>
+          <span className="df2-chip-val">—</span>
+        </div>
+      </div>
+
+      {/* Flow columns */}
+      <div className="df2-columns" ref={columnsRef}>
+
+        {/* ── Col 0: Total ── */}
+        <div className="df2-col df2-col-total">
+          <div className="df2-col-hd">Total</div>
+          <div className="df2-node" ref={totalNodeRef}>
+            <div className="df2-track" ref={totalTrackRef}>
+              <div className="df2-fill df2-fill-total" style={{ width: '100%' }} />
+            </div>
+            <strong className="df2-name">This Year</strong>
+            <span className="df2-val">{fmt.format(data.total)}</span>
+          </div>
+        </div>
+
+        {/* ── Col 1: Nationality ── */}
+        <div className="df2-col">
+          <div className="df2-col-hd">Nationality</div>
+          {visNat.map(row => (
+            <button
+              type="button"
+              key={row.label}
+              className={`df2-node df2-node-btn${selNat === row.label ? ' df2-sel' : ''}`}
+              ref={el => { natNodeRefs.current[row.label] = el; }}
+              onClick={() => handleNatClick(row.label)}
+            >
+              <div className="df2-track" ref={el => { natTrackRefs.current[row.label] = el; }}>
+                <div className="df2-fill" style={{ width: `${Math.max(4, (row.value / maxNat) * 100)}%` }} />
+              </div>
+              <strong className="df2-name">{row.label}</strong>
+              <span className="df2-val">{fmt.format(row.value)}</span>
+            </button>
+          ))}
+          {!showAllNat && natRows.length > INIT_SHOW && (
+            <button type="button" className="df2-more" onClick={() => setShowAllNat(true)}>
+              ∨ show {natRows.length - INIT_SHOW} more
+            </button>
+          )}
+        </div>
+
+        {/* ── Col 2: Industry — offset to align with selected nationality ── */}
+        {selNat && (
+          <div className="df2-col" style={{ marginTop: `${indColOffset}px` }}>
+            <div className="df2-col-hd">Industry</div>
+            {indRows.map(row => (
+              <button
+                type="button"
+                key={row.label}
+                className={`df2-node df2-node-btn${selInd === row.label ? ' df2-sel' : ''}`}
+                ref={el => { indNodeRefs.current[row.label] = el; }}
+                onClick={() => handleIndClick(row.label)}
+              >
+                <div className="df2-track" ref={el => { indTrackRefs.current[row.label] = el; }}>
+                  <div className="df2-fill" style={{ width: `${Math.max(4, (row.value / maxInd) * 100)}%` }} />
+                </div>
+                <strong className="df2-name">{row.label}</strong>
+                <span className="df2-val">{fmt.format(row.value)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── Col 3: Quarter — offset to align with selected industry ── */}
+        {selInd && (
+          <div className="df2-col" style={{ marginTop: `${qColOffset}px` }}>
+            <div className="df2-col-hd">Quarter</div>
+            {qRows.map(row => (
+              <div
+                key={row.label}
+                className="df2-node"
+                ref={el => { qNodeRefs.current[row.label] = el; }}
+              >
+                <div className="df2-track" ref={el => { qTrackRefs.current[row.label] = el; }}>
+                  <div className="df2-fill" style={{ width: `${Math.max(4, (row.value / maxQ) * 100)}%` }} />
+                </div>
+                <strong className="df2-name">{row.label}</strong>
+                <span className="df2-val">{fmt.format(row.value)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview }) {
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
     const fallback =
@@ -728,6 +1263,24 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   const records = overrideRecords || dataset.records;
   const fieldsByKey = Object.fromEntries((dataset.fields || []).map((field) => [field.key, field]));
   const fixedProfile = dataset.fixedProfile || {};
+
+  if (widget.type === 'miceStatCard') {
+    const profile = fixedProfile.kpis || {};
+    const metric = widget.metric || 'events';
+    const STAT_CONFIGS = {
+      events:         { value: formatMetricValue(profile.events),   label: 'MICE Events' },
+      visitors:       { value: formatMetricValue(profile.visitors), label: 'MICE Inter Visitors' },
+      topNationality: { value: profile.topNationality || '-',       label: 'Top Nationality' },
+      topIndustry:    { value: profile.topIndustry    || '-',       label: 'Top Industry' },
+    };
+    const cfg = STAT_CONFIGS[metric] || STAT_CONFIGS.events;
+    return (
+      <div className="mice-stat-card">
+        <strong>{cfg.value}</strong>
+        <span>{cfg.label}</span>
+      </div>
+    );
+  }
 
   if (widget.type === 'miceEventsChart') {
     const annual = fixedProfile.charts?.events || [];
@@ -828,115 +1381,11 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   }
 
   if (widget.type === 'miceNationalityPerformance') {
-    const currentRows = fixedProfile.nationalityPerformance || [];
-    const maxValue = Math.max(...currentRows.map((row) => row.current), 1);
-    const totalCurrent = 560512;
-    const totalPrev = 816258;
-
-    return (
-      <div className="fixed-mice-table-shell">
-        <div className="fixed-mice-chart-title fixed-mice-chart-title-table">Nationality Performance</div>
-        <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
-          <table className="fixed-mice-table fixed-mice-table-heavy">
-            <thead>
-              <tr>
-                <th>Continent</th>
-                <th>Nationality</th>
-                <th>No. of Visitors</th>
-                <th>Last Year</th>
-                <th>%YoY</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentRows.map((row) => (
-                <tr key={row.nationality}>
-                  <td>{row.continent}</td>
-                  <td>{row.nationality}</td>
-                  <td>
-                    <div className="table-cell-bar">
-                      <span style={{ width: `${Math.max(10, (row.current / maxValue) * 100)}%` }} />
-                      <strong>{formatMetricValue(row.current)}</strong>
-                    </div>
-                  </td>
-                  <td>{formatMetricValue(row.previous)}</td>
-                  <td className={row.yoy >= 0 ? 'positive' : 'negative'}>
-                    {`${row.yoy >= 0 ? '▲' : '▼'} ${Math.abs(row.yoy).toFixed(1)}%`}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan="2">Total</td>
-                <td>{formatMetricValue(totalCurrent)}</td>
-                <td>{formatMetricValue(totalPrev)}</td>
-                <td className={formatYoY(totalCurrent, totalPrev) >= 0 ? 'positive' : 'negative'}>
-                  {formatYoY(totalCurrent, totalPrev) === null
-                    ? '-'
-                    : `${formatYoY(totalCurrent, totalPrev) >= 0 ? '▲' : '▼'} ${Math.abs(formatYoY(totalCurrent, totalPrev)).toFixed(1)}%`}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-    );
+    return <MiceNationalityPerformanceWidget fixedProfile={fixedProfile} />;
   }
 
   if (widget.type === 'miceNationalityIndustryMatrix') {
-    const rowData = fixedProfile.nationalityIndustryMatrix || [];
-    const industries = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions'];
-    const columnTotals = Object.fromEntries(
-      [...industries, 'Total'].map((key) => [
-        key,
-        rowData.reduce((sum, row) => sum + (row[key] || 0), 0)
-      ])
-    );
-    const maxCell = Math.max(...rowData.flatMap((row) => industries.map((industry) => row[industry] || 0)), 1);
-
-    return (
-      <div className="fixed-mice-table-shell">
-        <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">Nationality by MICE Industry</div>
-        <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
-          <table className="fixed-mice-table fixed-mice-table-matrix">
-            <thead>
-              <tr>
-                <th>Nationality</th>
-                {industries.map((industry) => (
-                  <th key={industry}>{industry}</th>
-                ))}
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rowData.map((row) => (
-                <tr key={row.nationality}>
-                  <td>{row.nationality}</td>
-                  {industries.map((industry) => (
-                    <td key={industry} className={row[industry] ? 'filled' : 'empty'}>
-                      <div className="matrix-cell">
-                        <span style={{ width: `${Math.max(0, (row[industry] / maxCell) * 100)}%` }} />
-                        <strong>{row[industry] ? formatMetricValue(row[industry]) : ''}</strong>
-                      </div>
-                    </td>
-                  ))}
-                  <td className="total-cell">{formatMetricValue(row.Total)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>Total</td>
-                {industries.map((industry) => (
-                  <td key={industry}>{formatMetricValue(columnTotals[industry] || 0)}</td>
-                ))}
-                <td>{formatMetricValue(columnTotals.Total || 0)}</td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-    );
+    return <MiceNationalityIndustryMatrixWidget fixedProfile={fixedProfile} />;
   }
 
   if (widget.type === 'miceVisitorsBreakdown') {
@@ -1258,6 +1707,14 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
         </table>
       </div>
     );
+  }
+
+  if (widget.type === 'miceNationalityMatrixView') {
+    return <MiceNationalityMatrixView fixedProfile={fixedProfile} />;
+  }
+
+  if (widget.type === 'miceDrillFlow') {
+    return <MiceDrillFlow fixedProfile={fixedProfile} />;
   }
 
   return <p className="empty-note">Unsupported widget type.</p>;

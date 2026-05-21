@@ -210,6 +210,71 @@ const MICE_FIXED_PROFILE = {
       { label: 'Q3', value: 20504 }
     ]
   },
+  nationalityIndustryMatrix2025: [
+    { nationality: 'India',                    Meetings: 81238, Conventions: 0,  Total: 81238 },
+    { nationality: 'China',                    Meetings: 60881, Conventions: 0,  Total: 60881 },
+    { nationality: 'Hong Kong',                Meetings: 15680, Conventions: 0,  Total: 15680 },
+    { nationality: 'Malaysia',                 Meetings: 13598, Conventions: 0,  Total: 13598 },
+    { nationality: 'Vietnam',                  Meetings: 6190,  Conventions: 0,  Total: 6190  },
+    { nationality: 'Germany',                  Meetings: 4750,  Conventions: 0,  Total: 4750  },
+    { nationality: 'Australia',                Meetings: 3611,  Conventions: 0,  Total: 3611  },
+    { nationality: 'United States of America', Meetings: 3479,  Conventions: 10, Total: 3489  },
+    { nationality: 'United Kingdom',           Meetings: 3483,  Conventions: 0,  Total: 3483  },
+    { nationality: 'France',                   Meetings: 2293,  Conventions: 0,  Total: 2293  },
+    { nationality: 'Japan',                    Meetings: 2195,  Conventions: 0,  Total: 2195  },
+    { nationality: 'Taiwan',                   Meetings: 1050,  Conventions: 0,  Total: 1050  },
+    { nationality: 'Norway',                   Meetings: 794,   Conventions: 0,  Total: 794   },
+    { nationality: 'Myanmar',                  Meetings: 779,   Conventions: 0,  Total: 779   },
+    { nationality: 'Indonesia',                Meetings: 559,   Conventions: 0,  Total: 559   },
+    { nationality: 'Laos',                     Meetings: 472,   Conventions: 0,  Total: 472   },
+    { nationality: 'Israel',                   Meetings: 417,   Conventions: 0,  Total: 417   }
+  ],
+  nationalityQuarterMatrix: [
+    { nationality: 'India',                    Q1: 28672, Q2: 27040, Q3: 25526, Q4: 0,     Total: 81238 },
+    { nationality: 'China',                    Q1: 18442, Q2: 16200, Q3: 14960, Q4: 11279, Total: 60881 },
+    { nationality: 'Hong Kong',                Q1: 4200,  Q2: 3840,  Q3: 3980,  Q4: 3660,  Total: 15680 },
+    { nationality: 'Malaysia',                 Q1: 3800,  Q2: 3498,  Q3: 3500,  Q4: 2800,  Total: 13598 },
+    { nationality: 'Vietnam',                  Q1: 1800,  Q2: 1590,  Q3: 1700,  Q4: 1100,  Total: 6190  },
+    { nationality: 'Germany',                  Q1: 1400,  Q2: 1250,  Q3: 1100,  Q4: 1000,  Total: 4750  },
+    { nationality: 'Australia',                Q1: 1050,  Q2: 960,   Q3: 890,   Q4: 711,   Total: 3611  },
+    { nationality: 'United States of America', Q1: 950,   Q2: 890,   Q3: 870,   Q4: 779,   Total: 3489  },
+    { nationality: 'United Kingdom',           Q1: 910,   Q2: 870,   Q3: 850,   Q4: 853,   Total: 3483  },
+    { nationality: 'France',                   Q1: 620,   Q2: 590,   Q3: 570,   Q4: 513,   Total: 2293  },
+    { nationality: 'Japan',                    Q1: 610,   Q2: 580,   Q3: 560,   Q4: 445,   Total: 2195  },
+    { nationality: 'Taiwan',                   Q1: 290,   Q2: 270,   Q3: 260,   Q4: 230,   Total: 1050  },
+    { nationality: 'Norway',                   Q1: 210,   Q2: 200,   Q3: 195,   Q4: 189,   Total: 794   },
+    { nationality: 'Myanmar',                  Q1: 210,   Q2: 197,   Q3: 190,   Q4: 182,   Total: 779   },
+    { nationality: 'Indonesia',                Q1: 150,   Q2: 143,   Q3: 140,   Q4: 126,   Total: 559   },
+    { nationality: 'Laos',                     Q1: 130,   Q2: 122,   Q3: 120,   Q4: 100,   Total: 472   },
+    { nationality: 'Israel',                   Q1: 115,   Q2: 108,   Q3: 105,   Q4: 89,    Total: 417   }
+  ],
+  sankeyFlow: {
+    total: 201479,
+    nationality: [
+      { label: 'India',                    value: 81238,
+        industry: [{ label: 'Meetings', value: 81238, quarter: [{ label: 'Q1', value: 28672 }, { label: 'Q2', value: 27040 }, { label: 'Q3', value: 25526 }] }] },
+      { label: 'China',                    value: 60881,
+        industry: [{ label: 'Meetings', value: 55000, quarter: [{ label: 'Q1', value: 15500 }, { label: 'Q2', value: 14300 }, { label: 'Q3', value: 14000 }, { label: 'Q4', value: 11200 }] },
+                   { label: 'Incentives', value: 5881, quarter: [{ label: 'Q1', value: 1700 }, { label: 'Q2', value: 1600 }, { label: 'Q3', value: 1500 }, { label: 'Q4', value: 1081 }] }] },
+      { label: 'Hong Kong',                value: 15680,
+        industry: [{ label: 'Meetings', value: 14677, quarter: [{ label: 'Q1', value: 4000 }, { label: 'Q2', value: 3800 }, { label: 'Q3', value: 3900 }, { label: 'Q4', value: 2977 }] },
+                   { label: 'Incentives', value: 1003, quarter: [{ label: 'Q1', value: 280 }, { label: 'Q2', value: 250 }, { label: 'Q3', value: 250 }, { label: 'Q4', value: 223 }] }] },
+      { label: 'Malaysia',                 value: 13598,
+        industry: [{ label: 'Meetings', value: 7000, quarter: [{ label: 'Q1', value: 1900 }, { label: 'Q2', value: 1850 }, { label: 'Q3', value: 1750 }, { label: 'Q4', value: 1500 }] },
+                   { label: 'Incentives', value: 6598, quarter: [{ label: 'Q1', value: 1800 }, { label: 'Q2', value: 1748 }, { label: 'Q3', value: 1750 }, { label: 'Q4', value: 1300 }] }] },
+      { label: 'Vietnam',                  value: 6190,
+        industry: [{ label: 'Meetings', value: 6190, quarter: [{ label: 'Q1', value: 1800 }, { label: 'Q2', value: 1590 }, { label: 'Q3', value: 1700 }, { label: 'Q4', value: 1100 }] }] },
+      { label: 'Germany',                  value: 4750,
+        industry: [{ label: 'Meetings', value: 2500, quarter: [{ label: 'Q1', value: 700 }, { label: 'Q2', value: 650 }, { label: 'Q3', value: 600 }, { label: 'Q4', value: 550 }] },
+                   { label: 'Incentives', value: 2250, quarter: [{ label: 'Q1', value: 620 }, { label: 'Q2', value: 600 }, { label: 'Q3', value: 560 }, { label: 'Q4', value: 470 }] }] },
+      { label: 'Australia',                value: 3611,
+        industry: [{ label: 'Meetings', value: 2489, quarter: [{ label: 'Q1', value: 700 }, { label: 'Q2', value: 650 }, { label: 'Q3', value: 620 }, { label: 'Q4', value: 519 }] },
+                   { label: 'Incentives', value: 629, quarter: [{ label: 'Q1', value: 180 }, { label: 'Q2', value: 165 }, { label: 'Q3', value: 160 }, { label: 'Q4', value: 124 }] },
+                   { label: 'Conventions', value: 493, quarter: [{ label: 'Q1', value: 140 }, { label: 'Q2', value: 130 }, { label: 'Q3', value: 130 }, { label: 'Q4', value: 93 }] }] },
+      { label: 'United Kingdom',           value: 3483,
+        industry: [{ label: 'Meetings', value: 3483, quarter: [{ label: 'Q1', value: 910 }, { label: 'Q2', value: 870 }, { label: 'Q3', value: 850 }, { label: 'Q4', value: 853 }] }] }
+    ]
+  },
   chartsQuarterly: {
     events: [
       { quarter: 'Q1', thisYear: 4500, lastYear: 1494 },
@@ -379,6 +444,58 @@ export const datasetLibrary = {
 
 export const widgetCatalog = [
   {
+    type: 'miceStatCard',
+    paletteKey: 'miceStatCard:events',
+    group: 'ready',
+    fixed: true,
+    metric: 'events',
+    defaultW: 3,
+    defaultH: 3,
+    label: 'MICE Events (KPI)',
+    dataset: 'miceStatistics',
+    title: 'MICE Events',
+    description: 'จำนวนงาน MICE Events รวม'
+  },
+  {
+    type: 'miceStatCard',
+    paletteKey: 'miceStatCard:visitors',
+    group: 'ready',
+    fixed: true,
+    metric: 'visitors',
+    defaultW: 3,
+    defaultH: 3,
+    label: 'MICE Inter Visitors (KPI)',
+    dataset: 'miceStatistics',
+    title: 'MICE Inter Visitors',
+    description: 'จำนวนนักเดินทาง MICE International รวม'
+  },
+  {
+    type: 'miceStatCard',
+    paletteKey: 'miceStatCard:topNationality',
+    group: 'ready',
+    fixed: true,
+    metric: 'topNationality',
+    defaultW: 3,
+    defaultH: 3,
+    label: 'Top Nationality (KPI)',
+    dataset: 'miceStatistics',
+    title: 'Top Nationality',
+    description: 'สัญชาตินักเดินทาง MICE สูงสุด'
+  },
+  {
+    type: 'miceStatCard',
+    paletteKey: 'miceStatCard:topIndustry',
+    group: 'ready',
+    fixed: true,
+    metric: 'topIndustry',
+    defaultW: 3,
+    defaultH: 3,
+    label: 'Top Industry (KPI)',
+    dataset: 'miceStatistics',
+    title: 'Top Industry',
+    description: 'ประเภทงาน MICE ที่มีนักเดินทางสูงสุด'
+  },
+  {
     type: 'miceEventsQuarterlyChart',
     group: 'ready',
     fixed: true,
@@ -434,17 +551,6 @@ export const widgetCatalog = [
     description: 'นักเดินทางที่เข้าร่วมงาน Meetings, Incentive Travel, Conventions & Exhibitions'
   },
   {
-    type: 'miceKpis',
-    group: 'ready',
-    fixed: true,
-    defaultW: 12,
-    defaultH: 2,
-    label: 'MICE KPI Strip',
-    dataset: 'miceStatistics',
-    title: 'MICE KPI Summary',
-    description: 'สรุป Events, Revenue, Visitors และ Avg. Spend ของอุตสาหกรรม MICE'
-  },
-  {
     type: 'miceNationalityPerformance',
     group: 'ready',
     fixed: true,
@@ -476,6 +582,28 @@ export const widgetCatalog = [
     dataset: 'miceStatistics',
     title: 'MICE Visitors Breakdown',
     description: 'Breakdown นักเดินทาง MICE แยก Nationality, Continent และ Industry'
+  },
+  {
+    type: 'miceNationalityMatrixView',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 9,
+    label: 'Nationality Matrix (Industry / Period)',
+    dataset: 'miceStatistics',
+    title: 'Nationality by MICE Industry',
+    description: 'ตารางสัญชาติ × ประเภทงาน หรือ × ไตรมาส สลับมุมมองได้'
+  },
+  {
+    type: 'miceDrillFlow',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 12,
+    label: 'MICE Drill-down Flow',
+    dataset: 'miceStatistics',
+    title: 'MICE Visitors Drill-down',
+    description: 'Flow chart drill-down: Total → Nationality → Industry → Quarter'
   },
   {
     type: 'chart',
