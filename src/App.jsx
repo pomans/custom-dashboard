@@ -961,6 +961,8 @@ export default function App() {
   const [canvasZoom, setCanvasZoom] = useState(1);
   const [newDashboardDialog, setNewDashboardDialog] = useState(false);
   const [newDashboardDraftName, setNewDashboardDraftName] = useState('');
+  const [toastMsg, setToastMsg] = useState(null);
+  const toastTimerRef = useRef(null);
   const [dashboardListLayout, setDashboardListLayout] = useState('card');
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
@@ -1996,9 +1998,20 @@ export default function App() {
     }));
   };
 
+  const showToast = (message) => {
+    setToastMsg(message);
+    clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const activeIsEmpty = !activeDashboard || (activeDashboard.widgets || []).length === 0;
+
   const createNewDashboard = () => {
     if (readOnly) return;
-
+    if (activeIsEmpty) {
+      showToast('ไม่สามารถสร้าง Dashboard ใหม่ได้ — กรุณาเพิ่ม widget ใน canvas ปัจจุบันก่อน');
+      return;
+    }
     const newDashboard = createDashboard(`Dashboard ${dashboards.length + 1}`, []);
     updateWorkspace((prev) => ({
       dashboards: [...prev.dashboards, newDashboard],
@@ -2010,6 +2023,10 @@ export default function App() {
   };
 
   const openNewDashboardDialog = () => {
+    if (activeIsEmpty) {
+      showToast('ไม่สามารถสร้าง Dashboard ใหม่ได้ — กรุณาเพิ่ม widget ใน canvas ปัจจุบันก่อน');
+      return;
+    }
     setNewDashboardDraftName(`Dashboard ${dashboards.length + 1}`);
     setNewDashboardDialog(true);
   };
@@ -3575,6 +3592,19 @@ export default function App() {
           </div>
         </div>
       ) : null}
+
+      {/* ── Toast notification ── */}
+      {toastMsg && (
+        <div className="app-toast" role="alert">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="10" cy="10" r="8"/>
+            <line x1="10" y1="6" x2="10" y2="10.5"/>
+            <circle cx="10" cy="14" r="0.5" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>{toastMsg}</span>
+          <button type="button" className="app-toast-close" onClick={() => setToastMsg(null)}>×</button>
+        </div>
+      )}
     </div>
   );
 }
