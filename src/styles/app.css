@@ -1710,10 +1710,10 @@ button {
 
 .dashboard-filters {
   display: grid;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 8px;
+  padding: 10px 14px;
   border: 1px solid #d8e5f6;
-  border-radius: 18px;
+  border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
 }
 
@@ -1721,32 +1721,33 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
 .dashboard-filters-header .section-toggle {
-  padding: 4px 10px;
-  font-size: 0.8rem;
+  padding: 3px 8px;
+  font-size: 0.76rem;
   flex-shrink: 0;
 }
 
 .dashboard-filters-header strong {
-  display: block;
-  font-size: 1.05rem;
-  line-height: 1.1;
+  font-size: 0.88rem;
+  line-height: 1.2;
+  display: inline;
 }
 
 .dashboard-filters-header span {
-  display: block;
-  margin-top: 4px;
-  color: #64748b;
-  font-size: 0.84rem;
+  display: inline;
+  margin-top: 0;
+  margin-left: 6px;
+  color: #94a3b8;
+  font-size: 0.78rem;
 }
 
 .filter-header-label {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1759,42 +1760,46 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: #94a3b8;
+  font-size: 0.78rem;
 }
 
 .dashboard-filters-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px 14px;
   align-items: end;
 }
 
 .dashboard-filters label,
 .filter-button-group {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .dashboard-filters label span,
 .filter-button-group span {
-  color: #334155;
-  font-size: 0.8rem;
-  font-weight: 700;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .filter-chip-row {
   display: flex;
-  gap: 8px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
 .filter-chip-row button {
-  min-height: var(--control-height);
+  min-height: 28px;
   padding: 0 12px;
+  font-size: 0.8rem;
   border-radius: 999px;
   border: 1px solid #cfe0f5;
   background: #fff;
   color: #334155;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .filter-chip-row button.active {
@@ -1837,20 +1842,20 @@ button {
 .filter-drag-handle {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: move;
-  padding-bottom: 2px;
+  padding-bottom: 0;
 }
 
 .filter-drag-handle strong {
-  font-size: 1.05rem;
-  line-height: 1.1;
+  font-size: 0.88rem;
+  line-height: 1.2;
   flex-shrink: 0;
 }
 
 .filter-drag-handle span {
-  color: #64748b;
-  font-size: 0.84rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2682,9 +2687,34 @@ button {
 .mice-matrix-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   flex-shrink: 0;
   padding: 0 2px;
+}
+
+/* Quarter filter bar embedded in toolbar — override wfb padding/border */
+.mice-matrix-toolbar .wfb-wrap {
+  padding: 0;
+  border-bottom: none;
+  background: transparent;
+  gap: 4px 6px;
+}
+
+.mice-matrix-toolbar .wfb-label {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+/* Visual separator between view-toggle and quarter filter */
+.mice-matrix-toolbar .wfb-wrap::before {
+  content: '';
+  display: block;
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin-right: 4px;
+  flex-shrink: 0;
 }
 
 .mice-matrix-toolbar-label {
@@ -4923,9 +4953,9 @@ th {
 .yr-range-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   width: 100%;
-  padding: 2px 0;
+  padding: 0;
 }
 
 .yr-range-labels {
@@ -4935,19 +4965,19 @@ th {
 }
 
 .yr-range-val {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: #1e40af;
   background: #eff6ff;
-  border-radius: 6px;
-  padding: 2px 8px;
-  min-width: 38px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  min-width: 32px;
   text-align: center;
 }
 
 .yr-range-track-wrap {
   position: relative;
-  height: 28px;
+  height: 22px;
   display: flex;
   align-items: center;
 }
@@ -4994,12 +5024,12 @@ th {
 .yr-range-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #2563eb;
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(37,99,235,0.35);
+  box-shadow: 0 1px 3px rgba(37,99,235,0.35);
   cursor: pointer;
   pointer-events: all;
   transition: background 0.15s, box-shadow 0.15s;
@@ -5007,16 +5037,16 @@ th {
 
 .yr-range-input::-webkit-slider-thumb:hover {
   background: #1d4ed8;
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.2);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
 }
 
 .yr-range-input::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #2563eb;
   border: 2px solid #fff;
-  box-shadow: 0 1px 4px rgba(37,99,235,0.35);
+  box-shadow: 0 1px 3px rgba(37,99,235,0.35);
   cursor: pointer;
   pointer-events: all;
 }
@@ -5032,9 +5062,9 @@ th {
 .yr-range-ticks {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 10px;
   color: #94a3b8;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 /* ── Widget inline filter bar (WidgetFilterBar) ────────────────── */

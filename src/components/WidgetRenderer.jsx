@@ -825,15 +825,26 @@ function MiceNationalityIndustryMatrixWidget({ fixedProfile }) {
 }
 
 function MiceNationalityMatrixView({ fixedProfile }) {
-  const [view, setView] = useState('industry');
+  const [view, setView]           = useState('industry');
+  const [selQuarter, setSelQuarter] = useState('all');
+
   const industryRows = fixedProfile.nationalityIndustryMatrix2025 || [];
   const periodRows   = fixedProfile.nationalityQuarterMatrix || [];
 
-  const industryCols = ['Meetings', 'Conventions'];
-  const periodCols   = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const industryCols  = ['Meetings', 'Conventions'];
+  const allPeriodCols = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+  // When a single quarter is selected, show only that column; otherwise all
+  const periodCols = selQuarter === 'all' ? allPeriodCols : [selQuarter];
   const cols = view === 'industry' ? industryCols : periodCols;
   const rows = view === 'industry' ? industryRows : periodRows;
+
   const maxTotal = Math.max(...rows.map(r => r.Total), 1);
+
+  const quarterOptions = [
+    { value: 'all', label: 'ทั้งหมด' },
+    ...allPeriodCols.map(q => ({ value: q, label: q }))
+  ];
 
   return (
     <div className="mice-matrix-view">
@@ -845,13 +856,24 @@ function MiceNationalityMatrixView({ fixedProfile }) {
               key={mode}
               type="button"
               className={`mice-matrix-toggle-btn${view === mode ? ' active' : ''}`}
-              onClick={() => setView(mode)}
+              onClick={() => { setView(mode); setSelQuarter('all'); }}
             >
               {mode === 'industry' ? 'Industry' : 'Period'}
             </button>
           ))}
         </div>
+
+        {/* Quarter filter — only visible in Period view */}
+        {view === 'period' && (
+          <WidgetFilterBar
+            label="ไตรมาส"
+            options={quarterOptions}
+            value={selQuarter}
+            onChange={setSelQuarter}
+          />
+        )}
       </div>
+
       <div className="mice-matrix-table-wrap">
         <table className="mice-matrix-table">
           <thead>
