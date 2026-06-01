@@ -4,6 +4,7 @@ import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog } from './data/sampleData';
+import { fetchWidgetsOnDashboard, activeMiceWidgetKey } from './services/widgetApi';
 
 const MIN_GRID_COLS = 12;
 const GRID_ROW_HEIGHT = 72;
@@ -28,6 +29,8 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceEventsChart',
   'miceRevenueChart',
   'miceVisitorsChart',
+  'miceEventsQuarterlyChart',      // ← เพิ่ม: ต้องอยู่ในนี้เพื่อให้ fetchWidgetsOnDashboard fetch data
+  'miceVisitorsQuarterlyChart',    // ← เพิ่ม: เดียวกัน
   'miceKpis',
   'miceNationalityPerformance',
   'miceNationalityIndustryMatrix',
@@ -43,7 +46,9 @@ const MICE_FILTER_DEFAULTS = {
   yearMin: 2007,
   yearMax: 2025,
   industry: 'all',
-  country: 'all'
+  country: 'all',
+  continent: 'all',       // Asia | Europe | … | all  — filters nationality-related widgets
+  visitorType: 'All',     // All | Thai | International — Tourism widgets
 };
 const hasConfigPopup = (type) => !NO_CONFIG_WIDGET_TYPES.includes(type) && (hasDatasetTarget(type) || TEXT_WIDGET_TYPES.includes(type));
 const isInteractiveTarget = (target) =>
@@ -977,6 +982,10 @@ export default function App() {
   const filterPanelRef = useRef(null);
   const [filterPanelActualPx, setFilterPanelActualPx] = useState(null);
 
+  // ── API data state ─────────────────────────────────────────────────────────
+  const [miceApiFixedProfile, setMiceApiFixedProfile] = useState(null);
+  const [miceApiStatus, setMiceApiStatus] = useState('idle'); // idle | loading | loaded | error
+
   const dashboards = workspace.dashboards;
   const dashboardsRef = useRef(dashboards);
   const activeDashboardId = workspace.activeDashboardId;
@@ -1000,6 +1009,44 @@ export default function App() {
   const canvasContentWidth = canvasCols * cellWidth;
   const activeDashboardFilters = activeDashboard?.filters || { ...MICE_FILTER_DEFAULTS };
   const shouldRenderDashboardFilters = Boolean(activeDashboardFilters);
+
+  // ── Fetch only the widgets currently on the dashboard, with Spark concurrency guard ──
+  // Re-runs when: filter values change OR the set of MICE widget types on the dashboard changes
+  const activeMiceKey = activeMiceWidgetKey(widgets);
+  useEffect(() => {
+    const miceWidgets = widgets.filter((w) => NO_CONFIG_WIDGET_TYPES.includes(w.type));
+    if (!miceWidgets.length) return undefined;
+
+    // AbortController ยกเลิก fetch เก่าทันทีเมื่อ filter เปลี่ยน
+    // ป้องกัน pending requests ค้างอยู่เมื่อ user เปลี่ยน filter เร็ว
+    const abortController = new AbortController();
+    const { signal } = abortController;
+
+    setMiceApiStatus('loading');
+    fetchWidgetsOnDashboard(miceWidgets, activeDashboardFilters, signal)
+      .then((profile) => {
+        if (!signal.aborted && profile) {
+          setMiceApiFixedProfile(profile);
+          setMiceApiStatus('loaded');
+        }
+      })
+      .catch((err) => {
+        if (!signal.aborted) setMiceApiStatus('error');
+      });
+    return () => { abortController.abort(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeMiceKey,                           // widget types on dashboard changed
+    activeDashboardFilters?.market,
+    activeDashboardFilters?.yearMode,
+    activeDashboardFilters?.year,
+    activeDashboardFilters?.yearMin,
+    activeDashboardFilters?.yearMax,
+    activeDashboardFilters?.industry,
+    activeDashboardFilters?.country,
+    activeDashboardFilters?.continent,
+    activeDashboardFilters?.visitorType,
+  ]);
   const filterPanelLayout = shouldRenderDashboardFilters
     ? (activeDashboard?.filterPanel || { x: 0, y: 0, w: 12, h: 3 })
     : null;
@@ -3207,7 +3254,33 @@ export default function App() {
             ) : null}
 
             {displayWidgets.map((widget) => {
-              const dataset = datasetLibrary[widget.dataset];
+              const baseDataset = datasetLibrary[widget.dataset];
+              // Inject API-fetched fixedProfile into miceStatistics dataset,
+              // merging only the keys that were successfully fetched (non-null).
+              const dataset = (widget.dataset === 'miceStatistics' && miceApiFixedProfile)
+                ? {
+                    ...baseDataset,
+                    fixedProfile: (() => {
+                      const merged = {
+                        ...(baseDataset?.fixedProfile || {}),
+                        ...miceApiFixedProfile,
+                        charts: {
+                          ...(baseDataset?.fixedProfile?.charts || {}),
+                          ...(miceApiFixedProfile.charts || {}),
+                        },
+                        chartsQuarterly: {
+                          ...(baseDataset?.fixedProfile?.chartsQuarterly || {}),
+                          ...(miceApiFixedProfile.chartsQuarterly || {}),
+                        },
+                      };
+                      // Keep sampleData fallback for any key the API returned null for
+                      Object.keys(merged).forEach((k) => {
+                        if (merged[k] === null) merged[k] = baseDataset?.fixedProfile?.[k];
+                      });
+                      return merged;
+                    })()
+                  }
+                : baseDataset;
               const widgetRecords = getWidgetRecords(widget, dataset);
               const isWidgetPreview = readOnly || widget.preview;
               const isChromelessPreview =
@@ -3369,7 +3442,13 @@ export default function App() {
                       !isWidgetPreview && TEXT_WIDGET_TYPES.includes(widget.type) ? 'text-preview-visual' : ''
                     }`}
                   >
-                    <WidgetRenderer widget={widget} dataset={dataset} records={widgetRecords} isPreview={isWidgetPreview} />
+                    {NO_CONFIG_WIDGET_TYPES.includes(widget.type) && miceApiStatus === 'loading' ? (
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', opacity:0.5, fontSize:13 }}>
+                        Loading…
+                      </div>
+                    ) : (
+                      <WidgetRenderer widget={widget} dataset={dataset} records={widgetRecords} isPreview={isWidgetPreview} />
+                    )}
                   </div>
                 </div>
 
