@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import {
   Bar,
   BarChart,
@@ -688,6 +688,52 @@ function WidgetFilterBar({ label, options, value, onChange }) {
   );
 }
 
+/* ─── ShrinkText: ลด font-size อัตโนมัติเมื่อข้อความล้น container ──────── */
+function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }) {
+  const containerRef = useRef(null);
+  const textRef      = useRef(null);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const el        = textRef.current;
+    if (!container || !el) return;
+
+    // Reset ก่อนวัด
+    el.style.fontSize = `${maxPx}px`;
+
+    let size = maxPx;
+    // ลด 1px ต่อรอบจน text ไม่ล้น container ทั้ง width และ height
+    while (size > minPx && (el.scrollWidth > container.clientWidth + 2 || el.scrollHeight > container.clientHeight + 2)) {
+      size -= 1;
+      el.style.fontSize = `${size}px`;
+    }
+  }, [text, maxPx, minPx]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ overflow: 'hidden', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <strong
+        ref={textRef}
+        className={className}
+        style={{
+          fontSize: `${maxPx}px`,
+          lineHeight: 1.15,
+          wordBreak: 'break-word',
+          overflowWrap: 'break-word',
+          textAlign: 'center',
+          display: 'block',
+          width: '100%',
+          ...style,
+        }}
+      >
+        {text}
+      </strong>
+    </div>
+  );
+}
+
 /* ─── Nationality Performance with Continent filter ─────────── */
 function MiceNationalityPerformanceWidget({ fixedProfile }) {
   const [selContinent, setSelContinent] = useState('all');
@@ -1298,7 +1344,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const cfg = STAT_CONFIGS[metric] || STAT_CONFIGS.events;
     return (
       <div className="mice-stat-card">
-        <strong>{cfg.value}</strong>
+        <ShrinkText text={cfg.value} maxPx={28} minPx={10} />
         <span>{cfg.label}</span>
       </div>
     );
