@@ -101,54 +101,72 @@ async function fetchRows(widgetKey, filter, signal) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data transformers — rows → fixedProfile sub-objects
+// Column names from Blendata response match SQL aliases exactly
 // ─────────────────────────────────────────────────────────────────────────────
 function yoyPct(cur, prv) { return prv ? ((cur - prv) / Math.abs(prv)) * 100 : 0; }
+const sumF = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0);
+const num  = (v)       => Number(v) || 0;
 
-// transformKpis — view มี last_year_* columns อยู่แล้วในแถว current year
-// ไม่ต้อง filter year-1 อีกต่อไป
+// transformKpis — ใช้ _ly columns จาก view (pre-computed last year values)
+// Fallback: ถ้า year ไม่ match → ใช้ latest year ที่มีใน rows
 function transformKpis(rows, year) {
-  const cur  = rows.filter((r) => Number(r.year) === year);
-  const sumF = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0);
+  let cur = rows.filter((r) => Number(r.year) === year);
+  if (!cur.length) {
+    // fallback: ใช้ latest year ที่ Blendata ส่งมา
+    const maxYear = Math.max(...rows.map((r) => Number(r.year)));
+    cur = rows.filter((r) => Number(r.year) === maxYear);
+  }
 
   const events     = sumF(cur, 'no_of_events');
   const lastEvents = sumF(cur, 'no_of_events_ly');
-  const visitors   = sumF(cur, 'no_of_visitors');      // domestic (cy_fy view)
+  const visitors   = sumF(cur, 'no_of_visitors');
   const lastVis    = sumF(cur, 'no_of_visitors_ly');
 
-  // Top industry by no_of_events
+  // Top industry by no_of_events (view may or may not have sector_name breakdown)
   const bySector = {};
   cur.forEach((r) => {
-    if (r.sector_name) bySector[r.sector_name] = (bySector[r.sector_name] || 0) + Number(r.no_of_events || 0);
+    const key = r.sector_name || 'All';
+    bySector[key] = (bySector[key] || 0) + num(r.no_of_events);
   });
   const topIndustry = Object.entries(bySector).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
 
+  // Use pre-computed yoy_event from view when possible (avoids /0 edge cases)
+  const eventsGrowth  = lastEvents ? yoyPct(events, lastEvents) : num(cur[0]?.yoy_event);
+  const visitorsGrowth = lastVis   ? yoyPct(visitors, lastVis)  : num(cur[0]?.yoy_visitors);
+
   return {
     events,
-    eventsGrowth:         yoyPct(events, lastEvents),
+    eventsGrowth,
     visitors,
-    visitorsGrowth:       yoyPct(visitors, lastVis),
-    topNationality:       '-',   // nationality view fetched separately via miceNationalityPerformance
+    visitorsGrowth,
+    topNationality:       '-',   // from miceNationalityPerformance separately
     topNationalityGrowth: 0,
     topIndustry,
   };
 }
 
-function transformAnnualSeries(rows, valueKey) {
+// Annual series — {year, value, lastYear, yoy} — widget uses value; lastYear/yoy extra context
+function transformAnnualSeries(rows, valueKey, lyKey, yoyKey) {
   return rows
     .sort((a, b) => Number(a.year) - Number(b.year))
-    .map((r) => ({ year: Number(r.year), value: Number(r[valueKey] || 0) }));
+    .map((r) => ({
+      year:     num(r.year),
+      value:    num(r[valueKey]),
+      lastYear: lyKey  ? num(r[lyKey])  : undefined,
+      yoy:      yoyKey ? num(r[yoyKey]) : undefined,
+    }));
 }
 
-// transformQuarterly — quarter มาเป็น 'Q1','Q2','Q3','Q4' (string) ไม่ใช่ number
-// ไม่ต้อง prepend 'Q' อีก
-function transformQuarterly(rows, thisYearKey, lastYearKey) {
+// Quarterly chart — quarter values are already 'Q1'..'Q4' strings from view
+function transformQuarterly(rows, thisYearKey, lastYearKey, yoyKey) {
   return rows
     .slice()
     .sort((a, b) => String(a.quarter).localeCompare(String(b.quarter)))
     .map((r) => ({
-      quarter: String(r.quarter),          // ← already 'Q1' etc.
-      thisYear: Number(r[thisYearKey] || 0),
-      lastYear: Number(r[lastYearKey] || 0),
+      quarter:  String(r.quarter),
+      thisYear: num(r[thisYearKey]),
+      lastYear: num(r[lastYearKey]),
+      yoy:      yoyKey ? num(r[yoyKey]) : yoyPct(num(r[thisYearKey]), num(r[lastYearKey])),
     }));
 }
 
@@ -238,28 +256,38 @@ function applyToProfile(apiKey, rows, filter, profile) {
       profile.kpis = transformKpis(rows, year);
       break;
     case 'miceEventsChart':
-      // SQL คืน: year, no_of_events, no_of_events_ly, yoy_event
-      profile.charts.events = transformAnnualSeries(rows, 'no_of_events');
+      // SQL: year, no_of_events, no_of_events_ly, yoy_event
+      profile.charts.events = transformAnnualSeries(rows, 'no_of_events', 'no_of_events_ly', 'yoy_event');
       break;
     case 'miceRevenueChart':
-      // SQL คืน: year, revenue_generated, revenue_generated_ly, yoy_revenue
-      profile.charts.revenue = transformAnnualSeries(rows, 'revenue_generated');
+      // SQL: year, revenue_generated, revenue_generated_ly, yoy_revenue
+      profile.charts.revenue = transformAnnualSeries(rows, 'revenue_generated', 'revenue_generated_ly', 'yoy_revenue');
       break;
     case 'miceVisitorsChart':
-      // SQL คืน: year, no_of_visitors, no_of_visitors_ly, yoy_visitors
-      profile.charts.visitors = transformAnnualSeries(rows, 'no_of_visitors');
+      // SQL: year, no_of_visitors, no_of_visitors_ly, yoy_visitors
+      profile.charts.visitors = transformAnnualSeries(rows, 'no_of_visitors', 'no_of_visitors_ly', 'yoy_visitors');
       break;
     case 'miceEventsQuarterlyChart':
-      // SQL คืน: year, quarter('Q1'..'Q4'), no_of_events, no_of_events_ly, yoy_event
-      profile.chartsQuarterly.events = transformQuarterly(rows, 'no_of_events', 'no_of_events_ly');
+      // SQL: year, quarter('Q1'..'Q4'), no_of_events, no_of_events_ly, yoy_event
+      profile.chartsQuarterly.events = transformQuarterly(rows, 'no_of_events', 'no_of_events_ly', 'yoy_event');
       break;
     case 'miceVisitorsQuarterlyChart':
-      // SQL คืน: year, quarter('Q1'..'Q4'), no_of_visitors, no_of_visitors_ly, yoy_visitors
-      profile.chartsQuarterly.visitors = transformQuarterly(rows, 'no_of_visitors', 'no_of_visitors_ly');
+      // SQL: year, quarter('Q1'..'Q4'), no_of_visitors, no_of_visitors_ly, yoy_visitors
+      profile.chartsQuarterly.visitors = transformQuarterly(rows, 'no_of_visitors', 'no_of_visitors_ly', 'yoy_visitors');
       break;
-    case 'miceNationalityPerformance':
-      profile.nationalityPerformance = transformNationalityPerformance(rows);
+    case 'miceNationalityPerformance': {
+      const natPerf = transformNationalityPerformance(rows);
+      profile.nationalityPerformance = natPerf;
+      // SQL returns ORDER BY current_visitors DESC → rows[0] = top nationality
+      // อัปเดต kpis.topNationality จาก nationality view (miceKpis ใช้ cy_fy ไม่มี nationality)
+      if (natPerf.length > 0) {
+        const top = natPerf[0];
+        if (!profile.kpis) profile.kpis = {};
+        profile.kpis.topNationality       = top.nationality || '-';
+        profile.kpis.topNationalityGrowth = num(top.yoy);
+      }
       break;
+    }
     case 'miceNationalityIndustryMatrix':
       profile.nationalityIndustryMatrix = transformNationalityIndustryMatrix(rows);
       break;
