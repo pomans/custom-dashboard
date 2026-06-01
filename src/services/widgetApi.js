@@ -1,11 +1,21 @@
 import { WIDGET_ENDPOINT } from '../config/apiConfig';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Spark concurrency limit
-// Blendata ใช้ Apache Spark — query แรกต้อง warm up ก่อน (token + jobGroupId)
-// ใช้ concurrency = 1 เพื่อให้ auth flow เสร็จก่อน แล้วค่อย query ถัดไป
+// Spark concurrency — จำนวน Spark jobs ที่รันพร้อมกัน
+//
+// แต่ละ query มี jobGroupId ใหม่ทุกครั้ง (Ocelot ขอใหม่ต่อ query)
+// ดังนั้น "already started" error ไม่เกิด → รัน parallel ได้
+//
+// Trade-offs:
+//   1 → sequential, ปลอดภัย, ~27s สำหรับ 11 widgets
+//   2 → 2 Spark jobs คู่กัน, ~15s  ← ค่าที่ใช้ (balance ระหว่างเร็วและ resource)
+//   3 → ~10s, ใช้ได้ถ้า Spark cluster มีทรัพยากรพอ
+//
+// ปรับผ่าน VITE_SPARK_CONCURRENCY ใน .env.local ถ้าต้องการ tuning
 // ─────────────────────────────────────────────────────────────────────────────
-const SPARK_CONCURRENCY = 1;
+const SPARK_CONCURRENCY = Number(
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SPARK_CONCURRENCY) || 2
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget type → API keys ที่ต้องดึง
@@ -326,13 +336,25 @@ export async function fetchWidgetsOnDashboard(activeWidgets, filter, signal) {
   // 2. Order by priority (smaller/faster queries first → warms Spark up quickly)
   const orderedKeys = FETCH_PRIORITY.filter((k) => neededKeys.has(k));
 
+  console.log(
+    `[widgetApi] fetching ${orderedKeys.length} widgets: [${orderedKeys.join(', ')}]  concurrency=${SPARK_CONCURRENCY}`
+  );
+  const t0 = performance.now();
+
   // 3. Build task list + fetch with concurrency limit
   const rowsByKey = {};
   const tasks = orderedKeys.map((key) => async () => {
+    const ts = performance.now();
     rowsByKey[key] = await fetchRows(key, filter, signal);
+    const ms = Math.round(performance.now() - ts);
+    const rowCount = rowsByKey[key]?.length ?? 'err';
+    console.log(`[widgetApi] ${key}  rows=${rowCount}  took=${ms}ms`);
   });
 
   await asyncPool(tasks, SPARK_CONCURRENCY);
+
+  const totalMs = Math.round(performance.now() - t0);
+  console.log(`[widgetApi] all done  total=${totalMs}ms  concurrency=${SPARK_CONCURRENCY}`);
 
   // 4. Build fixedProfile from successful results
   const profile = { charts: {}, chartsQuarterly: {} };
