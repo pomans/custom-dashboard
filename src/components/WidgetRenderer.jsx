@@ -381,7 +381,7 @@ const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter 
       </div>
       {renderQuarterlyLegend()}
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={withYoy} margin={{ top: 32, right: 24, bottom: 32, left: 18 }}>
+        <LineChart data={withYoy} margin={{ top: 32, right: 24, bottom: 8, left: 18 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
           <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
           <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />

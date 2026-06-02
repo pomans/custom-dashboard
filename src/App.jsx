@@ -3567,7 +3567,7 @@ export default function App() {
                           setRefreshKey((k) => k + 1);
                         }}
                       >
-                        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <svg viewBox="0 0 16 16" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M13.5 8A5.5 5.5 0 1 1 10 3.07" />
                           <path d="M10 1v3h3" />
                         </svg>
@@ -3579,7 +3579,7 @@ export default function App() {
                         title="Clear filters"
                         onClick={clearActiveDashboardFilters}
                       >
-                        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                        <svg viewBox="0 0 16 16" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                           <path d="M12 4 4 12M4 4l8 8" />
                         </svg>
                       </button>

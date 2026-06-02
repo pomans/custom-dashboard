@@ -1737,12 +1737,12 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
   border: 1px solid #cbd5e1;
   background: #f8fafc;
-  color: #64748b;
+  color: #475569;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -2489,33 +2489,9 @@ button {
   overflow: hidden;
 }
 
-/* MICE chart widgets: allow overflow so x-axis labels show below plot area */
-.widget-card[data-widget-type='miceEventsQuarterlyChart'] .widget-content,
-.widget-card[data-widget-type='miceVisitorsQuarterlyChart'] .widget-content,
-.widget-card[data-widget-type='miceEventsChart'] .widget-content,
-.widget-card[data-widget-type='miceRevenueChart'] .widget-content,
-.widget-card[data-widget-type='miceVisitorsChart'] .widget-content {
+/* recharts SVG: allow labels to render in the margin area below the plot */
+.fixed-mice-chart svg {
   overflow: visible;
-  padding-bottom: 0;
-}
-
-.widget-card[data-widget-type='miceEventsQuarterlyChart'] .widget-visual,
-.widget-card[data-widget-type='miceVisitorsQuarterlyChart'] .widget-visual,
-.widget-card[data-widget-type='miceEventsChart'] .widget-visual,
-.widget-card[data-widget-type='miceRevenueChart'] .widget-visual,
-.widget-card[data-widget-type='miceVisitorsChart'] .widget-visual {
-  overflow: visible;
-}
-
-/* widget-card keeps border-radius clip via clip-path for the chart types */
-.widget-card[data-widget-type='miceEventsQuarterlyChart'],
-.widget-card[data-widget-type='miceVisitorsQuarterlyChart'],
-.widget-card[data-widget-type='miceEventsChart'],
-.widget-card[data-widget-type='miceRevenueChart'],
-.widget-card[data-widget-type='miceVisitorsChart'] {
-  overflow: visible;
-  /* keep rounded look with clip-path instead of overflow:hidden */
-  clip-path: none;
 }
 
 .fixed-mice-dashboard {
@@ -2537,11 +2513,11 @@ button {
   height: 100%;
   min-height: 0;
   min-width: 0;
-  padding: 8px 0 4px;    /* bottom padding เพื่อให้ x-axis label มีพื้นที่ */
+  padding: 8px 0 36px;   /* bottom 36px = พื้นที่ x-axis label อยู่ภายในกรอบ */
   border: 1px solid #d1d5db;
   border-radius: 12px;
   background: #fff;
-  overflow: visible;     /* ← เปลี่ยนจาก hidden เพื่อไม่ clip x-axis labels */
+  overflow: hidden;      /* กลับมา hidden — label อยู่ใน padding area */
 }
 
 .fixed-mice-chart-header {
@@ -2594,7 +2570,7 @@ button {
 
 .fixed-mice-chart .recharts-responsive-container {
   position: absolute !important;
-  inset: 52px 0 0 0;  /* ไม่ cut bottom — x-axis labels แสดงใน margin ด้านล่าง */
+  inset: 52px 0 36px 0;  /* bottom 36px = พื้นที่ x-axis label (font 13 + tickMargin 8 + gap) */
 }
 
 .fixed-mice-chart .recharts-cartesian-grid-horizontal line {
