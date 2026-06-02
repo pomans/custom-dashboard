@@ -606,6 +606,17 @@ export const widgetCatalog = [
     description: 'Flow chart drill-down: Total → Nationality → Industry → Quarter'
   },
   {
+    type: 'miceDataTable',
+    group: 'ready',
+    fixed: true,
+    defaultW: 8,
+    defaultH: 10,
+    label: 'MICE Statistics Table',
+    dataset: 'miceStatistics',
+    title: 'MICE Statistics',
+    description: 'ตารางสถิติ MICE รายปี: Events, Visitors, Revenue แยกตาม Quarter'
+  },
+  {
     type: 'chart',
     group: 'configurable',
     label: 'Chart',

@@ -1399,6 +1399,80 @@ function MiceDrillFlow({ fixedProfile }) {
   );
 }
 
+/* ─── MiceDataTableWidget: ตาราง MICE Statistics รายปี / ไตรมาส ─────────── */
+function MiceDataTableWidget({ rows }) {
+  const fmt  = new Intl.NumberFormat('en-US');
+  const fmtM = (v) => v >= 1000 ? `${(v/1000).toFixed(1)}K` : fmt.format(v);
+
+  // Group by year, then by quarter
+  const byYear = {};
+  rows.forEach((r) => {
+    if (!byYear[r.year]) byYear[r.year] = [];
+    byYear[r.year].push(r);
+  });
+
+  const years = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+  const totals = (arr) => arr.reduce((s, r) => ({
+    events:   s.events   + r.events,
+    visitors: s.visitors + r.visitors,
+    revenue:  s.revenue  + r.revenue,
+  }), { events: 0, visitors: 0, revenue: 0 });
+
+  const [expanded, setExpanded] = useState({});
+  const toggleYear = (y) => setExpanded((p) => ({ ...p, [y]: !p[y] }));
+
+  return (
+    <div className="fixed-mice-table-shell">
+      <div className="fixed-mice-chart-title" style={{ background: '#1e3a5f', margin: '8px 12px 0', borderRadius: 8, fontSize: '0.85rem', padding: '6px 14px' }}>
+        MICE Statistics
+      </div>
+      <div className="fixed-mice-table-shell-main" style={{ marginTop: 6 }}>
+        <table className="fixed-mice-table-heavy" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ width: '28%', textAlign: 'left' }}>Calendar Year</th>
+              <th style={{ textAlign: 'right' }}>MICE Events</th>
+              <th style={{ textAlign: 'right' }}>MICE Visitors</th>
+              <th style={{ textAlign: 'right' }}>Revenue (MB)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {years.map((y) => {
+              const qRows = byYear[y];
+              const t = totals(qRows);
+              const isExp = expanded[y];
+              return (
+                <React.Fragment key={y}>
+                  <tr
+                    onClick={() => toggleYear(y)}
+                    style={{ cursor: 'pointer', background: isExp ? '#f0f4ff' : undefined }}
+                  >
+                    <td style={{ fontWeight: 600 }}>
+                      <span style={{ marginRight: 6, opacity: 0.5, fontSize: '0.75rem' }}>{isExp ? '▾' : '⊕'}</span>
+                      {y}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{fmt.format(t.events)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt.format(t.visitors)}</td>
+                    <td style={{ textAlign: 'right' }}>{fmt.format(Math.round(t.revenue))}</td>
+                  </tr>
+                  {isExp && qRows.map((r) => (
+                    <tr key={`${y}-${r.quarter}`} style={{ background: '#f8faff', fontSize: '0.82rem' }}>
+                      <td style={{ paddingLeft: 28, color: '#64748b' }}>{r.quarter}</td>
+                      <td style={{ textAlign: 'right', color: '#475569' }}>{fmt.format(r.events)}</td>
+                      <td style={{ textAlign: 'right', color: '#475569' }}>{fmt.format(r.visitors)}</td>
+                      <td style={{ textAlign: 'right', color: '#475569' }}>{fmt.format(Math.round(r.revenue))}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false, globalFilter }) {
   if (isSkeleton) return <WidgetSkeleton type={widget.type} />;
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
@@ -1889,6 +1963,10 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
 
   if (widget.type === 'miceDrillFlow') {
     return <MiceDrillFlow fixedProfile={fixedProfile} />;
+  }
+
+  if (widget.type === 'miceDataTable') {
+    return <MiceDataTableWidget rows={fixedProfile.dataTable || []} />;
   }
 
   return <p className="empty-note">Unsupported widget type.</p>;

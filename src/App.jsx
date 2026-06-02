@@ -36,7 +36,8 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceNationalityIndustryMatrix',
   'miceNationalityMatrixView',
   'miceVisitorsBreakdown',
-  'miceDrillFlow'
+  'miceDrillFlow',
+  'miceDataTable'
 ];
 const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {

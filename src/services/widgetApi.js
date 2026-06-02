@@ -33,6 +33,8 @@ const WIDGET_API_KEYS = {
   miceVisitorsBreakdown:       ['miceVisitorsBreakdown'],
   miceNationalityMatrixView:   ['miceNationalityMatrixView'],
   miceDrillFlow:               ['miceDrillFlow'],
+  miceDataTable:               ['miceDataTable'],
+  // FETCH_PRIORITY entry handled below
 };
 
 // Priority: summary → annual trends → quarterly → heavy cross-tabs
@@ -49,6 +51,7 @@ const FETCH_PRIORITY = [
   'miceVisitorsBreakdown',     // UNION ALL 3 groups
   'miceNationalityMatrixView', // UNION ALL industry + quarter views
   'miceDrillFlow',             // full hierarchy — หนักสุด
+  'miceDataTable',             // annual+quarterly table
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -316,6 +319,16 @@ function applyToProfile(apiKey, rows, filter, profile) {
     }
     case 'miceDrillFlow':
       profile.sankeyFlow = transformDrillFlow(rows);
+      break;
+    case 'miceDataTable':
+      // rows: [{year, quarter, no_of_events, no_of_visitors, revenue_generated_million_baht}]
+      profile.dataTable = rows.map((r) => ({
+        year:     num(r.year),
+        quarter:  String(r.quarter || ''),
+        events:   num(r.no_of_events),
+        visitors: num(r.no_of_visitors),
+        revenue:  num(r.revenue_generated_million_baht),
+      }));
       break;
     default:
       break;
