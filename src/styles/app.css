@@ -1968,28 +1968,42 @@ button {
   height: 14px;
 }
 
-/* Vertical orientation */
-.dashboard-filters.vertical .dashboard-filters-grid,
-.dashboard-filters.vertical ~ * .dashboard-filters-grid {
-  grid-template-columns: 1fr;
-}
-
+/* ─── Vertical orientation ─────────────────────────────────────────────── */
 .dashboard-filters.vertical {
-  overflow: visible;
+  min-width: 180px;
+  max-width: 280px;
 }
 
-.dashboard-filters.vertical .dashboard-filters-grid {
+/* Market + Year Basis: แสดงเป็น 1 column เมื่อ vertical */
+.dashboard-filters.vertical .filter-row-two-col {
   grid-template-columns: 1fr;
+  gap: 10px;
 }
 
+/* Toggle buttons: ยังคง flex row แต่ wrap ได้ */
+.dashboard-filters.vertical .filter-toggle-row {
+  flex-wrap: wrap;
+}
+
+.dashboard-filters.vertical .filter-toggle-row button {
+  flex: 1 1 45%;    /* allow 2 per row or wrap to 1 per row when very narrow */
+  min-height: 32px;
+}
+
+/* filter-chip-row (legacy) */
 .dashboard-filters.vertical .filter-chip-row {
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .dashboard-filters.vertical .filter-chip-row button {
   width: 100%;
-  justify-content: flex-start;
+  justify-content: center;
+}
+
+/* Year Range: เต็มความกว้าง */
+.dashboard-filters.vertical .dashboard-filters-grid {
+  gap: 12px;
 }
 
 .drop-preview {
