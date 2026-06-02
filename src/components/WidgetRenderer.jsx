@@ -780,29 +780,27 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
     const el        = textRef.current;
     if (!container || !el) return;
 
-    const cw = container.clientWidth;
-    const ch = container.clientHeight;
+    const cw = container.clientWidth  - 4;  // 4px safety margin
+    const ch = container.clientHeight - 4;
 
-    // Phase 1: single-line — ลด font จนข้อความพอดี width โดยไม่ตัดคำ
-    // ใช้ inline-block + nowrap เพื่อวัด natural text width ได้แม่นยำ
-    el.style.display    = 'inline-block';
+    // ทำงานใน block mode ตลอด — nowrap ชั่วคราวเพื่อ shrink ให้พอดี width
     el.style.whiteSpace = 'nowrap';
     el.style.fontSize   = `${maxPx}px`;
 
     let size = maxPx;
-    while (size > minPx && el.offsetWidth > cw) {
+
+    // Phase 1: shrink จนพอดี width (no wrap)
+    while (size > minPx && el.scrollWidth > cw) {
       size -= 1;
       el.style.fontSize = `${size}px`;
     }
 
-    // Phase 2: ถ้า height ยังล้น (card เล็กมาก) → allow wrap แล้วลดต่อ
-    el.style.display    = 'block';
+    // Phase 2: อนุญาต wrap แล้วตรวจ height
     el.style.whiteSpace = 'normal';
-    if (el.scrollHeight > ch) {
-      while (size > minPx && (el.offsetWidth > cw || el.scrollHeight > ch)) {
-        size -= 1;
-        el.style.fontSize = `${size}px`;
-      }
+    // ถ้า wrap แล้ว height ล้น → ลด font ต่อ
+    while (size > minPx && el.scrollHeight > ch) {
+      size -= 1;
+      el.style.fontSize = `${size}px`;
     }
   }, [text, maxPx, minPx]);
 
@@ -819,7 +817,7 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
           lineHeight: 1.2,
           textAlign: 'center',
           display: 'block',
-          maxWidth: '100%',
+          width: '100%',
           ...style,
         }}
       >
