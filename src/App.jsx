@@ -1535,7 +1535,17 @@ export default function App() {
     const vw = stageViewportWidth ?? rect.width;
     const viewportCols = Math.floor((vw || MIN_GRID_COLS * GRID_COL_WIDTH) / GRID_COL_WIDTH);
     const sorted = [...widgets].sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
+
+    // Pre-fill occupied cells with filter panel area
     const colHeight = new Array(viewportCols).fill(0);
+    if (filterPanelLayout) {
+      const fp = filterPanelLayout;
+      const fpBottom = (fp.y ?? 0) + Math.max(2, fp.h ?? 3);
+      const fpLeft  = Math.max(0, fp.x ?? 0);
+      const fpRight = Math.min(viewportCols, (fp.x ?? 0) + (fp.w ?? viewportCols));
+      for (let c = fpLeft; c < fpRight; c++) colHeight[c] = Math.max(colHeight[c], fpBottom);
+    }
+
     const arranged = sorted.map((w) => {
       const ww = Math.min(w.w, viewportCols);
       let bestX = 0, bestY = Infinity;
@@ -1546,9 +1556,10 @@ export default function App() {
       for (let c = bestX; c < bestX + ww; c++) colHeight[c] = bestY + w.h;
       return { ...w, x: bestX, y: bestY, w: ww };
     });
+
     setWidgets(arranged);
     setCanvasZoom(1);
-  }, [widgets, stageViewportWidth]);
+  }, [widgets, stageViewportWidth, filterPanelLayout]);
 
   const updateActiveDashboard = (updater, options = {}) => {
     updateWorkspace(
