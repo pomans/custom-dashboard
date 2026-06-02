@@ -476,7 +476,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
         <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
         <Tooltip
           labelFormatter={(year) => String(year)}
-          formatter={(value, name) => [formatMetricValue(Number(value)), name]}
+          formatter={(value) => [formatMetricValue(Number(value)), yLabel]}
         />
         <Line
           type="monotone"
@@ -1440,13 +1440,12 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
       value: item.value,
       yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
     }));
-    const forecastSeries = buildForecastSeries(actualSeries);
     return renderFixedChartPanel({
       title: 'จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)',
       color: '#081f68',
       yLabel: 'MICE Events',
       actualSeries,
-      forecastSeries,
+      forecastSeries: [],
       yTickFormatter: formatYAxisTickThousands
     });
   }
@@ -1458,13 +1457,12 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
       value: item.value,
       yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
     }));
-    const forecastSeries = buildForecastSeries(actualSeries);
     return renderFixedChartPanel({
       title: 'รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)',
       color: '#1d4fb3',
       yLabel: 'ล้านบาท',
       actualSeries,
-      forecastSeries,
+      forecastSeries: [],
       yTickFormatter: formatYAxisTickFull
     });
   }
@@ -1476,13 +1474,12 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
       value: item.value,
       yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
     }));
-    const forecastSeries = buildForecastSeries(actualSeries);
     return renderFixedChartPanel({
       title: 'จำนวนนักเดินทางไมซ์ (MICE Visitors)',
       color: '#4098b9',
       yLabel: 'MICE Visitors',
       actualSeries,
-      forecastSeries,
+      forecastSeries: [],
       yTickFormatter: formatYAxisTickMillions
     });
   }
