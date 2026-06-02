@@ -380,8 +380,9 @@ const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter 
         <div className="fixed-mice-chart-rule" />
       </div>
       {renderQuarterlyLegend()}
+      <div className="fixed-mice-chart-body">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={withYoy} margin={{ top: 32, right: 24, bottom: 8, left: 18 }}>
+        <LineChart data={withYoy} margin={{ top: 28, right: 24, bottom: 28, left: 18 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
           <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
           <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
@@ -408,6 +409,7 @@ const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter 
           />
         </LineChart>
       </ResponsiveContainer>
+      </div>
       <div className="fixed-mice-chart-axis-label">{yLabel}</div>
     </div>
   );
@@ -441,6 +443,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
       </div>
       <div className="fixed-mice-chart-rule" />
     </div>
+    <div className="fixed-mice-chart-body">
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
         data={[...actualSeries, ...forecastSeries]}
@@ -491,6 +494,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
         />
       </LineChart>
     </ResponsiveContainer>
+    </div>
     <div className="fixed-mice-chart-axis-label">{yLabel}</div>
   </div>
 );
