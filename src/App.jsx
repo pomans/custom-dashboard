@@ -146,7 +146,7 @@ const ToolbarIcon = ({ name }) => {
     case 'sidebar':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect {...c} x="3" y="3" width="18" height="18" rx="2" />
+          <rect {...c} x="3" y="3" width="24" height="24" rx="2" />
           <path {...c} d="M9 3v18" />
           <path {...c} d="M5.5 9l-2 3 2 3" strokeWidth="1.8" />
         </svg>
@@ -3567,7 +3567,7 @@ export default function App() {
                           setRefreshKey((k) => k + 1);
                         }}
                       >
-                        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <svg viewBox="0 0 20 20" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M16.5 10A6.5 6.5 0 1 1 12 4.07" />
                           <path d="M12 1v4.5h4.5" />
                         </svg>
@@ -3579,7 +3579,7 @@ export default function App() {
                         title="Clear filters"
                         onClick={clearActiveDashboardFilters}
                       >
-                        <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <svg viewBox="0 0 20 20" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M3 16h14" />
                           <path d="M9 16 4.5 11.5a1.4 1.4 0 0 1 0-2L12 2l5.5 5.5-7 7-1.5.5z" />
                           <path d="M12 2l5.5 5.5" />
