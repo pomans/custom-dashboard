@@ -780,33 +780,27 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
     const el        = textRef.current;
     if (!container || !el) return;
 
-    const cw = container.clientWidth  - 4;
-    const ch = container.clientHeight - 4;
+    const cw = container.clientWidth - 2;
     const hasSpace = String(text).includes(' ');
 
     el.style.fontSize = `${maxPx}px`;
     let size = maxPx;
 
     if (hasSpace) {
-      // มีเว้นวรรค → wrap ที่คำได้เลย แล้วลด font เฉพาะถ้า height ล้น
+      // มีเว้นวรรค → wrap ที่คำ ลด font จนบรรทัดที่ยาวสุดพอดี width
       el.style.whiteSpace = 'normal';
-      while (size > minPx && el.scrollHeight > ch) {
+      while (size > minPx && el.scrollWidth > cw) {
         size -= 1;
         el.style.fontSize = `${size}px`;
       }
     } else {
-      // ไม่มีเว้นวรรค → nowrap + shrink width ก่อน แล้วตรวจ height
+      // ไม่มีเว้นวรรค → single line ลด font จนพอดี width
       el.style.whiteSpace = 'nowrap';
       while (size > minPx && el.scrollWidth > cw) {
         size -= 1;
         el.style.fontSize = `${size}px`;
       }
-      // ตรวจ height สุดท้าย (กรณี card เล็กมาก)
       el.style.whiteSpace = 'normal';
-      while (size > minPx && el.scrollHeight > ch) {
-        size -= 1;
-        el.style.fontSize = `${size}px`;
-      }
     }
   }, [text, maxPx, minPx]);
 
