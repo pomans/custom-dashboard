@@ -92,6 +92,8 @@ function buildParams(filter) {
   };
   // gdsDimension is an int — only include when explicitly set (0 is valid)
   if (f.gdsDimension != null) params.gdsDimension = f.gdsDimension;
+  // nocache — bypass server MemoryCache (force reload)
+  if (f.nocache) params.nocache = 'true';
   return new URLSearchParams(params).toString();
 }
 

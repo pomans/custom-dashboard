@@ -985,6 +985,7 @@ export default function App() {
   // ── API data state ─────────────────────────────────────────────────────────
   const [miceApiFixedProfile, setMiceApiFixedProfile] = useState(null);
   const [miceApiStatus, setMiceApiStatus] = useState('idle'); // idle | loading | loaded | error
+  const [refreshKey, setRefreshKey] = useState(0);            // increment → force reload (nocache)
 
   const dashboards = workspace.dashboards;
   const dashboardsRef = useRef(dashboards);
@@ -1023,7 +1024,11 @@ export default function App() {
     const { signal } = abortController;
 
     setMiceApiStatus('loading');
-    fetchWidgetsOnDashboard(miceWidgets, activeDashboardFilters, signal)
+    // refreshKey > 0 → force reload: ส่ง nocache=true เพื่อ bypass server MemoryCache
+    const filterForFetch = refreshKey > 0
+      ? { ...activeDashboardFilters, nocache: true }
+      : activeDashboardFilters;
+    fetchWidgetsOnDashboard(miceWidgets, filterForFetch, signal)
       .then((profile) => {
         if (!signal.aborted && profile) {
           setMiceApiFixedProfile(profile);
@@ -1046,6 +1051,7 @@ export default function App() {
     activeDashboardFilters?.country,
     activeDashboardFilters?.continent,
     activeDashboardFilters?.visitorType,
+    refreshKey,   // force reload trigger
   ]);
   const filterPanelLayout = shouldRenderDashboardFilters
     ? (activeDashboard?.filterPanel || { x: 0, y: 0, w: 12, h: 3 })
@@ -3550,9 +3556,27 @@ export default function App() {
                       <strong>Filters</strong>
                       <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
                     </div>
-                    <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
-                      Clear Filters
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        className="section-toggle"
+                        title="Reload widget data from Blendata (bypass cache)"
+                        onClick={() => {
+                          setMiceApiFixedProfile(null);
+                          setRefreshKey((k) => k + 1);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                      >
+                        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M13.5 8A5.5 5.5 0 1 1 10 3.07" />
+                          <path d="M10 1v3h3" />
+                        </svg>
+                        Reload
+                      </button>
+                      <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
+                        Clear Filters
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="dashboard-filters-grid">
