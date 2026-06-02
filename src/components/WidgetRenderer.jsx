@@ -386,11 +386,14 @@ const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter 
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
           <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
           <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
-          <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
+          <Tooltip
+            labelFormatter={(quarter) => `ไตรมาส ${quarter}`}
+            formatter={(value, name) => [formatMetricValue(Number(value)), name]}
+          />
           <Line
             type="monotone"
             dataKey="thisYear"
-            name="This Year"
+            name="ปีนี้ (This Year)"
             stroke="#081f68"
             strokeWidth={3}
             dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }}
@@ -401,7 +404,7 @@ const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter 
           <Line
             type="monotone"
             dataKey="lastYear"
-            name="Last Year"
+            name="ปีที่แล้ว (Last Year)"
             stroke="#7ec8e3"
             strokeWidth={2}
             strokeDasharray="6 4"
@@ -471,10 +474,14 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
           tickMargin={4}
         />
         <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
-        <Tooltip formatter={(value) => formatMetricValue(Number(value))} />
+        <Tooltip
+          labelFormatter={(year) => `ปี ${year}`}
+          formatter={(value, name) => [formatMetricValue(Number(value)), name]}
+        />
         <Line
           type="monotone"
           dataKey="value"
+          name={yLabel}
           stroke="#0f1f68"
           strokeWidth={3.5}
           dot={{ r: 5, fill: '#0f1f68' }}
@@ -486,6 +493,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
         <Line
           type="monotone"
           dataKey="value"
+          name="Forecast (ประมาณการ)"
           stroke="#0f1f68"
           strokeWidth={3}
           dot={false}
