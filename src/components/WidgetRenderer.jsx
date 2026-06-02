@@ -447,7 +447,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
     <ResponsiveContainer width="100%" height="100%">
       <LineChart
         data={[...actualSeries, ...forecastSeries]}
-        margin={{ top: 42, right: 18, bottom: 42, left: 18 }}
+        margin={{ top: 42, right: 18, bottom: 10, left: 18 }}
       >
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         {actualSeries.map((entry) =>
