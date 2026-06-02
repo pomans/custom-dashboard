@@ -1708,23 +1708,27 @@ button {
   box-shadow: none;
 }
 
+/* ─── Filter Panel ─────────────────────────────────────────────────────── */
 .dashboard-filters {
-  display: grid;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid #d8e5f6;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
-  min-width: 300px;        /* ขั้นต่ำเพื่อให้ 2-column toggles ไม่ล้น */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border: 1px solid #dde8f8;
+  border-radius: 16px;
+  background: #fff;
+  min-width: 280px;
   box-sizing: border-box;
-  overflow: hidden;        /* clip เฉพาะ filter panel ให้ fit ใน card */
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(15,23,42,.06);
 }
 
+/* Header row */
 .dashboard-filters-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dashboard-filters-header .section-toggle {
@@ -1733,95 +1737,109 @@ button {
   flex-shrink: 0;
 }
 
+/* Title + subtitle */
+.filter-header-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.filter-header-label strong,
+.dashboard-filters-header strong {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  flex-shrink: 0;
+}
+
+.filter-header-label span,
+.dashboard-filters-header span {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Icon buttons — reload & clear */
 .filter-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  border: 1px solid #cbd5e1;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1.5px solid #e2e8f0;
   background: #f8fafc;
-  color: #475569;
+  color: #64748b;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
 }
 
 .filter-icon-btn:hover {
-  background: #e2e8f0;
+  background: #f1f5f9;
   color: #0f172a;
   border-color: #94a3b8;
 }
 
-.dashboard-filters-header strong {
-  font-size: 0.88rem;
-  line-height: 1.2;
-  display: inline;
+.filter-icon-btn:active { transform: scale(0.92); }
+
+/* Divider */
+.filter-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 0 -2px;
 }
 
-.dashboard-filters-header span {
-  display: inline;
-  margin-top: 0;
-  margin-left: 6px;
-  color: #94a3b8;
-  font-size: 0.78rem;
-}
-
-.filter-header-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.filter-header-label strong {
-  flex-shrink: 0;
-}
-
-.filter-header-label span {
-  margin-top: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #94a3b8;
-  font-size: 0.78rem;
-}
-
+/* Grid layout */
 .dashboard-filters-grid {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* Market + Year Basis row: always 2 equal columns */
+/* Market + Year Basis: 2 equal columns */
 .filter-row-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 
-/* Toggle row: buttons fill the group width evenly */
+/* Group label */
+.dashboard-filters label span,
+.filter-button-group span {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* Segmented toggle control */
 .filter-toggle-row {
   display: flex;
-  gap: 0;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #cfe0f5;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  border: none;
 }
 
 .filter-toggle-row button {
   flex: 1;
-  min-height: 30px;
-  padding: 0 6px;
-  font-size: 0.72rem;
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 0.75rem;
   font-weight: 600;
   border: none;
-  border-right: 1px solid #cfe0f5;
-  background: #fff;
-  color: #475569;
+  border-radius: 7px;
+  background: transparent;
+  color: #64748b;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1831,26 +1849,20 @@ button {
 .filter-toggle-row button:last-child { border-right: none; }
 
 .filter-toggle-row button.active {
-  background: #0f172a;
-  color: #fff;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15,23,42,.12), 0 0 0 1px rgba(15,23,42,.06);
 }
 
 .filter-toggle-row button:hover:not(.active) {
-  background: #f1f5f9;
+  background: rgba(255,255,255,.6);
+  color: #334155;
 }
 
 .dashboard-filters label,
 .filter-button-group {
   display: grid;
-  gap: 4px;
-}
-
-.dashboard-filters label span,
-.filter-button-group span {
-  color: #64748b;
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  gap: 5px;
 }
 
 .filter-chip-row {
