@@ -2509,6 +2509,7 @@ button {
 }
 
 .fixed-mice-chart {
+  position: relative;          /* positioning context สำหรับ axis-label */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -2567,13 +2568,13 @@ button {
 
 .fixed-mice-chart-axis-label {
   position: absolute;
-  left: 12px;
-  bottom: 14px;
+  left: 6px;
+  top: 50%;                         /* center กลาง chart */
+  transform: translateY(-50%) rotate(180deg);
   color: #334155;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
   writing-mode: vertical-rl;
-  transform: rotate(180deg);
 }
 
 .fixed-mice-chart .recharts-responsive-container {
