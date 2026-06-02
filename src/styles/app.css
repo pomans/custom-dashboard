@@ -2513,7 +2513,7 @@ button {
   height: 100%;
   min-height: 0;
   min-width: 0;
-  padding: 8px 0 36px;   /* bottom 36px = พื้นที่ x-axis label อยู่ภายในกรอบ */
+  padding: 8px 0 51px;   /* bottom 51px = inset bottom ใหม่ (x-axis label อยู่ในกรอบ) */
   border: 1px solid #d1d5db;
   border-radius: 12px;
   background: #fff;
@@ -2570,7 +2570,8 @@ button {
 
 .fixed-mice-chart .recharts-responsive-container {
   position: absolute !important;
-  inset: 52px 0 36px 0;  /* bottom 36px = พื้นที่ x-axis label (font 13 + tickMargin 8 + gap) */
+  /* ลดขนาด chart 30px: inset ซ้าย/ขวา 15px (width -30px), บน +15px, ล่าง +15px (height -30px) */
+  inset: 67px 15px 51px 15px;
 }
 
 .fixed-mice-chart .recharts-cartesian-grid-horizontal line {
