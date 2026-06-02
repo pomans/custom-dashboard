@@ -770,39 +770,42 @@ function WidgetSkeleton({ type }) {
   );
 }
 
-/* ─── ShrinkText: ลด font-size อัตโนมัติเมื่อข้อความล้น container ──────── */
-function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }) {
+/* ─── ShrinkText: font ใหญ่สุดเท่าที่พอดี container ──────────────────────── */
+const CHAR_WIDTH_RATIO = 0.62; // อัตราส่วน char width / font-size สำหรับ bold font
+
+function ShrinkText({ text, maxPx = 56, minPx = 10, style = {}, className = '' }) {
   const containerRef = useRef(null);
-  const textRef      = useRef(null);
+  const [fontSize, setFontSize] = useState(maxPx);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const container = containerRef.current;
-    const el        = textRef.current;
-    if (!container || !el) return;
+    if (!container) return;
 
-    const cw = container.clientWidth - 2;
-    const hasSpace = String(text).includes(' ');
+    // rAF เพื่อให้ flex layout complete ก่อนวัด clientWidth
+    const raf = requestAnimationFrame(() => {
+      const cw = container.clientWidth;
+      if (!cw) return;
 
-    el.style.fontSize = `${maxPx}px`;
-    let size = maxPx;
+      const str = String(text);
+      const hasSpace = str.includes(' ');
 
-    if (hasSpace) {
-      // มีเว้นวรรค → wrap ที่คำ ลด font จนบรรทัดที่ยาวสุดพอดี width
-      el.style.whiteSpace = 'normal';
-      while (size > minPx && el.scrollWidth > cw) {
-        size -= 1;
-        el.style.fontSize = `${size}px`;
+      let fitted;
+      if (hasSpace) {
+        // มีเว้นวรรค → คำนวณจาก longest word
+        const longestWord = str.split(/\s+/).reduce((a, b) => a.length > b.length ? a : b, '');
+        fitted = Math.floor(cw / (longestWord.length * CHAR_WIDTH_RATIO));
+      } else {
+        // ไม่มีเว้นวรรค → คำนวณจาก full string (single line)
+        fitted = Math.floor(cw / (str.length * CHAR_WIDTH_RATIO));
       }
-    } else {
-      // ไม่มีเว้นวรรค → single line ลด font จนพอดี width
-      el.style.whiteSpace = 'nowrap';
-      while (size > minPx && el.scrollWidth > cw) {
-        size -= 1;
-        el.style.fontSize = `${size}px`;
-      }
-      el.style.whiteSpace = 'normal';
-    }
+
+      setFontSize(Math.max(minPx, Math.min(maxPx, fitted)));
+    });
+
+    return () => cancelAnimationFrame(raf);
   }, [text, maxPx, minPx]);
+
+  const hasSpace = String(text).includes(' ');
 
   return (
     <div
@@ -810,14 +813,15 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
       style={{ overflow: 'hidden', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
     >
       <strong
-        ref={textRef}
         className={className}
         style={{
-          fontSize: `${maxPx}px`,
+          fontSize: `${fontSize}px`,
           lineHeight: 1.2,
           textAlign: 'center',
           display: 'block',
           width: '100%',
+          whiteSpace: hasSpace ? 'normal' : 'nowrap',
+          wordBreak: hasSpace ? 'normal' : 'keep-all',
           ...style,
         }}
       >
