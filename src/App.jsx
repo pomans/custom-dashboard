@@ -1534,18 +1534,18 @@ export default function App() {
     const rect = stageWrapRef.current.getBoundingClientRect();
     const vw = stageViewportWidth ?? rect.width;
     const viewportCols = Math.floor((vw || MIN_GRID_COLS * GRID_COL_WIDTH) / GRID_COL_WIDTH);
-    const sorted = [...widgets].sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
 
-    // Pre-fill occupied cells with filter panel area
+    // Filter panel: pin ไว้ที่ (0, 0) เสมอ — widgets จะอยู่ใต้มัน
+    const hasFp = Boolean(filterPanelLayout);
+    const fpW   = hasFp ? Math.min(filterPanelLayout.w ?? viewportCols, viewportCols) : 0;
+    const fpH   = hasFp ? Math.max(2, filterPanelLayout.h ?? 3) : 0;
+
+    // colHeight: บล็อก columns ที่ filter panel ครอง (x=0..fpW, y=0..fpH)
     const colHeight = new Array(viewportCols).fill(0);
-    if (filterPanelLayout) {
-      const fp = filterPanelLayout;
-      const fpBottom = (fp.y ?? 0) + Math.max(2, fp.h ?? 3);
-      const fpLeft  = Math.max(0, fp.x ?? 0);
-      const fpRight = Math.min(viewportCols, (fp.x ?? 0) + (fp.w ?? viewportCols));
-      for (let c = fpLeft; c < fpRight; c++) colHeight[c] = Math.max(colHeight[c], fpBottom);
-    }
+    for (let c = 0; c < fpW; c++) colHeight[c] = fpH;
 
+    // Pack widgets แบบ top-left bin-packing
+    const sorted = [...widgets].sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
     const arranged = sorted.map((w) => {
       const ww = Math.min(w.w, viewportCols);
       let bestX = 0, bestY = Infinity;
@@ -1557,9 +1557,26 @@ export default function App() {
       return { ...w, x: bestX, y: bestY, w: ww };
     });
 
-    setWidgets(arranged);
+    // Update widgets + filter panel position ใน workspace transaction เดียว
+    updateWorkspace((prev) => {
+      const id = prev.activeDashboardId;
+      return {
+        ...prev,
+        dashboards: prev.dashboards.map((dash) => {
+          if (dash.id !== id) return dash;
+          return {
+            ...dash,
+            widgets: arranged,
+            ...(hasFp && dash.filterPanel
+              ? { filterPanel: { ...dash.filterPanel, x: 0, y: 0, w: fpW, h: fpH } }
+              : {})
+          };
+        })
+      };
+    });
+
     setCanvasZoom(1);
-  }, [widgets, stageViewportWidth, filterPanelLayout]);
+  }, [widgets, stageViewportWidth, filterPanelLayout, updateWorkspace]);
 
   const updateActiveDashboard = (updater, options = {}) => {
     updateWorkspace(
