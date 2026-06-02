@@ -94,6 +94,8 @@ function buildParams(filter) {
   if (f.gdsDimension != null) params.gdsDimension = f.gdsDimension;
   // nocache — bypass server MemoryCache (force reload)
   if (f.nocache) params.nocache = 'true';
+  // quarters — per-widget quarter filter (default all 4)
+  if (f.quarters && f.quarters !== 'Q1,Q2,Q3,Q4') params.quarters = f.quarters;
   return new URLSearchParams(params).toString();
 }
 
@@ -377,4 +379,12 @@ export function activeMiceWidgetKey(widgets) {
     if (WIDGET_API_KEYS[w.type]) types.add(w.type === 'miceStatCard' ? 'miceKpis' : w.type);
   });
   return [...types].sort().join(',');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Direct per-widget fetch — ใช้โดย chart widget components ที่มี local filter
+// ─────────────────────────────────────────────────────────────────────────────
+export async function fetchWidgetDirect(widgetKey, filter, signal) {
+  const rows = await fetchRows(widgetKey, filter, signal);
+  return rows;
 }

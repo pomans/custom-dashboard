@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { fetchWidgetDirect } from '../services/widgetApi';
 import {
   Bar,
   BarChart,
@@ -438,76 +439,48 @@ const renderYoyBadge = ({ x, y, value }) => {
   );
 };
 
-const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSeries, yTickFormatter }) => (
-  <div className="fixed-mice-chart">
-    <div className="fixed-mice-chart-header">
-      <div className="fixed-mice-chart-title" style={{ background: color }}>
-        {title}
+function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, forecastSeries, yTickFormatter, valueKey, lyKey, yoyKey, globalFilter }) {
+  const { quarters, setQuarters, industry, setIndustry, localData, loading } = useChartLocalFilter(
+    widgetKey,
+    globalFilter,
+    (rows) => rows.sort((a, b) => Number(a.year) - Number(b.year)).map((r) => ({
+      year: Number(r.year), value: num(r[valueKey]), lastYear: lyKey ? num(r[lyKey]) : undefined, yoy: yoyKey ? num(r[yoyKey]) : undefined,
+    }))
+  );
+  const series = localData ?? actualSeries;
+  return (
+    <div className="fixed-mice-chart">
+      <div className="fixed-mice-chart-header">
+        <div className="fixed-mice-chart-title" style={{ background: color }}>{title}</div>
+        <div className="fixed-mice-chart-rule" />
       </div>
-      <div className="fixed-mice-chart-rule" />
+      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industry={industry} setIndustry={setIndustry} />
+      <div className="fixed-mice-chart-body">
+        {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={[...series, ...forecastSeries]} margin={{ top: 42, right: 18, bottom: 10, left: 3 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            {series.map((entry) =>
+              entry.year % 2 === 0 ? (
+                <ReferenceArea key={`band-${entry.year}`} x1={entry.year-0.5} x2={entry.year+0.5} fill="#d9d9d9" fillOpacity={0.35} ifOverflow="extendDomain" />
+              ) : null
+            )}
+            <XAxis dataKey="year" tickFormatter={formatAnnualTick} interval={0} height={44} tick={{ angle: -45, textAnchor: 'end', fontSize: 10 }} tickMargin={4} />
+            <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
+            <Tooltip labelFormatter={String} formatter={(value) => [formatMetricValue(Number(value)), yLabel]} />
+            <Line type="monotone" dataKey="value" name={yLabel} stroke="#0f1f68" strokeWidth={3.5} dot={{ r: 5, fill: '#0f1f68' }} activeDot={{ r: 6 }} data={series}>
+              <LabelList dataKey="yoy" content={renderYoyBadge} />
+            </Line>
+            {forecastSeries.length > 0 && (
+              <Line type="monotone" dataKey="value" name="Forecast (ประมาณการ)" stroke="#0f1f68" strokeWidth={3} dot={false} strokeDasharray="6 6" data={forecastSeries} />
+            )}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="fixed-mice-chart-axis-label">{yLabel}</div>
     </div>
-    <div className="fixed-mice-chart-body">
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart
-        data={[...actualSeries, ...forecastSeries]}
-        margin={{ top: 42, right: 18, bottom: 10, left: 3 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        {actualSeries.map((entry) =>
-          entry.year % 2 === 0 ? (
-            <ReferenceArea
-              key={`band-${entry.year}`}
-              x1={entry.year - 0.5}
-              x2={entry.year + 0.5}
-              fill="#d9d9d9"
-              fillOpacity={0.35}
-              ifOverflow="extendDomain"
-            />
-          ) : null
-        )}
-        <XAxis
-          dataKey="year"
-          tickFormatter={formatAnnualTick}
-          interval={0}
-          height={44}
-          tick={{ angle: -45, textAnchor: 'end', fontSize: 10 }}
-          tickMargin={4}
-        />
-        <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
-        <Tooltip
-          labelFormatter={(year) => String(year)}
-          formatter={(value) => [formatMetricValue(Number(value)), yLabel]}
-        />
-        <Line
-          type="monotone"
-          dataKey="value"
-          name={yLabel}
-          stroke="#0f1f68"
-          strokeWidth={3.5}
-          dot={{ r: 5, fill: '#0f1f68' }}
-          activeDot={{ r: 6 }}
-          data={actualSeries}
-        >
-          <LabelList dataKey="yoy" content={renderYoyBadge} />
-        </Line>
-        {forecastSeries.length > 0 && (
-          <Line
-            type="monotone"
-            dataKey="value"
-            name="Forecast (ประมาณการ)"
-            stroke="#0f1f68"
-            strokeWidth={3}
-            dot={false}
-            strokeDasharray="6 6"
-            data={forecastSeries}
-          />
-        )}
-      </LineChart>
-    </ResponsiveContainer>
-    </div>
-    <div className="fixed-mice-chart-axis-label">{yLabel}</div>
-  </div>
-);
+  );
+}
 
 const buildChartRows = (records, widget) => {
   const xField = widget.mapping?.xField;
@@ -697,6 +670,71 @@ function WidgetFilterBar({ label, options, value, onChange }) {
             {opt.label}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── useChartLocalFilter: per-widget quarter/industry filter + fetch ───── */
+const ALL_QUARTERS  = ['Q1', 'Q2', 'Q3', 'Q4'];
+const ALL_INDUSTRIES = ['Meeting', 'Incentives', 'Conventions', 'Exhibitions', 'Mega Events'];
+
+function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
+  const [quarters,  setQuarters]  = useState(ALL_QUARTERS);
+  const [industry,  setIndustry]  = useState('all');
+  const [localData, setLocalData] = useState(null);
+  const [loading,   setLoading]   = useState(false);
+
+  const isDefault = quarters.length === 4 && industry === 'all';
+
+  useEffect(() => {
+    if (isDefault) { setLocalData(null); return; }
+    const ac = new AbortController();
+    setLoading(true);
+    const filter = {
+      ...(globalFilter || {}),
+      quarters: quarters.join(','),
+      industry,
+      nocache: true,
+    };
+    fetchWidgetDirect(widgetKey, filter, ac.signal)
+      .then((rows) => { if (!ac.signal.aborted) { setLocalData(transformFn(rows)); setLoading(false); } })
+      .catch(() => { if (!ac.signal.aborted) setLoading(false); });
+    return () => ac.abort();
+  }, [quarters, industry, widgetKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { quarters, setQuarters, industry, setIndustry, localData, loading, isDefault };
+}
+
+/* Compact filter toolbar ภายใน chart widget */
+function ChartLocalFilter({ quarters, setQuarters, industry, setIndustry }) {
+  const toggleQ = (q) => setQuarters((prev) =>
+    prev.includes(q) ? (prev.length > 1 ? prev.filter((x) => x !== q) : prev) : [...prev, q].sort()
+  );
+  const indOpts = [{ v: 'all', l: 'ทั้งหมด' }, ...ALL_INDUSTRIES.map((i) => ({ v: i, l: i }))];
+
+  return (
+    <div className="chart-local-filter">
+      <div className="clf-group">
+        <span className="clf-label">ไตรมาส</span>
+        <div className="clf-chips">
+          {ALL_QUARTERS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              className={quarters.includes(q) ? 'active' : ''}
+              onClick={() => toggleQ(q)}
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="clf-group">
+        <span className="clf-label">ประเภท</span>
+        <select value={industry} onChange={(e) => setIndustry(e.target.value)} className="clf-select">
+          {indOpts.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
       </div>
     </div>
   );
@@ -1361,7 +1399,7 @@ function MiceDrillFlow({ fixedProfile }) {
   );
 }
 
-export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false }) {
+export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false, globalFilter }) {
   if (isSkeleton) return <WidgetSkeleton type={widget.type} />;
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
     const fallback =
@@ -1451,52 +1489,25 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   if (widget.type === 'miceEventsChart') {
     const annual = fixedProfile.charts?.events || [];
     const actualSeries = annual.map((item, index) => ({
-      year: item.year,
-      value: item.value,
-      yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
+      year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return renderFixedChartPanel({
-      title: 'จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)',
-      color: '#081f68',
-      yLabel: 'MICE Events',
-      actualSeries,
-      forecastSeries: [],
-      yTickFormatter: formatYAxisTickThousands
-    });
+    return <FixedChartPanel widgetKey="miceEventsChart" title="จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)" color="#081f68" yLabel="MICE Events" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickThousands} valueKey="no_of_events" lyKey="no_of_events_ly" yoyKey="yoy_event" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceRevenueChart') {
     const annual = fixedProfile.charts?.revenue || [];
     const actualSeries = annual.map((item, index) => ({
-      year: item.year,
-      value: item.value,
-      yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
+      year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return renderFixedChartPanel({
-      title: 'รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)',
-      color: '#1d4fb3',
-      yLabel: 'ล้านบาท',
-      actualSeries,
-      forecastSeries: [],
-      yTickFormatter: formatYAxisTickFull
-    });
+    return <FixedChartPanel widgetKey="miceRevenueChart" title="รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)" color="#1d4fb3" yLabel="ล้านบาท" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="revenue_generated" lyKey="revenue_generated_ly" yoyKey="yoy_revenue" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceVisitorsChart') {
     const annual = fixedProfile.charts?.visitors || [];
     const actualSeries = annual.map((item, index) => ({
-      year: item.year,
-      value: item.value,
-      yoy: index > 0 ? computeYoY(item.value, annual[index - 1].value) : null
+      year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return renderFixedChartPanel({
-      title: 'จำนวนนักเดินทางไมซ์ (MICE Visitors)',
-      color: '#4098b9',
-      yLabel: 'MICE Visitors',
-      actualSeries,
-      forecastSeries: [],
-      yTickFormatter: formatYAxisTickMillions
-    });
+    return <FixedChartPanel widgetKey="miceVisitorsChart" title="จำนวนนักเดินทางไมซ์ (MICE Visitors)" color="#4098b9" yLabel="MICE Visitors" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickMillions} valueKey="no_of_visitors" lyKey="no_of_visitors_ly" yoyKey="yoy_visitors" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceEventsQuarterlyChart') {

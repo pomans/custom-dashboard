@@ -3603,6 +3603,7 @@ export default function App() {
                       records={widgetRecords}
                       isPreview={isWidgetPreview}
                       isSkeleton={NO_CONFIG_WIDGET_TYPES.includes(widget.type) && miceApiStatus === 'loading'}
+                      globalFilter={activeDashboardFilters}
                     />
                   </div>
                 </div>
