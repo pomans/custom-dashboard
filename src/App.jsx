@@ -1559,22 +1559,41 @@ export default function App() {
       return { ...w, x: bestX, y: bestY, w: ww };
     });
 
-    // Pass 2: gravity — ดึงแต่ละ widget ขึ้นให้ชิดสุดโดยไม่ทับ widget อื่นหรือ filter panel
-    const overlaps = (a, b) =>
+    // Pass 2: multi-pass iterative gravity (up + left) จนกว่า stable
+    // Mutate in-place เพื่อให้แต่ละ widget check overlap กับ positions ล่าสุด
+    const hits = (a, b) =>
       a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
     const fpRect = hasFp ? { x: 0, y: 0, w: fpW, h: fpH } : null;
 
-    packed = packed.map((w, i) => {
-      let y = w.y;
-      while (y > 0) {
-        const candidate = { ...w, y: y - 1 };
-        const hitFp = fpRect && overlaps(candidate, fpRect);
-        const hitWidget = packed.some((other, j) => j !== i && overlaps(candidate, other));
-        if (hitFp || hitWidget) break;
-        y--;
+    let changed = true;
+    let pass = 0;
+    while (changed && pass++ < 40) {
+      changed = false;
+      for (let i = 0; i < packed.length; i++) {
+        const w = packed[i];
+
+        // Pull up
+        let ny = w.y;
+        while (ny > 0) {
+          const c = { ...w, y: ny - 1 };
+          if ((fpRect && hits(c, fpRect)) || packed.some((o, j) => j !== i && hits(c, o))) break;
+          ny--;
+        }
+
+        // Pull left (from already-pulled-up position)
+        let nx = w.x;
+        while (nx > 0) {
+          const c = { ...w, x: nx - 1, y: ny };
+          if ((fpRect && hits(c, fpRect)) || packed.some((o, j) => j !== i && hits(c, o))) break;
+          nx--;
+        }
+
+        if (ny !== w.y || nx !== w.x) {
+          packed[i] = { ...w, x: nx, y: ny };
+          changed = true;
+        }
       }
-      return { ...w, y };
-    });
+    }
 
     const arranged = packed;
 
