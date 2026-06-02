@@ -783,20 +783,23 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
     const cw = container.clientWidth;
     const ch = container.clientHeight;
 
-    // Phase 1: ลองแบบ single-line (nowrap) ให้พอดี width ก่อน
+    // Phase 1: single-line — ลด font จนข้อความพอดี width โดยไม่ตัดคำ
+    // ใช้ inline-block + nowrap เพื่อวัด natural text width ได้แม่นยำ
+    el.style.display    = 'inline-block';
     el.style.whiteSpace = 'nowrap';
     el.style.fontSize   = `${maxPx}px`;
+
     let size = maxPx;
-    while (size > minPx && el.scrollWidth > cw + 2) {
+    while (size > minPx && el.offsetWidth > cw) {
       size -= 1;
       el.style.fontSize = `${size}px`;
     }
 
-    // Phase 2: ถ้า single-line พอดี → ใช้เลย
-    // ถ้ายัง overflow height (เช่น ตัวอักษรใหญ่เกิน height) → ลดต่อ
-    if (el.scrollHeight > ch + 2) {
-      el.style.whiteSpace = 'normal'; // อนุญาต wrap
-      while (size > minPx && (el.scrollWidth > cw + 2 || el.scrollHeight > ch + 2)) {
+    // Phase 2: ถ้า height ยังล้น (card เล็กมาก) → allow wrap แล้วลดต่อ
+    el.style.display    = 'block';
+    el.style.whiteSpace = 'normal';
+    if (el.scrollHeight > ch) {
+      while (size > minPx && (el.offsetWidth > cw || el.scrollHeight > ch)) {
         size -= 1;
         el.style.fontSize = `${size}px`;
       }
@@ -816,7 +819,7 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
           lineHeight: 1.2,
           textAlign: 'center',
           display: 'block',
-          width: '100%',
+          maxWidth: '100%',
           ...style,
         }}
       >
