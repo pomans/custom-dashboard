@@ -1438,7 +1438,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const cfg = STAT_CONFIGS[metric] || STAT_CONFIGS.events;
     return (
       <div className="mice-stat-card">
-        <ShrinkText text={cfg.value} maxPx={28} minPx={10} />
+        <ShrinkText text={cfg.value} maxPx={56} minPx={10} />
         <span>{cfg.label}</span>
       </div>
     );
