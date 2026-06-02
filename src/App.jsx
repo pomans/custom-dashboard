@@ -3745,16 +3745,31 @@ export default function App() {
                     <div className="filter-button-group">
                       <span>Market</span>
                       <div className="filter-toggle-row">
-                        {['International', 'Domestic'].map((market) => (
-                          <button
-                            key={market}
-                            type="button"
-                            className={activeDashboardFilters.market === market ? 'active' : ''}
-                            onClick={() => updateActiveDashboardFilters({ market })}
-                          >
-                            {market}
-                          </button>
-                        ))}
+                        {['International', 'Domestic'].map((option) => {
+                          const cur = activeDashboardFilters.market;
+                          const isActive = cur === option || cur === 'all';
+                          return (
+                            <button
+                              key={option}
+                              type="button"
+                              className={isActive ? 'active' : ''}
+                              onClick={() => {
+                                if (cur === 'all') {
+                                  // ยกเลิก option นี้ → เหลืออีกตัว
+                                  updateActiveDashboardFilters({ market: option === 'International' ? 'Domestic' : 'International' });
+                                } else if (cur === option) {
+                                  // คลิกซ้ำตัวเดิม → เลือกทั้งคู่ (all)
+                                  updateActiveDashboardFilters({ market: 'all' });
+                                } else {
+                                  // เลือก option ใหม่ขณะอีกตัวแอคทีฟ → เลือกทั้งคู่
+                                  updateActiveDashboardFilters({ market: 'all' });
+                                }
+                              }}
+                            >
+                              {option}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                     <div className="filter-button-group">
