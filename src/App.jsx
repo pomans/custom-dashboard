@@ -3556,25 +3556,32 @@ export default function App() {
                       <strong>Filters</strong>
                       <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
                     </div>
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                      {/* Reload — ⟳ */}
                       <button
                         type="button"
-                        className="section-toggle"
-                        title="Reload widget data from Blendata (bypass cache)"
+                        className="filter-icon-btn"
+                        title="Reload widget data (bypass cache)"
                         onClick={() => {
                           setMiceApiFixedProfile(null);
                           setRefreshKey((k) => k + 1);
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                       >
-                        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M13.5 8A5.5 5.5 0 1 1 10 3.07" />
                           <path d="M10 1v3h3" />
                         </svg>
-                        Reload
                       </button>
-                      <button type="button" className="section-toggle" onClick={clearActiveDashboardFilters}>
-                        Clear Filters
+                      {/* Clear Filters — ✕ */}
+                      <button
+                        type="button"
+                        className="filter-icon-btn"
+                        title="Clear filters"
+                        onClick={clearActiveDashboardFilters}
+                      >
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                          <path d="M12 4 4 12M4 4l8 8" />
+                        </svg>
                       </button>
                     </div>
                   </div>
