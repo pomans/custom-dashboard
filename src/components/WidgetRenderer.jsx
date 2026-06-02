@@ -440,7 +440,7 @@ const renderYoyBadge = ({ x, y, value }) => {
 };
 
 function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, forecastSeries, yTickFormatter, valueKey, lyKey, yoyKey, globalFilter }) {
-  const { quarters, setQuarters, industry, setIndustry, localData, loading } = useChartLocalFilter(
+  const { quarters, setQuarters, industries, setIndustries, localData, loading } = useChartLocalFilter(
     widgetKey,
     globalFilter,
     (rows) => rows.sort((a, b) => Number(a.year) - Number(b.year)).map((r) => ({
@@ -454,7 +454,7 @@ function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, foreca
         <div className="fixed-mice-chart-title" style={{ background: color }}>{title}</div>
         <div className="fixed-mice-chart-rule" />
       </div>
-      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industry={industry} setIndustry={setIndustry} />
+      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industries={industries} setIndustries={setIndustries} />
       <div className="fixed-mice-chart-body">
         {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
         <ResponsiveContainer width="100%" height="100%">
@@ -680,12 +680,12 @@ const ALL_QUARTERS  = ['Q1', 'Q2', 'Q3', 'Q4'];
 const ALL_INDUSTRIES = ['Meeting', 'Incentives', 'Conventions', 'Exhibitions', 'Mega Events'];
 
 function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
-  const [quarters,  setQuarters]  = useState(ALL_QUARTERS);
-  const [industry,  setIndustry]  = useState('all');
-  const [localData, setLocalData] = useState(null);
-  const [loading,   setLoading]   = useState(false);
+  const [quarters,   setQuarters]   = useState(ALL_QUARTERS);
+  const [industries, setIndustries] = useState(ALL_INDUSTRIES);
+  const [localData,  setLocalData]  = useState(null);
+  const [loading,    setLoading]    = useState(false);
 
-  const isDefault = quarters.length === 4 && industry === 'all';
+  const isDefault = quarters.length === ALL_QUARTERS.length && industries.length === ALL_INDUSTRIES.length;
 
   useEffect(() => {
     if (isDefault) { setLocalData(null); return; }
@@ -693,25 +693,30 @@ function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
     setLoading(true);
     const filter = {
       ...(globalFilter || {}),
-      quarters: quarters.join(','),
-      industry,
+      quarters:  quarters.join(','),
+      industry:  industries.length === ALL_INDUSTRIES.length ? 'all' : industries.join(','),
       nocache: true,
     };
     fetchWidgetDirect(widgetKey, filter, ac.signal)
       .then((rows) => { if (!ac.signal.aborted) { setLocalData(transformFn(rows)); setLoading(false); } })
       .catch(() => { if (!ac.signal.aborted) setLoading(false); });
     return () => ac.abort();
-  }, [quarters, industry, widgetKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [quarters, industries, widgetKey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { quarters, setQuarters, industry, setIndustry, localData, loading, isDefault };
+  return { quarters, setQuarters, industries, setIndustries, localData, loading, isDefault };
 }
 
+// Short labels for industry chips
+const IND_LABEL = { Meeting: 'M', Incentives: 'I', Conventions: 'C', Exhibitions: 'E', 'Mega Events': 'ME' };
+
 /* Compact filter toolbar ภายใน chart widget */
-function ChartLocalFilter({ quarters, setQuarters, industry, setIndustry }) {
+function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries }) {
   const toggleQ = (q) => setQuarters((prev) =>
     prev.includes(q) ? (prev.length > 1 ? prev.filter((x) => x !== q) : prev) : [...prev, q].sort()
   );
-  const indOpts = [{ v: 'all', l: 'ทั้งหมด' }, ...ALL_INDUSTRIES.map((i) => ({ v: i, l: i }))];
+  const toggleInd = (ind) => setIndustries((prev) =>
+    prev.includes(ind) ? (prev.length > 1 ? prev.filter((x) => x !== ind) : prev) : [...prev, ind]
+  );
 
   return (
     <div className="chart-local-filter">
@@ -719,22 +724,25 @@ function ChartLocalFilter({ quarters, setQuarters, industry, setIndustry }) {
         <span className="clf-label">ไตรมาส</span>
         <div className="clf-chips">
           {ALL_QUARTERS.map((q) => (
-            <button
-              key={q}
-              type="button"
-              className={quarters.includes(q) ? 'active' : ''}
-              onClick={() => toggleQ(q)}
-            >
-              {q}
-            </button>
+            <button key={q} type="button" className={quarters.includes(q) ? 'active' : ''} onClick={() => toggleQ(q)}>{q}</button>
           ))}
         </div>
       </div>
       <div className="clf-group">
         <span className="clf-label">ประเภท</span>
-        <select value={industry} onChange={(e) => setIndustry(e.target.value)} className="clf-select">
-          {indOpts.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </select>
+        <div className="clf-chips">
+          {ALL_INDUSTRIES.map((ind) => (
+            <button
+              key={ind}
+              type="button"
+              title={ind}
+              className={industries.includes(ind) ? 'active' : ''}
+              onClick={() => toggleInd(ind)}
+            >
+              {IND_LABEL[ind] || ind}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1402,7 +1410,7 @@ function MiceDrillFlow({ fixedProfile }) {
 /* ─── MiceDataTableWidget: ตาราง MICE Statistics รายปี / ไตรมาส ─────────── */
 function MiceDataTableWidget({ rows, globalFilter }) {
   // per-widget quarter + industry filter
-  const { quarters, setQuarters, industry, setIndustry, localData, loading } = useChartLocalFilter(
+  const { quarters, setQuarters, industries, setIndustries, localData, loading } = useChartLocalFilter(
     'miceDataTable',
     globalFilter,
     (apiRows) => apiRows.map((r) => ({
@@ -1440,7 +1448,7 @@ function MiceDataTableWidget({ rows, globalFilter }) {
       <div className="fixed-mice-chart-title" style={{ background: '#1e3a5f', margin: '8px 12px 0', borderRadius: 8, fontSize: '0.85rem', padding: '6px 14px' }}>
         MICE Statistics
       </div>
-      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industry={industry} setIndustry={setIndustry} />
+      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industries={industries} setIndustries={setIndustries} />
       <div className="fixed-mice-table-shell-main" style={{ position: 'relative' }}>
         {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
         <table className="fixed-mice-table-heavy" style={{ width: '100%', borderCollapse: 'collapse' }}>
