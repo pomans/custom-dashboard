@@ -1544,9 +1544,11 @@ export default function App() {
     const colHeight = new Array(viewportCols).fill(0);
     for (let c = 0; c < fpW; c++) colHeight[c] = fpH;
 
-    // Pack widgets แบบ top-left bin-packing
-    const sorted = [...widgets].sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
-    const arranged = sorted.map((w) => {
+    // Sort ตาม area ใหญ่ก่อน → large widgets ถูกวางก่อน ลด wasted space
+    const sorted = [...widgets].sort((a, b) => (b.w * b.h) - (a.w * a.h) || (a.y - b.y));
+
+    // Pass 1: top-left bin-packing
+    let packed = sorted.map((w) => {
       const ww = Math.min(w.w, viewportCols);
       let bestX = 0, bestY = Infinity;
       for (let x = 0; x <= viewportCols - ww; x++) {
@@ -1556,6 +1558,25 @@ export default function App() {
       for (let c = bestX; c < bestX + ww; c++) colHeight[c] = bestY + w.h;
       return { ...w, x: bestX, y: bestY, w: ww };
     });
+
+    // Pass 2: gravity — ดึงแต่ละ widget ขึ้นให้ชิดสุดโดยไม่ทับ widget อื่นหรือ filter panel
+    const overlaps = (a, b) =>
+      a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    const fpRect = hasFp ? { x: 0, y: 0, w: fpW, h: fpH } : null;
+
+    packed = packed.map((w, i) => {
+      let y = w.y;
+      while (y > 0) {
+        const candidate = { ...w, y: y - 1 };
+        const hitFp = fpRect && overlaps(candidate, fpRect);
+        const hitWidget = packed.some((other, j) => j !== i && overlaps(candidate, other));
+        if (hitFp || hitWidget) break;
+        y--;
+      }
+      return { ...w, y };
+    });
+
+    const arranged = packed;
 
     // Update widgets + filter panel position ใน workspace transaction เดียว
     updateWorkspace((prev) => {
