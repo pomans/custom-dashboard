@@ -381,7 +381,7 @@ const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter 
       </div>
       {renderQuarterlyLegend()}
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={withYoy} margin={{ top: 32, right: 24, bottom: 24, left: 18 }}>
+        <LineChart data={withYoy} margin={{ top: 32, right: 24, bottom: 32, left: 18 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
           <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
           <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
@@ -711,16 +711,19 @@ function WidgetSkeleton({ type }) {
 
   /* Line / bar charts */
   if (CHART_WIDGET_TYPES.has(type)) {
-    const bars = [65, 50, 80, 45, 70, 55, 90, 60, 75, 48];
+    // quarterly: 4 labels (Q1-Q4), annual: 10 labels
+    const isQuarterly = type === 'miceEventsQuarterlyChart' || type === 'miceVisitorsQuarterlyChart';
+    const labelCount  = isQuarterly ? 4 : 10;
     return (
       <div className="sk-chart">
         <div className="sk sk-chart-title" />
         <div className="sk-chart-area">
           <div className="sk-chart-line" />
         </div>
-        <div className="sk-chart-bars" style={{ height: 28 }}>
-          {bars.map((h, i) => (
-            <div key={i} className="sk sk-chart-bar" style={{ height: `${h}%` }} />
+        {/* x-axis label placeholders — แยกออกจาก chart area เพื่อไม่ให้โดน clip */}
+        <div className="sk-chart-labels">
+          {Array.from({ length: labelCount }).map((_, i) => (
+            <div key={i} className="sk sk-chart-label" />
           ))}
         </div>
       </div>
