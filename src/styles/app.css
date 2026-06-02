@@ -1715,6 +1715,9 @@ button {
   border: 1px solid #d8e5f6;
   border-radius: 14px;
   background: linear-gradient(180deg, #ffffff 0%, #f6faff 100%);
+  min-width: 300px;        /* ขั้นต่ำเพื่อให้ 2-column toggles ไม่ล้น */
+  box-sizing: border-box;
+  overflow: hidden;        /* clip เฉพาะ filter panel ให้ fit ใน card */
 }
 
 .dashboard-filters-header {
@@ -1789,8 +1792,8 @@ button {
 .filter-toggle-row button {
   flex: 1;
   min-height: 30px;
-  padding: 0 8px;
-  font-size: 0.75rem;
+  padding: 0 6px;
+  font-size: 0.72rem;
   font-weight: 600;
   border: none;
   border-right: 1px solid #cfe0f5;
@@ -1801,6 +1804,7 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .filter-toggle-row button:last-child { border-right: none; }
@@ -2464,6 +2468,35 @@ button {
   overflow: hidden;
 }
 
+/* MICE chart widgets: allow overflow so x-axis labels show below plot area */
+.widget-card[data-widget-type='miceEventsQuarterlyChart'] .widget-content,
+.widget-card[data-widget-type='miceVisitorsQuarterlyChart'] .widget-content,
+.widget-card[data-widget-type='miceEventsChart'] .widget-content,
+.widget-card[data-widget-type='miceRevenueChart'] .widget-content,
+.widget-card[data-widget-type='miceVisitorsChart'] .widget-content {
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.widget-card[data-widget-type='miceEventsQuarterlyChart'] .widget-visual,
+.widget-card[data-widget-type='miceVisitorsQuarterlyChart'] .widget-visual,
+.widget-card[data-widget-type='miceEventsChart'] .widget-visual,
+.widget-card[data-widget-type='miceRevenueChart'] .widget-visual,
+.widget-card[data-widget-type='miceVisitorsChart'] .widget-visual {
+  overflow: visible;
+}
+
+/* widget-card keeps border-radius clip via clip-path for the chart types */
+.widget-card[data-widget-type='miceEventsQuarterlyChart'],
+.widget-card[data-widget-type='miceVisitorsQuarterlyChart'],
+.widget-card[data-widget-type='miceEventsChart'],
+.widget-card[data-widget-type='miceRevenueChart'],
+.widget-card[data-widget-type='miceVisitorsChart'] {
+  overflow: visible;
+  /* keep rounded look with clip-path instead of overflow:hidden */
+  clip-path: none;
+}
+
 .fixed-mice-dashboard {
   display: grid;
   gap: 12px;
@@ -2540,7 +2573,7 @@ button {
 
 .fixed-mice-chart .recharts-responsive-container {
   position: absolute !important;
-  inset: 52px 0 32px 0;  /* bottom 32px ให้ x-axis label มีพื้นที่แสดง */
+  inset: 52px 0 0 0;  /* ไม่ cut bottom — x-axis labels แสดงใน margin ด้านล่าง */
 }
 
 .fixed-mice-chart .recharts-cartesian-grid-horizontal line {
