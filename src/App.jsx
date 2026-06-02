@@ -3580,39 +3580,43 @@ export default function App() {
                   </div>
                 )}
                 <div className="dashboard-filters-grid">
-                  <div className="filter-button-group">
-                    <span>Market</span>
-                    <div className="filter-chip-row">
-                      {['International', 'Domestic'].map((market) => (
-                        <button
-                          key={market}
-                          type="button"
-                          className={activeDashboardFilters.market === market ? 'active' : ''}
-                          onClick={() => updateActiveDashboardFilters({ market })}
-                        >
-                          {market}
-                        </button>
-                      ))}
+                  {/* Market + Year Basis — side by side 2 columns */}
+                  <div className="filter-row-two-col">
+                    <div className="filter-button-group">
+                      <span>Market</span>
+                      <div className="filter-toggle-row">
+                        {['International', 'Domestic'].map((market) => (
+                          <button
+                            key={market}
+                            type="button"
+                            className={activeDashboardFilters.market === market ? 'active' : ''}
+                            onClick={() => updateActiveDashboardFilters({ market })}
+                          >
+                            {market}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="filter-button-group">
+                      <span>Year Basis</span>
+                      <div className="filter-toggle-row">
+                        {[
+                          { value: 'calendar', label: 'Calendar Year' },
+                          { value: 'fiscal', label: 'Fiscal Year' }
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className={activeDashboardFilters.yearMode === option.value ? 'active' : ''}
+                            onClick={() => updateActiveDashboardFilters({ yearMode: option.value })}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
-                  <div className="filter-button-group">
-                    <span>Year Basis</span>
-                    <div className="filter-chip-row">
-                      {[
-                        { value: 'calendar', label: 'Calendar Year' },
-                        { value: 'fiscal', label: 'Fiscal Year' }
-                      ].map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          className={activeDashboardFilters.yearMode === option.value ? 'active' : ''}
-                          onClick={() => updateActiveDashboardFilters({ yearMode: option.value })}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Year Range — full width */}
                   <div className="filter-button-group">
                     <span>Year Range</span>
                     <YearRangeSlider

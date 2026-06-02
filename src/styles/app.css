@@ -1765,10 +1765,53 @@ button {
 }
 
 .dashboard-filters-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Market + Year Basis row: always 2 equal columns */
+.filter-row-two-col {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px 14px;
-  align-items: end;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Toggle row: buttons fill the group width evenly */
+.filter-toggle-row {
+  display: flex;
+  gap: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #cfe0f5;
+}
+
+.filter-toggle-row button {
+  flex: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: none;
+  border-right: 1px solid #cfe0f5;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filter-toggle-row button:last-child { border-right: none; }
+
+.filter-toggle-row button.active {
+  background: #0f172a;
+  color: #fff;
+}
+
+.filter-toggle-row button:hover:not(.active) {
+  background: #f1f5f9;
 }
 
 .dashboard-filters label,
@@ -2440,11 +2483,11 @@ button {
   height: 100%;
   min-height: 0;
   min-width: 0;
-  padding: 8px 0 0;
+  padding: 8px 0 4px;    /* bottom padding เพื่อให้ x-axis label มีพื้นที่ */
   border: 1px solid #d1d5db;
   border-radius: 12px;
   background: #fff;
-  overflow: hidden;
+  overflow: visible;     /* ← เปลี่ยนจาก hidden เพื่อไม่ clip x-axis labels */
 }
 
 .fixed-mice-chart-header {
@@ -2497,7 +2540,7 @@ button {
 
 .fixed-mice-chart .recharts-responsive-container {
   position: absolute !important;
-  inset: 52px 0 10px 0;
+  inset: 52px 0 32px 0;  /* bottom 32px ให้ x-axis label มีพื้นที่แสดง */
 }
 
 .fixed-mice-chart .recharts-cartesian-grid-horizontal line {
