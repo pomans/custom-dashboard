@@ -2699,6 +2699,8 @@ button {
   height: 100%;
   min-height: 0;
   min-width: 0;
+  overflow-y: auto;   /* ต้องมี scrolling container เพื่อให้ sticky thead ทำงาน */
+  overflow-x: auto;
 }
 
 .fixed-mice-table-heavy {
@@ -2714,6 +2716,9 @@ button {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .fixed-mice-table-heavy tfoot td {
