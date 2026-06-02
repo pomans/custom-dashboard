@@ -475,7 +475,7 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
         />
         <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
         <Tooltip
-          labelFormatter={(year) => `ปี ${year}`}
+          labelFormatter={(year) => String(year)}
           formatter={(value, name) => [formatMetricValue(Number(value)), name]}
         />
         <Line
@@ -490,16 +490,18 @@ const renderFixedChartPanel = ({ title, color, yLabel, actualSeries, forecastSer
         >
           <LabelList dataKey="yoy" content={renderYoyBadge} />
         </Line>
-        <Line
-          type="monotone"
-          dataKey="value"
-          name="Forecast (ประมาณการ)"
-          stroke="#0f1f68"
-          strokeWidth={3}
-          dot={false}
-          strokeDasharray="6 6"
-          data={forecastSeries}
-        />
+        {forecastSeries.length > 0 && (
+          <Line
+            type="monotone"
+            dataKey="value"
+            name="Forecast (ประมาณการ)"
+            stroke="#0f1f68"
+            strokeWidth={3}
+            dot={false}
+            strokeDasharray="6 6"
+            data={forecastSeries}
+          />
+        )}
       </LineChart>
     </ResponsiveContainer>
     </div>
