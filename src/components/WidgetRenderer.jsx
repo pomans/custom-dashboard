@@ -1400,13 +1400,27 @@ function MiceDrillFlow({ fixedProfile }) {
 }
 
 /* ─── MiceDataTableWidget: ตาราง MICE Statistics รายปี / ไตรมาส ─────────── */
-function MiceDataTableWidget({ rows }) {
+function MiceDataTableWidget({ rows, globalFilter }) {
+  // per-widget quarter + industry filter
+  const { quarters, setQuarters, industry, setIndustry, localData, loading } = useChartLocalFilter(
+    'miceDataTable',
+    globalFilter,
+    (apiRows) => apiRows.map((r) => ({
+      year:     num(r.year),
+      quarter:  String(r.quarter || ''),
+      events:   num(r.no_of_events),
+      visitors: num(r.no_of_visitors),
+      revenue:  num(r.revenue_generated_million_baht),
+    }))
+  );
+
+  const displayRows = localData ?? rows;
   const fmt  = new Intl.NumberFormat('en-US');
   const fmtM = (v) => v >= 1000 ? `${(v/1000).toFixed(1)}K` : fmt.format(v);
 
   // Group by year, then by quarter
   const byYear = {};
-  rows.forEach((r) => {
+  displayRows.forEach((r) => {
     if (!byYear[r.year]) byYear[r.year] = [];
     byYear[r.year].push(r);
   });
@@ -1426,7 +1440,9 @@ function MiceDataTableWidget({ rows }) {
       <div className="fixed-mice-chart-title" style={{ background: '#1e3a5f', margin: '8px 12px 0', borderRadius: 8, fontSize: '0.85rem', padding: '6px 14px' }}>
         MICE Statistics
       </div>
-      <div className="fixed-mice-table-shell-main" style={{ marginTop: 6 }}>
+      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industry={industry} setIndustry={setIndustry} />
+      <div className="fixed-mice-table-shell-main" style={{ position: 'relative' }}>
+        {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
         <table className="fixed-mice-table-heavy" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -1966,7 +1982,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   }
 
   if (widget.type === 'miceDataTable') {
-    return <MiceDataTableWidget rows={fixedProfile.dataTable || []} />;
+    return <MiceDataTableWidget rows={fixedProfile.dataTable || []} globalFilter={globalFilter} />;
   }
 
   return <p className="empty-note">Unsupported widget type.</p>;
