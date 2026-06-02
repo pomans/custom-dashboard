@@ -1368,6 +1368,60 @@ export default function App() {
     setCanvasZoom(Math.max(ZOOM_MIN, Math.min(1, Math.round(zoom * 100) / 100)));
   }, [stageViewportWidth, occupiedContentWidth, widgets.length]);
 
+  // Auto Resize — ปรับขนาดทุก widget ให้พอดีกับ viewport (MIN_GRID_COLS columns)
+  const autoResize = useCallback(() => {
+    if (!widgets.length || !stageWrapRef.current) return;
+    const rect = stageWrapRef.current.getBoundingClientRect();
+    const vw = stageViewportWidth ?? rect.width;
+    if (!vw) return;
+
+    // คำนวณ cols ที่ viewport มี (เทียบกับ GRID_COL_WIDTH)
+    const viewportCols = Math.floor(vw / GRID_COL_WIDTH) || MIN_GRID_COLS;
+    // scale factor: ถ้า widget กว้างกว่า viewport ให้ย่อลง
+    const currentMaxCol = Math.max(...widgets.map((w) => w.x + w.w), 1);
+    const scale = Math.min(1, viewportCols / currentMaxCol);
+
+    setWidgets((prev) =>
+      prev.map((w) => ({
+        ...w,
+        x: Math.round(w.x * scale),
+        y: w.y,
+        w: Math.max(MIN_W, Math.round(w.w * scale)),
+        h: w.h,
+      }))
+    );
+    setCanvasZoom(1);
+  }, [widgets, stageViewportWidth, setWidgets]);
+
+  // Auto Arrange — จัดเรียง widgets เป็น grid ไม่ให้ overlap
+  const autoArrange = useCallback(() => {
+    if (!widgets.length || !stageWrapRef.current) return;
+    const rect = stageWrapRef.current.getBoundingClientRect();
+    const vw = stageViewportWidth ?? rect.width;
+    const viewportCols = Math.floor((vw || MIN_GRID_COLS * GRID_COL_WIDTH) / GRID_COL_WIDTH);
+
+    // เรียง widget จาก top-left ไป bottom-right แล้ว pack
+    const sorted = [...widgets].sort((a, b) => a.y !== b.y ? a.y - b.y : a.x - b.x);
+    // grid map: ติดตามแถวที่ถูกใช้ต่อคอลัมน์
+    const colHeight = new Array(viewportCols).fill(0);
+
+    const arranged = sorted.map((w) => {
+      const ww = Math.min(w.w, viewportCols);
+      // หา x ที่ทำให้ y ต่ำสุด (pack top)
+      let bestX = 0;
+      let bestY = Infinity;
+      for (let x = 0; x <= viewportCols - ww; x++) {
+        const y = Math.max(...colHeight.slice(x, x + ww));
+        if (y < bestY) { bestY = y; bestX = x; }
+      }
+      for (let c = bestX; c < bestX + ww; c++) colHeight[c] = bestY + w.h;
+      return { ...w, x: bestX, y: bestY, w: ww };
+    });
+
+    setWidgets(arranged);
+    setCanvasZoom(1);
+  }, [widgets, stageViewportWidth, setWidgets]);
+
   useEffect(() => {
     if (viewMode !== 'detail') return;
     if (isNarrowView) return;
@@ -3041,6 +3095,42 @@ export default function App() {
                 data-tooltip-dir="down"
               >
                 <ToolbarIcon name="fitScreen" />
+              </button>
+              {/* Auto Resize */}
+              <button
+                type="button"
+                className="zoom-btn fit-screen-btn"
+                onClick={autoResize}
+                aria-label="Auto Resize"
+                data-tooltip="Auto Resize — ปรับขนาด widget ให้พอดีหน้าจอ"
+                data-tooltip-dir="down"
+                disabled={readOnly}
+              >
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="7" height="7" rx="1.5"/>
+                  <rect x="11" y="2" width="7" height="7" rx="1.5"/>
+                  <rect x="2" y="11" width="7" height="7" rx="1.5"/>
+                  <rect x="11" y="11" width="7" height="7" rx="1.5"/>
+                  <path d="M5.5 5.5h1M13.5 5.5h1M5.5 14.5h1M13.5 14.5h1" strokeWidth="2"/>
+                </svg>
+              </button>
+              {/* Auto Arrange */}
+              <button
+                type="button"
+                className="zoom-btn fit-screen-btn"
+                onClick={autoArrange}
+                aria-label="Auto Arrange"
+                data-tooltip="Auto Arrange — จัดเรียง widget อัตโนมัติไม่ให้ overlap"
+                data-tooltip-dir="down"
+                disabled={readOnly}
+              >
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="7" height="4" rx="1"/>
+                  <rect x="11" y="2" width="7" height="4" rx="1"/>
+                  <rect x="2" y="8" width="16" height="4" rx="1"/>
+                  <rect x="2" y="14" width="10" height="4" rx="1"/>
+                  <rect x="14" y="14" width="4" height="4" rx="1"/>
+                </svg>
               </button>
               <div className="topbar-divider" />
             </>
