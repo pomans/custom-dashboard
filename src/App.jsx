@@ -3442,13 +3442,13 @@ export default function App() {
                       !isWidgetPreview && TEXT_WIDGET_TYPES.includes(widget.type) ? 'text-preview-visual' : ''
                     }`}
                   >
-                    {NO_CONFIG_WIDGET_TYPES.includes(widget.type) && miceApiStatus === 'loading' ? (
-                      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', opacity:0.5, fontSize:13 }}>
-                        Loading…
-                      </div>
-                    ) : (
-                      <WidgetRenderer widget={widget} dataset={dataset} records={widgetRecords} isPreview={isWidgetPreview} />
-                    )}
+                    <WidgetRenderer
+                      widget={widget}
+                      dataset={dataset}
+                      records={widgetRecords}
+                      isPreview={isWidgetPreview}
+                      isSkeleton={NO_CONFIG_WIDGET_TYPES.includes(widget.type) && miceApiStatus === 'loading'}
+                    />
                   </div>
                 </div>
 

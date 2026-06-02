@@ -688,6 +688,71 @@ function WidgetFilterBar({ label, options, value, onChange }) {
   );
 }
 
+/* ─── WidgetSkeleton: shimmer placeholder ขณะ loading API data ─────────── */
+const CHART_WIDGET_TYPES = new Set([
+  'miceEventsChart', 'miceRevenueChart', 'miceVisitorsChart',
+  'miceEventsQuarterlyChart', 'miceVisitorsQuarterlyChart',
+]);
+const TABLE_WIDGET_TYPES = new Set([
+  'miceNationalityPerformance', 'miceNationalityIndustryMatrix',
+  'miceNationalityMatrixView', 'miceVisitorsBreakdown', 'miceDrillFlow',
+]);
+
+function WidgetSkeleton({ type }) {
+  /* KPI card */
+  if (type === 'miceStatCard' || type === 'miceKpis') {
+    return (
+      <div className="sk-kpi">
+        <div className="sk sk-kpi-value" />
+        <div className="sk sk-kpi-label" />
+      </div>
+    );
+  }
+
+  /* Line / bar charts */
+  if (CHART_WIDGET_TYPES.has(type)) {
+    const bars = [65, 50, 80, 45, 70, 55, 90, 60, 75, 48];
+    return (
+      <div className="sk-chart">
+        <div className="sk sk-chart-title" />
+        <div className="sk-chart-area">
+          <div className="sk-chart-line" />
+        </div>
+        <div className="sk-chart-bars" style={{ height: 28 }}>
+          {bars.map((h, i) => (
+            <div key={i} className="sk sk-chart-bar" style={{ height: `${h}%` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* Table / matrix / flow */
+  if (TABLE_WIDGET_TYPES.has(type)) {
+    const rows = [100, 80, 60, 45, 70, 55, 85];
+    return (
+      <div className="sk-table">
+        <div className="sk sk-table-title" />
+        {rows.map((w, i) => (
+          <div key={i} className="sk-table-row">
+            <div className="sk sk-table-cell" style={{ width: '30%' }} />
+            <div className="sk sk-table-cell" style={{ width: `${w * 0.55}%` }} />
+            <div className="sk sk-table-cell" style={{ flex: 1 }} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  /* Generic */
+  return (
+    <div style={{ height: '100%', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="sk" style={{ width: '50%', height: 14 }} />
+      <div className="sk" style={{ flex: 1 }} />
+    </div>
+  );
+}
+
 /* ─── ShrinkText: ลด font-size อัตโนมัติเมื่อข้อความล้น container ──────── */
 function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }) {
   const containerRef = useRef(null);
@@ -1264,7 +1329,8 @@ function MiceDrillFlow({ fixedProfile }) {
   );
 }
 
-export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview }) {
+export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false }) {
+  if (isSkeleton) return <WidgetSkeleton type={widget.type} />;
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
     const fallback =
       widget.type === 'date' ? '${format_date(current_date)}' : widget.title || 'Text';
