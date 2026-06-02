@@ -780,14 +780,26 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
     const el        = textRef.current;
     if (!container || !el) return;
 
-    // Reset ก่อนวัด
-    el.style.fontSize = `${maxPx}px`;
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
 
+    // Phase 1: ลองแบบ single-line (nowrap) ให้พอดี width ก่อน
+    el.style.whiteSpace = 'nowrap';
+    el.style.fontSize   = `${maxPx}px`;
     let size = maxPx;
-    // ลด 1px ต่อรอบจน text ไม่ล้น container ทั้ง width และ height
-    while (size > minPx && (el.scrollWidth > container.clientWidth + 2 || el.scrollHeight > container.clientHeight + 2)) {
+    while (size > minPx && el.scrollWidth > cw + 2) {
       size -= 1;
       el.style.fontSize = `${size}px`;
+    }
+
+    // Phase 2: ถ้า single-line พอดี → ใช้เลย
+    // ถ้ายัง overflow height (เช่น ตัวอักษรใหญ่เกิน height) → ลดต่อ
+    if (el.scrollHeight > ch + 2) {
+      el.style.whiteSpace = 'normal'; // อนุญาต wrap
+      while (size > minPx && (el.scrollWidth > cw + 2 || el.scrollHeight > ch + 2)) {
+        size -= 1;
+        el.style.fontSize = `${size}px`;
+      }
     }
   }, [text, maxPx, minPx]);
 
@@ -801,9 +813,7 @@ function ShrinkText({ text, maxPx = 28, minPx = 10, style = {}, className = '' }
         className={className}
         style={{
           fontSize: `${maxPx}px`,
-          lineHeight: 1.15,
-          wordBreak: 'break-word',
-          overflowWrap: 'break-word',
+          lineHeight: 1.2,
           textAlign: 'center',
           display: 'block',
           width: '100%',
