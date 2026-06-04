@@ -121,8 +121,9 @@ async function fetchRows(widgetKey, filter, signal) {
 // Column names from Blendata response match SQL aliases exactly
 // ─────────────────────────────────────────────────────────────────────────────
 function yoyPct(cur, prv) { return prv ? ((cur - prv) / Math.abs(prv)) * 100 : 0; }
-const sumF = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0);
-const num  = (v)       => Number(v) || 0;
+const sumF   = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0);
+const num    = (v)      => Number(v) || 0;
+const numYoy = (v)      => (v == null || v === '' || (typeof v === 'string' && v.trim() === '')) ? null : Number(v);
 
 // transformKpis — ใช้ _ly columns จาก view (pre-computed last year values)
 // Fallback: ถ้า year ไม่ match → ใช้ latest year ที่มีใน rows
@@ -169,8 +170,8 @@ function transformAnnualSeries(rows, valueKey, lyKey, yoyKey) {
     .map((r) => ({
       year:     num(r.year),
       value:    num(r[valueKey]),
-      lastYear: lyKey  ? num(r[lyKey])  : undefined,
-      yoy:      yoyKey ? num(r[yoyKey]) : undefined,
+      lastYear: lyKey  ? num(r[lyKey])     : undefined,
+      yoy:      yoyKey ? numYoy(r[yoyKey]) : undefined,
     }));
 }
 
@@ -183,7 +184,7 @@ function transformQuarterly(rows, thisYearKey, lastYearKey, yoyKey) {
       quarter:  String(r.quarter),
       thisYear: num(r[thisYearKey]),
       lastYear: num(r[lastYearKey]),
-      yoy:      yoyKey ? num(r[yoyKey]) : yoyPct(num(r[thisYearKey]), num(r[lastYearKey])),
+      yoy:      yoyKey ? numYoy(r[yoyKey]) : yoyPct(num(r[thisYearKey]), num(r[lastYearKey])),
     }));
 }
 
@@ -400,4 +401,26 @@ export function activeMiceWidgetKey(widgets) {
 export async function fetchWidgetDirect(widgetKey, filter, signal) {
   const rows = await fetchRows(widgetKey, filter, signal);
   return rows;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Master Sectors — ดึงจาก vw_adhoc_master_sector ครั้งเดียว (module-level cache)
+// ─────────────────────────────────────────────────────────────────────────────
+let _sectorPromise = null;
+
+export function fetchMasterSectors() {
+  if (!_sectorPromise) {
+    _sectorPromise = fetchRows('masterSectors', {})
+      .then((rows) => {
+        if (!rows?.length) return null;
+        return rows
+          .sort((a, b) => Number(a.sector_seq || 0) - Number(b.sector_seq || 0))
+          .map((r) => ({
+            name:  String(r.sector_name),
+            short: String(r.sector_name),
+          }));
+      })
+      .catch(() => null);
+  }
+  return _sectorPromise;
 }

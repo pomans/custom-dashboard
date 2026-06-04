@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { fetchWidgetDirect } from '../services/widgetApi';
+import { fetchWidgetDirect, fetchMasterSectors } from '../services/widgetApi';
 import {
   Bar,
   BarChart,
@@ -423,7 +423,7 @@ const renderYoyBadge = ({ x, y, value }) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return null;
 
   const positive = value >= 0;
-  const text = `${positive ? '▲' : '▼'} ${Math.abs(value).toFixed(1)}%`;
+  const text = `${positive ? '▲' : '▼'} ${positive ? '' : '-'}${Math.abs(value).toFixed(1)}%`;
   const fill = positive ? '#1faa2f' : '#ff3b1f';
   const boxWidth = Math.max(72, text.length * 7.2);
   const boxX = x - boxWidth / 2;
@@ -457,6 +457,7 @@ function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, foreca
       <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industries={industries} setIndustries={setIndustries} />
       <div className="fixed-mice-chart-body">
         {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
+        <div className="fixed-mice-chart-axis-label">{yLabel}</div>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={[...series, ...forecastSeries]} margin={{ top: 42, right: 18, bottom: 10, left: 3 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -477,7 +478,6 @@ function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, foreca
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <div className="fixed-mice-chart-axis-label">{yLabel}</div>
     </div>
   );
 }
@@ -676,16 +676,56 @@ function WidgetFilterBar({ label, options, value, onChange }) {
 }
 
 /* ─── useChartLocalFilter: per-widget quarter/industry filter + fetch ───── */
-const ALL_QUARTERS  = ['Q1', 'Q2', 'Q3', 'Q4'];
-const ALL_INDUSTRIES = ['Meeting', 'Incentives', 'Conventions', 'Exhibitions', 'Mega Events'];
+const ALL_QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
+
+// Fallback sectors ใช้ขณะ API ยังไม่ตอบ
+const FALLBACK_SECTORS = [
+  { name: 'Meeting',     short: 'Meeting'     },
+  { name: 'Incentives',  short: 'Incentives'  },
+  { name: 'Conventions', short: 'Conventions' },
+  { name: 'Exhibitions', short: 'Exhibitions' },
+  { name: 'Mega Events', short: 'Mega Events' },
+];
+
+// Module-level sector cache — โหลดครั้งเดียว แชร์ทุก instance
+let _cachedSectors = null;
+
+function useSectors() {
+  const [sectors, setSectors] = useState(() => _cachedSectors || FALLBACK_SECTORS);
+  useEffect(() => {
+    if (_cachedSectors) return;
+    fetchMasterSectors().then((data) => {
+      if (data) { _cachedSectors = data; setSectors(data); }
+    });
+  }, []);
+  return sectors;
+}
 
 function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
+  const sectors    = useSectors();
+  const allIndNames = sectors.map((s) => s.name);
+
   const [quarters,   setQuarters]   = useState(ALL_QUARTERS);
-  const [industries, setIndustries] = useState(ALL_INDUSTRIES);
+  const [industries, setIndustries] = useState(allIndNames);
   const [localData,  setLocalData]  = useState(null);
   const [loading,    setLoading]    = useState(false);
 
-  const isDefault = quarters.length === ALL_QUARTERS.length && industries.length === ALL_INDUSTRIES.length;
+  // เมื่อ sectors โหลดใหม่จาก API และ user ยังไม่ได้ filter → sync ให้ครบ
+  const prevAllRef = React.useRef(allIndNames);
+  useEffect(() => {
+    const prev = prevAllRef.current;
+    if (JSON.stringify(prev) !== JSON.stringify(allIndNames)) {
+      prevAllRef.current = allIndNames;
+      setIndustries((cur) =>
+        cur.length === prev.length && prev.every((n) => cur.includes(n))
+          ? allIndNames
+          : cur
+      );
+    }
+  }, [JSON.stringify(allIndNames)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isAllInds  = industries.length === allIndNames.length && allIndNames.every((n) => industries.includes(n));
+  const isDefault  = quarters.length === ALL_QUARTERS.length && isAllInds;
 
   useEffect(() => {
     if (isDefault) { setLocalData(null); return; }
@@ -693,24 +733,23 @@ function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
     setLoading(true);
     const filter = {
       ...(globalFilter || {}),
-      quarters:  quarters.join(','),
-      industry:  industries.length === ALL_INDUSTRIES.length ? 'all' : industries.join(','),
-      nocache: true,
+      quarters: quarters.join(','),
+      industry: isAllInds ? 'all' : industries.join(','),
+      nocache:  true,
     };
     fetchWidgetDirect(widgetKey, filter, ac.signal)
       .then((rows) => { if (!ac.signal.aborted) { setLocalData(transformFn(rows)); setLoading(false); } })
       .catch(() => { if (!ac.signal.aborted) setLoading(false); });
     return () => ac.abort();
-  }, [quarters, industries, widgetKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [quarters, industries, widgetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { quarters, setQuarters, industries, setIndustries, localData, loading, isDefault };
 }
 
-// Short labels for industry chips
-const IND_LABEL = { Meeting: 'M', Incentives: 'I', Conventions: 'C', Exhibitions: 'E', 'Mega Events': 'ME' };
-
 /* Compact filter toolbar ภายใน chart widget */
 function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries }) {
+  const sectors = useSectors();
+
   const toggleQ = (q) => setQuarters((prev) =>
     prev.includes(q) ? (prev.length > 1 ? prev.filter((x) => x !== q) : prev) : [...prev, q].sort()
   );
@@ -731,15 +770,15 @@ function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries }) 
       <div className="clf-group">
         <span className="clf-label">ประเภท</span>
         <div className="clf-chips">
-          {ALL_INDUSTRIES.map((ind) => (
+          {sectors.map((s) => (
             <button
-              key={ind}
+              key={s.name}
               type="button"
-              title={ind}
-              className={industries.includes(ind) ? 'active' : ''}
-              onClick={() => toggleInd(ind)}
+              title={s.name}
+              className={industries.includes(s.name) ? 'active' : ''}
+              onClick={() => toggleInd(s.name)}
             >
-              {IND_LABEL[ind] || ind}
+              {s.short}
             </button>
           ))}
         </div>
@@ -924,7 +963,7 @@ function MiceNationalityPerformanceWidget({ fixedProfile }) {
                 </td>
                 <td>{formatMetricValue(row.previous)}</td>
                 <td className={row.yoy >= 0 ? 'positive' : 'negative'}>
-                  {`${row.yoy >= 0 ? '▲' : '▼'} ${Math.abs(row.yoy).toFixed(1)}%`}
+                  {`${row.yoy >= 0 ? '▲' : '▼'} ${row.yoy >= 0 ? '' : '-'}${Math.abs(row.yoy).toFixed(1)}%`}
                 </td>
               </tr>
             ))}
@@ -937,7 +976,7 @@ function MiceNationalityPerformanceWidget({ fixedProfile }) {
               <td className={formatYoY(totalCurrent, totalPrev) >= 0 ? 'positive' : 'negative'}>
                 {formatYoY(totalCurrent, totalPrev) === null
                   ? '-'
-                  : `${formatYoY(totalCurrent, totalPrev) >= 0 ? '▲' : '▼'} ${Math.abs(formatYoY(totalCurrent, totalPrev)).toFixed(1)}%`}
+                  : `${formatYoY(totalCurrent, totalPrev) >= 0 ? '▲' : '▼'} ${formatYoY(totalCurrent, totalPrev) >= 0 ? '' : '-'}${Math.abs(formatYoY(totalCurrent, totalPrev)).toFixed(1)}%`}
               </td>
             </tr>
           </tfoot>
@@ -1434,6 +1473,11 @@ function MiceDataTableWidget({ rows, globalFilter }) {
   });
 
   const years = Object.keys(byYear).map(Number).sort((a, b) => a - b);
+  const grandTotal = displayRows.reduce((s, r) => ({
+    events:   s.events   + r.events,
+    visitors: s.visitors + r.visitors,
+    revenue:  s.revenue  + r.revenue,
+  }), { events: 0, visitors: 0, revenue: 0 });
   const totals = (arr) => arr.reduce((s, r) => ({
     events:   s.events   + r.events,
     visitors: s.visitors + r.visitors,
@@ -1491,6 +1535,14 @@ function MiceDataTableWidget({ rows, globalFilter }) {
               );
             })}
           </tbody>
+          <tfoot>
+            <tr style={{ fontWeight: 700, borderTop: '2px solid #cbd5e1', background: '#f8faff' }}>
+              <td>Total</td>
+              <td style={{ textAlign: 'right' }}>{fmt.format(grandTotal.events)}</td>
+              <td style={{ textAlign: 'right' }}>{fmt.format(grandTotal.visitors)}</td>
+              <td style={{ textAlign: 'right' }}>{fmt.format(Math.round(grandTotal.revenue))}</td>
+            </tr>
+          </tfoot>
         </table>
       </div>
     </div>
@@ -1632,11 +1684,11 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const profile = fixedProfile.kpis || {};
     const cards = [
       { value: formatMetricValue(profile.events), label: 'MICE Events' },
-      { value: `${profile.eventsGrowth >= 0 ? '▲' : '▼'} ${Math.abs(profile.eventsGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.eventsGrowth >= 0 ? 'up' : 'down' },
+      { value: `${profile.eventsGrowth >= 0 ? '▲' : '▼'} ${profile.eventsGrowth >= 0 ? '' : '-'}${Math.abs(profile.eventsGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.eventsGrowth >= 0 ? 'up' : 'down' },
       { value: formatMetricValue(profile.visitors), label: 'MICE Inter Visitors' },
-      { value: `${profile.visitorsGrowth >= 0 ? '▲' : '▼'} ${Math.abs(profile.visitorsGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.visitorsGrowth >= 0 ? 'up' : 'down' },
+      { value: `${profile.visitorsGrowth >= 0 ? '▲' : '▼'} ${profile.visitorsGrowth >= 0 ? '' : '-'}${Math.abs(profile.visitorsGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.visitorsGrowth >= 0 ? 'up' : 'down' },
       { value: profile.topNationality || '-', label: 'Top Nationality' },
-      { value: `${profile.topNationalityGrowth >= 0 ? '▲' : '▼'} ${Math.abs(profile.topNationalityGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.topNationalityGrowth >= 0 ? 'up' : 'down' },
+      { value: `${profile.topNationalityGrowth >= 0 ? '▲' : '▼'} ${profile.topNationalityGrowth >= 0 ? '' : '-'}${Math.abs(profile.topNationalityGrowth).toFixed(1)}%`, label: '%Growth (YoY)', accent: profile.topNationalityGrowth >= 0 ? 'up' : 'down' },
       { value: profile.topIndustry || '-', label: 'Top Industry' }
     ];
 

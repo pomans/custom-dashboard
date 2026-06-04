@@ -1790,23 +1790,40 @@ export default function App() {
             }
 
             if (item.type === 'textbox') {
+              const dir = action.dir || 'se';
+              const wDelta = dir.includes('e') ? snapX : dir.includes('w') ? -snapX : 0;
+              const xDelta = dir.includes('w') ? snapX : 0;
               const baseHeightPx = action.origin.heightPx || action.origin.h * GRID_ROW_HEIGHT;
-              const nextHeightPx = Math.max(56, baseHeightPx + deltaY);
-
+              const heightDelta = dir.includes('s') ? deltaY : dir.includes('n') ? -deltaY : 0;
+              const nextHeightPx = Math.max(56, baseHeightPx + heightDelta);
               return {
                 ...item,
                 autoHeight: false,
-                w: Math.max(MIN_W, action.origin.w + snapX),
+                x: Math.max(0, action.origin.x + xDelta),
+                w: Math.max(MIN_W, action.origin.w + wDelta),
                 heightPx: nextHeightPx,
                 h: Math.max(MIN_H, Math.ceil(nextHeightPx / GRID_ROW_HEIGHT))
               };
             }
 
-            return {
-              ...item,
-              w: Math.max(MIN_W, action.origin.w + snapX),
-              h: Math.max(MIN_H, action.origin.h + snapY)
-            };
+            {
+              const dir = action.dir || 'se';
+              const wDelta = dir.includes('e') ? snapX : dir.includes('w') ? -snapX : 0;
+              const hDelta = dir.includes('s') ? snapY : dir.includes('n') ? -snapY : 0;
+              const xDelta = dir.includes('w') ? snapX : 0;
+              const yDelta = dir.includes('n') ? snapY : 0;
+              const newW = Math.max(MIN_W, action.origin.w + wDelta);
+              const newH = Math.max(MIN_H, action.origin.h + hDelta);
+              const newX = Math.max(0, action.origin.x + xDelta);
+              const newY = Math.max(0, action.origin.y + yDelta);
+              return {
+                ...item,
+                x: newX,
+                y: newY,
+                w: newW,
+                h: newH
+              };
+            }
           }),
         { recordHistory: false }
       );
@@ -3609,21 +3626,26 @@ export default function App() {
                   </div>
                 </div>
 
-                {!readOnly ? (
+                {!readOnly ? (['n','ne','e','se','s','sw','w','nw']).map((dir) => (
                   <button
+                    key={dir}
                     type="button"
-                    aria-label="Resize widget"
+                    aria-label={`Resize widget ${dir}`}
                     className="resize-handle"
+                    data-dir={dir}
                     onMouseDown={(event) => {
                       event.preventDefault();
                       gestureSnapshotRef.current = cloneWorkspace(workspace);
                       gestureChangedRef.current = false;
                       setAction({
                         kind: 'resize',
+                        dir,
                         id: widget.id,
                         startX: event.clientX,
                         startY: event.clientY,
                         origin: {
+                          x: widget.x,
+                          y: widget.y,
                           w: widget.w,
                           h: widget.h,
                           heightPx: widget.heightPx || widget.h * GRID_ROW_HEIGHT
@@ -3631,7 +3653,7 @@ export default function App() {
                       });
                     }}
                   />
-                ) : null}
+                )) : null}
               </section>
             );
           })}
@@ -3673,8 +3695,10 @@ export default function App() {
                       });
                     }}
                   >
-                    <strong>Filters</strong>
-                    <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
+                    <div className="filter-drag-handle-text">
+                      <strong>Filters</strong>
+                      <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
+                    </div>
                     <button
                       type="button"
                       className="filter-orientation-btn"
@@ -3776,8 +3800,8 @@ export default function App() {
                       <span>Year Basis</span>
                       <div className="filter-toggle-row">
                         {[
-                          { value: 'calendar', label: 'Calendar Year' },
-                          { value: 'fiscal', label: 'Fiscal Year' }
+                          { value: 'calendar', label: 'Calendar' },
+                          { value: 'fiscal', label: 'Fiscal' }
                         ].map((option) => (
                           <button
                             key={option.value}
@@ -3791,8 +3815,8 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  {/* Year Range — full width */}
-                  <div className="filter-button-group">
+                  {/* Year Range */}
+                  <div className="filter-button-group" style={{ flex: '2' }}>
                     <span>Year Range</span>
                     <YearRangeSlider
                       minYear={MICE_FILTER_OPTIONS.years[0] || 2007}
