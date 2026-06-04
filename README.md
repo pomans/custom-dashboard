@@ -4,25 +4,32 @@ React + Vite dashboard builder for TCEB — a drag-and-drop widget canvas that v
 
 ## Project ecosystem
 
-This repository is one of three interconnected projects that together form the TCEB platform:
+This repository is one of three interconnected projects that together form the TCEB platform. They communicate through a shared backend API and an Ocelot API Gateway that proxies queries to the Blendata data warehouse.
 
-| Repository | Role | Tech |
+| Component | Role | Tech |
 |---|---|---|
 | **tceb-core-api** | Backend REST API — authentication, portal data, MICE statistics, dashboards, insight reports | .NET 8 / ASP.NET Core |
-| **custom-dashboard** ← you are here | Embedded BI dashboard builder — drag-and-drop widgets that visualise data by calling the API | React + Vite |
-| **tceb-web** | Main web portal — the host application that embeds this dashboard and surfaces all platform features to end users | Vue 3 / Vite |
+| **custom-dashboard** ← you are here | Embedded BI dashboard builder — drag-and-drop widgets that visualise data | React + Vite |
+| **tceb-web** | Main web portal — authenticates users, hosts all platform features, and embeds this dashboard | Vue 3 / Vite |
+| **Ocelot Gateway** | API Gateway — routes widget SQL queries from `tceb-core-api` to the Blendata data warehouse | Ocelot (.NET) |
+| **Blendata** | Data warehouse — executes SQL over MICE/tourism fact tables and returns JSON result sets | Blendata / Spark |
 
 ### How they connect
 
 ```
-tceb-web
-   │
-   └── embeds ──► custom-dashboard ──► tceb-core-api ──► Blendata
-                   (this repo)          /datasource/        (data
-                                        widget/{key}        warehouse)
+custom-dashboard (this repo)
+        │
+        │  REST /datasource/widget/{key}
+        ▼
+  tceb-core-api ──── POST /blendata/query ────► Ocelot Gateway ──► Blendata
+                                                                    (data warehouse)
+        ▲
+        │  REST (auth, portal, reports)
+  tceb-web ── embeds ──► custom-dashboard
 ```
 
-- This app fetches widget data from `tceb-core-api` at `/datasource/widget/{key}`.
+- This app calls `tceb-core-api` at `/datasource/widget/{key}?...` to load chart/table data.
+- `tceb-core-api` builds a SQL query and POSTs it to **Ocelot**, which forwards it to **Blendata** for execution.
 - The API host is configured via `VITE_API_BASE_URL` (defaults to `https://localhost:7139`).
 - **tceb-web** embeds this app and controls which dashboards are visible based on the authenticated user's permissions.
 
