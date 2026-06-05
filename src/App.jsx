@@ -5,6 +5,7 @@ import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog } from './data/sampleData';
 import { fetchWidgetsOnDashboard, activeMiceWidgetKey } from './services/widgetApi';
+import { USE_SAMPLE_DATA } from './config/apiConfig';
 
 const MIN_GRID_COLS = 12;
 const GRID_ROW_HEIGHT = 72;
@@ -1018,6 +1019,13 @@ export default function App() {
   useEffect(() => {
     const miceWidgets = widgets.filter((w) => NO_CONFIG_WIDGET_TYPES.includes(w.type));
     if (!miceWidgets.length) return undefined;
+
+    // Sample-data mode: ข้าม API fetch ทั้งหมด ใช้ sampleData fixedProfile โดยตรง
+    if (USE_SAMPLE_DATA) {
+      setMiceApiFixedProfile(null);
+      setMiceApiStatus('loaded');
+      return undefined;
+    }
 
     // AbortController ยกเลิก fetch เก่าทันทีเมื่อ filter เปลี่ยน
     // ป้องกัน pending requests ค้างอยู่เมื่อ user เปลี่ยน filter เร็ว
