@@ -1,65 +1,351 @@
-# BI Dashboard (custom-dashboard)
+# tceb-dashboard-builder
 
-React + Vite dashboard builder for TCEB — a drag-and-drop widget canvas that visualises MICE statistics, tourism, ICCA rankings, and economic indicators.
+MICE Data Hub Dashboard Builder — React component สำหรับสร้างและแสดงผล dashboard แบบ drag-and-drop
+ใช้งานได้สองแบบ: (1) Standalone SPA และ (2) Embedded npm package ใน host app
 
-## Project ecosystem
+---
 
-This repository is one of three interconnected projects that together form the TCEB platform. They communicate through a shared backend API and an Ocelot API Gateway that proxies queries to the Blendata data warehouse.
+## สารบัญ
 
-| Component | Role | Tech |
+- [ติดตั้ง](#ติดตั้ง)
+- [การใช้งานเบื้องต้น](#การใช้งานเบื้องต้น)
+- [Props](#props)
+- [การตั้งค่า API URL](#การตั้งค่า-api-url)
+- [การตั้งค่า CSS](#การตั้งค่า-css)
+- [Z-index Reference](#z-index-reference)
+- [Local Development](#local-development)
+- [Build & Pack](#build--pack)
+- [Project Ecosystem](#project-ecosystem)
+
+---
+
+## ติดตั้ง
+
+```bash
+# จาก .tgz file ที่ได้รับมา
+npm install ./tceb-dashboard-builder-1.0.0.tgz
+```
+
+### Peer Dependencies (ต้องมีใน host app)
+
+```json
+{ "react": ">=18", "react-dom": ">=18" }
+```
+
+`recharts`, `jspdf`, `html2canvas` — **bundled แล้วใน package** ไม่ต้องติดตั้งแยก
+
+---
+
+## การใช้งานเบื้องต้น
+
+```jsx
+import React, { Suspense, lazy } from 'react';
+
+const DashboardBuilder = lazy(() => import('tceb-dashboard-builder'));
+
+function MyPage() {
+  return (
+    <div className="my-dashboard-page">
+      <Suspense fallback={<div>กำลังโหลด...</div>}>
+        <DashboardBuilder
+          apiBaseUrl="https://your-api.example.com"
+          useSampleData={false}
+        />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+---
+
+## Props
+
+| Prop | Type | Default | คำอธิบาย |
+|------|------|---------|----------|
+| `apiBaseUrl` | `string` | `https://localhost:7139` | URL ของ backend API |
+| `useSampleData` | `boolean` | `false` | ใช้ sample data แทน API จริง (dev/demo) |
+
+---
+
+## การตั้งค่า API URL
+
+Package อ่าน API URL จากหลายแหล่ง โดยมี **priority** ดังนี้:
+
+```
+1. window.__DASHBOARD_API_BASE_URL__         ← runtime override (สูงสุด)
+2. VITE_API_BASE_URL                         ← Vite .env (ใช้ตอน dev standalone)
+3. REACT_APP_CUSTOM_DASHBOARD_API_URL        ← CRA/webpack .env (tceb-web ใช้อันนี้)
+4. 'https://localhost:7139'                  ← hardcoded fallback
+```
+
+### วิธีที่ 1 — `.env` file (แนะนำสำหรับ CRA / webpack)
+
+ค่าถูก bake เข้า bundle ตอน build — เหมาะกับ environment ที่แน่นอน
+
+**.env.development**
+```env
+REACT_APP_CUSTOM_DASHBOARD_API_URL=https://localhost:7139
+```
+
+**.env.production**
+```env
+REACT_APP_CUSTOM_DASHBOARD_API_URL=https://your-api.example.com
+```
+
+ส่งผ่าน prop ใน Page component:
+
+```jsx
+const API_BASE_URL = process.env.REACT_APP_CUSTOM_DASHBOARD_API_URL;
+
+<DashboardBuilder apiBaseUrl={API_BASE_URL} />
+```
+
+### วิธีที่ 2 — `window` global (runtime, ไม่ต้อง rebuild)
+
+เหมาะกับ deploy หลาย environment โดยไม่ต้อง build ใหม่
+
+```html
+<!-- index.html หรือ server-rendered HTML -->
+<script>
+  window.__DASHBOARD_API_BASE_URL__ = "https://your-api.example.com";
+  window.__DASHBOARD_USE_SAMPLE_DATA__ = false;
+</script>
+```
+
+หรือสร้าง `/public/config.js` แยกต่อ environment แล้ว include ใน `index.html`:
+
+```html
+<script src="/config.js"></script>
+```
+
+```js
+// config.js (สร้างต่างกันต่อ environment โดย CI/CD)
+window.__DASHBOARD_API_BASE_URL__ = "https://prod-api.example.com";
+```
+
+### ตัวแปรทั้งหมดที่ config ได้
+
+| ค่า | `.env` (CRA) | `window` global | Default |
+|-----|-------------|-----------------|---------|
+| API base URL | `REACT_APP_CUSTOM_DASHBOARD_API_URL` | `window.__DASHBOARD_API_BASE_URL__` | `https://localhost:7139` |
+| ใช้ sample data | `REACT_APP_CUSTOM_DASHBOARD_SAMPLE_DATA=true` | `window.__DASHBOARD_USE_SAMPLE_DATA__ = true` | `false` |
+| Spark concurrency | `REACT_APP_SPARK_CONCURRENCY=2` | — | `2` |
+
+---
+
+## การตั้งค่า CSS
+
+Dashboard Builder มี **topbar** และ **Widget Palette sidebar** เป็น `position: fixed` ซึ่งอาจทับกับ nav ของ host app หากไม่ได้ตั้งค่า offset
+
+### กรณีที่ 1 — ไม่มี nav (standalone / full-page)
+
+ไม่ต้อง config CSS เพิ่มเติม — dashboard ใช้ค่า default ของตัวเองทั้งหมด
+
+### กรณีที่ 2 — Host app มี nav ความสูงคงที่
+
+แก้ `top` ของ topbar และ palette ให้เลื่อนลงมาต่ำกว่า nav:
+
+```css
+/* wrapper ของหน้า dashboard */
+.my-dashboard-page .topbar {
+  position: fixed !important;
+  top: 122px !important;    /* NAV_HEIGHT (110) + 12px = 122px  ← ปรับตาม nav จริง */
+  left: 0 !important;
+  right: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  z-index: 950 !important;  /* ต่ำกว่า nav ของ host */
+}
+
+/* ซ่อน brand/logo ของ dashboard (host มี nav ของตัวเองอยู่แล้ว) */
+.my-dashboard-page .topbar-brand {
+  display: none !important;
+}
+
+/* เว้นพื้นที่ให้ topbar */
+.my-dashboard-page .app-shell {
+  padding-top: 88px !important;
+}
+
+/* Widget Palette sidebar */
+.my-dashboard-page .palette {
+  top: 198px !important;            /* NAV_HEIGHT (110) + 88px = 198px  ← ปรับตาม nav จริง */
+  max-height: calc(100vh - 218px) !important;
+  z-index: 1000 !important;
+}
+```
+
+**สูตรคำนวณ:**
+
+```
+topbar top  = NAV_HEIGHT + 12
+palette top = NAV_HEIGHT + 88
+```
+
+### กรณีที่ 3 — Nav เลื่อนตาม scroll (dynamic offset)
+
+เมื่อ nav ไม่ได้ fixed ตลอดเวลา ให้ใช้ JavaScript hook คำนวณ offset แบบ real-time
+และตรวจ footer ด้วยเพื่อไม่ให้ sidebar ทับ:
+
+**CSS (ใช้ CSS variables):**
+
+```css
+.my-dashboard-page .topbar {
+  position: fixed !important;
+  top: var(--cd-topbar-top, 122px) !important;  /* fallback = nav เต็มสูง */
+  left: 0 !important;
+  right: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  z-index: 950 !important;
+}
+
+.my-dashboard-page .topbar-brand { display: none !important; }
+
+.my-dashboard-page .app-shell { padding-top: 88px !important; }
+
+.my-dashboard-page .palette {
+  top: var(--cd-palette-top, 198px) !important;
+  max-height: var(--cd-palette-maxh, calc(100vh - 218px)) !important;
+  z-index: 1000 !important;
+}
+```
+
+**JavaScript hook (ใส่ใน Page component):**
+
+```jsx
+import { useEffect } from 'react';
+
+const NAV_SELECTOR    = '.your-nav-class';     // ← selector ของ nav host app
+const FOOTER_SELECTOR = '.your-footer-class';  // ← selector ของ footer host app
+
+function useDashboardOffset() {
+  useEffect(() => {
+    let rafId = null;
+
+    const update = () => {
+      const nav    = document.querySelector(NAV_SELECTOR);
+      const footer = document.querySelector(FOOTER_SELECTOR);
+      const root   = document.documentElement;
+
+      // nav bottom: 0 ถ้า scroll พ้นจอแล้ว
+      const navBottom  = nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 0;
+
+      // palette หยุดก่อนถึง footer 16px เสมอ
+      const footerTop  = footer ? footer.getBoundingClientRect().top : window.innerHeight;
+      const paletteTop = navBottom + 88;
+      const paletteMaxH = Math.max(
+        120,
+        Math.min(window.innerHeight - 16, footerTop - 16) - paletteTop
+      );
+
+      root.style.setProperty('--cd-topbar-top',   `${navBottom + 12}px`);
+      root.style.setProperty('--cd-palette-top',  `${paletteTop}px`);
+      root.style.setProperty('--cd-palette-maxh', `${paletteMaxH}px`);
+    };
+
+    const onScroll = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(update);
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    update(); // initial
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, []);
+}
+
+// ใช้งาน
+function MyDashboardPage() {
+  useDashboardOffset();
+  return (
+    <div className="my-dashboard-page">
+      <Suspense fallback={<div>Loading...</div>}>
+        <DashboardBuilder apiBaseUrl={API_BASE_URL} />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+**ตัวอย่าง behavior:**
+
+| สถานะ scroll | navBottom | topbar top | palette top |
+|---|---|---|---|
+| ไม่ได้ scroll (nav เต็ม 110px) | 110px | 122px | 198px |
+| scroll ลงครึ่งทาง (nav เหลือ 55px) | 55px | 67px | 143px |
+| scroll พ้น nav แล้ว | 0px | 12px | 88px |
+
+---
+
+## Z-index Reference
+
+| Element | Z-index | หมายเหตุ |
 |---|---|---|
-| **tceb-core-api** | Backend REST API — authentication, portal data, MICE statistics, dashboards, insight reports | .NET 8 / ASP.NET Core |
-| **custom-dashboard** ← you are here | Embedded BI dashboard builder — drag-and-drop widgets that visualise data | React + Vite |
-| **tceb-web** | Main web portal — authenticates users, hosts all platform features, and embeds this dashboard | Vue 3 / Vite |
-| **Ocelot Gateway** | API Gateway — routes widget SQL queries from `tceb-core-api` to the Blendata data warehouse | Ocelot (.NET) |
-| **Blendata** | Data warehouse — executes SQL over MICE/tourism fact tables and returns JSON result sets | Blendata / Spark |
+| Host nav | ≥ 1100 | ต้องสูงกว่าทุกอย่างใน dashboard |
+| Widget Palette | 1000 | อยู่เหนือ topbar เสมอ |
+| Dashboard Topbar | 950 | อยู่เหนือ content |
+| Dashboard Content | default | — |
 
-### How they connect
+---
 
-```
-custom-dashboard (this repo)
-        │
-        │  REST /datasource/widget/{key}
-        ▼
-  tceb-core-api ──── POST /blendata/query ────► Ocelot Gateway ──► Blendata
-                                                                    (data warehouse)
-        ▲
-        │  REST (auth, portal, reports)
-  tceb-web ── embeds ──► custom-dashboard
-```
-
-- This app calls `tceb-core-api` at `/datasource/widget/{key}?...` to load chart/table data.
-- `tceb-core-api` builds a SQL query and POSTs it to **Ocelot**, which forwards it to **Blendata** for execution.
-- The API host is configured via `VITE_API_BASE_URL` (defaults to `https://localhost:7139`).
-- **tceb-web** embeds this app and controls which dashboards are visible based on the authenticated user's permissions.
-
-## Features
-
-- Build dashboards from draggable widgets.
-- Save the active dashboard as a `.json` file.
-- Import a saved dashboard `.json` file.
-- Export the active dashboard as PDF.
-
-## Local development
+## Local Development
 
 ```bash
 npm install
-npm run dev
+npm run dev        # Vite dev server → http://localhost:5173/custom-dashboard/
 ```
 
-## Build
+---
+
+## Build & Pack
 
 ```bash
-npm run build
+npm run build       # Standalone SPA → dist-app/  (deploy ที่ /custom-dashboard/)
+npm run build:lib   # npm package    → dist/       (แชร์ให้ทีมอื่น)
+npm run build:all   # Build ทั้งสองแบบ
+npm run pack        # build:lib แล้วสร้าง .tgz พร้อมแชร์
 ```
 
-The production build is written to `dist/`.
+ผลลัพธ์:
+- `dist/dashboard-builder.es.js` — ES module (Vite, modern bundlers)
+- `dist/dashboard-builder.cjs.js` — CommonJS (webpack/CRA)
+- `tceb-dashboard-builder-x.x.x.tgz` — ไฟล์สำหรับส่งให้ทีมอื่น
 
-## Deploy to GitHub Pages
+### อัปเดต Version
 
-This project is configured for GitHub Pages:
+```bash
+# 1. แก้ "version" ใน package.json
+# 2. build + pack
+npm run pack
 
-- Vite uses a relative asset base (`./`) so the app can run under a repository path such as `https://<user>.github.io/<repo>/`.
-- `.github/workflows/deploy.yml` builds the app and deploys `dist/` to GitHub Pages on every push to `main`.
+# ทีมที่รับไฟล์:
+npm install ./tceb-dashboard-builder-x.x.x.tgz
+```
 
-In GitHub, enable **Settings > Pages > Build and deployment > Source: GitHub Actions**.
+---
+
+## Project Ecosystem
+
+| Component | Role | Tech |
+|---|---|---|
+| **tceb-core-api** | Backend REST API | .NET 8 / ASP.NET Core |
+| **custom-dashboard** ← you are here | Dashboard builder component | React + Vite |
+| **tceb-web** | Main web portal | React (CRA) |
+| **Ocelot Gateway** | API Gateway → Blendata | Ocelot (.NET) |
+| **Blendata** | Data warehouse | Spark SQL |
+
+### Request Flow
+
+```
+DashboardBuilder
+      │  REST /datasource/widget/{key}
+      ▼
+tceb-core-api ──► Ocelot Gateway ──► Blendata (data warehouse)
+```

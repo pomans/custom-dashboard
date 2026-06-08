@@ -1,0 +1,14 @@
+# Source code — ไม่ต้องแชร์ source ให้ทีมอื่น
+src/
+public/
+
+# Standalone SPA build (ไม่ใช่ library)
+dist-app/
+
+# Dev configs
+vite.config.js
+.env*
+
+# Editor / OS
+.DS_Store
+*.local

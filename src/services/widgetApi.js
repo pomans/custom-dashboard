@@ -1,4 +1,4 @@
-import { WIDGET_ENDPOINT } from '../config/apiConfig';
+import { WIDGET_ENDPOINT, SPARK_CONCURRENCY } from '../config/apiConfig';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Spark concurrency — จำนวน Spark jobs ที่รันพร้อมกัน
@@ -11,11 +11,8 @@ import { WIDGET_ENDPOINT } from '../config/apiConfig';
 //   2 → 2 Spark jobs คู่กัน, ~15s  ← ค่าที่ใช้ (balance ระหว่างเร็วและ resource)
 //   3 → ~10s, ใช้ได้ถ้า Spark cluster มีทรัพยากรพอ
 //
-// ปรับผ่าน VITE_SPARK_CONCURRENCY ใน .env.local ถ้าต้องการ tuning
+// ปรับผ่าน REACT_APP_SPARK_CONCURRENCY (tceb-web) หรือ VITE_SPARK_CONCURRENCY (standalone)
 // ─────────────────────────────────────────────────────────────────────────────
-const SPARK_CONCURRENCY = Number(
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SPARK_CONCURRENCY) || 2
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Widget type → API keys ที่ต้องดึง

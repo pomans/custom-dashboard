@@ -1,22 +1,42 @@
 {
-  "name": "dashboard-builder-prototype",
-  "private": true,
-  "version": "0.1.0",
+  "name": "tceb-dashboard-builder",
+  "version": "1.0.0",
+  "description": "MICE Data Hub Dashboard Builder — embeddable React component",
   "type": "module",
+  "main": "./dist/dashboard-builder.cjs.js",
+  "module": "./dist/dashboard-builder.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/dashboard-builder.es.js",
+      "require": "./dist/dashboard-builder.cjs.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:lib": "vite build --mode lib",
+    "build:all": "npm run build && npm run build:lib",
+    "preview": "vite preview --base /custom-dashboard/",
+    "pack": "npm run build:lib && npm pack"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
   },
   "dependencies": {
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
     "recharts": "^2.12.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",
-    "vite": "^5.4.8"
+    "vite": "^6.4.3",
+    "vite-plugin-css-injected-by-js": "^3.5.2"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   }
 }

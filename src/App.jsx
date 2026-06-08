@@ -949,6 +949,9 @@ const getA4LandscapeFitScale = (contentWidthPx, contentHeightPx) => {
 };
 
 export default function App() {
+  // ── Embedded mode: running inside an iframe (e.g. tceb-web) ──
+  const isEmbedded = window.self !== window.top;
+
   const [workspace, setWorkspace] = useState(loadWorkspaceFromStorage);
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
@@ -2982,11 +2985,11 @@ export default function App() {
   );
 
   if (viewMode === 'list') {
-    return <div className="app-shell">{renderDashboardListPage()}</div>;
+    return <div className={`app-shell${isEmbedded ? ' embedded' : ''}`}>{renderDashboardListPage()}</div>;
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isEmbedded ? ' embedded' : ''}`}>
       <header className={`topbar ${readOnly ? 'read-only' : ''}`}>
 
         {/* ── Zone 1: Brand ── */}
