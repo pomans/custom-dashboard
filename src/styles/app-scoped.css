@@ -5426,13 +5426,16 @@
 
 .dashboard-builder-root .clf-select{
   height: 22px;
-  padding: 0 6px;
+  width: fit-content;
+  padding: 0 20px 0 6px;
   font-size: 0.72rem;
+  font-weight: 600;
   border: 1px solid #cbd5e1;
   border-radius: 5px;
   background: #f8fafc;
   color: #475569;
   cursor: pointer;
+  appearance: auto;
 }
 
 /* ═══════════════════════════════════════
