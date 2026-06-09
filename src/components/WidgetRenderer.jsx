@@ -369,55 +369,99 @@ const renderQuarterlyLegend = () => (
   </div>
 );
 
-const renderQuarterlyChartPanel = ({ title, color, yLabel, data, yTickFormatter }) => {
+function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, globalFilter, defaultData, valueKey, lyKey }) {
+  const sectors    = useSectors();
+  const allIndNames = sectors.map((s) => s.name);
+
+  const globalYear = globalFilter?.year ?? 2025;
+  const [selectedYear, setSelectedYear] = useState(globalYear);
+  const [quarters,     setQuarters]     = useState(ALL_QUARTERS);
+  const [industries,   setIndustries]   = useState(allIndNames);
+  const [localData,    setLocalData]    = useState(null);
+  const [loading,      setLoading]      = useState(false);
+
+  // Sync when user changes the global year (e.g. dashboard-level year picker)
+  useEffect(() => { setSelectedYear(globalYear); }, [globalYear]);
+
+  const isAllInds = industries.length === allIndNames.length && allIndNames.every((n) => industries.includes(n));
+  const isDefault = selectedYear === globalYear && quarters.length === ALL_QUARTERS.length && isAllInds;
+
+  useEffect(() => {
+    if (isDefault) { setLocalData(null); return; }
+    const ac = new AbortController();
+    setLoading(true);
+    const filter = {
+      ...(globalFilter || {}),
+      year:     selectedYear,
+      quarters: quarters.join(','),
+      industry: isAllInds ? 'all' : industries.join(','),
+      nocache:  true,
+    };
+    fetchWidgetDirect(widgetKey, filter, ac.signal)
+      .then((rows) => {
+        if (ac.signal.aborted) return;
+        const transformed = (rows || [])
+          .sort((a, b) => String(a.quarter).localeCompare(String(b.quarter)))
+          .map((r) => ({
+            quarter:  String(r.quarter),
+            thisYear: num(r[valueKey]),
+            lastYear: lyKey ? num(r[lyKey]) : 0,
+          }));
+        setLocalData(transformed);
+        setLoading(false);
+      })
+      .catch(() => { if (!ac.signal.aborted) setLoading(false); });
+    return () => ac.abort();
+  }, [selectedYear, quarters, industries, widgetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const data = localData ?? defaultData ?? [];
   const withYoy = data.map((row) => ({
     ...row,
-    yoy: row.lastYear !== 0 ? ((row.thisYear - row.lastYear) / Math.abs(row.lastYear)) * 100 : null
+    yoy: row.lastYear ? ((row.thisYear - row.lastYear) / Math.abs(row.lastYear)) * 100 : null,
   }));
+
+  const yearMin     = globalFilter?.yearMin ?? 2007;
+  const yearMax     = globalFilter?.yearMax ?? globalYear;
+  const yearOptions = Array.from({ length: yearMax - yearMin + 1 }, (_, i) => yearMax - i);
+
   return (
     <div className="fixed-mice-chart">
       <div className="fixed-mice-chart-header">
         <div className="fixed-mice-chart-title" style={{ background: color }}>{title}</div>
         <div className="fixed-mice-chart-rule" />
       </div>
+      <ChartLocalFilter
+        quarters={quarters} setQuarters={setQuarters}
+        industries={industries} setIndustries={setIndustries}
+        year={selectedYear} setYear={setSelectedYear} yearOptions={yearOptions}
+      />
       {renderQuarterlyLegend()}
-      <div className="fixed-mice-chart-body">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={withYoy} margin={{ top: 28, right: 24, bottom: 28, left: 18 }}>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
-          <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
-          <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
-          <Tooltip
-            labelFormatter={(quarter) => `ไตรมาส ${quarter}`}
-            formatter={(value, name) => [formatMetricValue(Number(value)), name]}
-          />
-          <Line
-            type="monotone"
-            dataKey="thisYear"
-            name="ปีนี้ (This Year)"
-            stroke="#081f68"
-            strokeWidth={3}
-            dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }}
-            activeDot={{ r: 7 }}
-          >
-            <LabelList dataKey="yoy" content={renderYoyBadge} />
-          </Line>
-          <Line
-            type="monotone"
-            dataKey="lastYear"
-            name="ปีที่แล้ว (Last Year)"
-            stroke="#7ec8e3"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-            dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <div className="fixed-mice-chart-body" style={{ position: 'relative' }}>
+        {loading && (
+          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, fontSize: 12, color: '#94a3b8' }}>
+            กำลังโหลด…
+          </div>
+        )}
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={withYoy} margin={{ top: 28, right: 24, bottom: 28, left: 18 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
+            <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
+            <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
+            <Tooltip
+              labelFormatter={(quarter) => `ไตรมาส ${quarter}`}
+              formatter={(value, name) => [formatMetricValue(Number(value)), name]}
+            />
+            <Line type="monotone" dataKey="thisYear" name="ปีนี้ (This Year)" stroke="#081f68" strokeWidth={3} dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }} activeDot={{ r: 7 }}>
+              <LabelList dataKey="yoy" content={renderYoyBadge} />
+            </Line>
+            <Line type="monotone" dataKey="lastYear" name="ปีที่แล้ว (Last Year)" stroke="#7ec8e3" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
       <div className="fixed-mice-chart-axis-label">{yLabel}</div>
     </div>
   );
-};
+}
 
 const renderYoyBadge = ({ x, y, value }) => {
   if (typeof value !== 'number' || Number.isNaN(value)) return null;
@@ -747,7 +791,7 @@ function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
 }
 
 /* Compact filter toolbar ภายใน chart widget */
-function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries }) {
+function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries, year, setYear, yearOptions }) {
   const sectors = useSectors();
 
   const toggleQ = (q) => setQuarters((prev) =>
@@ -759,6 +803,20 @@ function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries }) 
 
   return (
     <div className="chart-local-filter">
+      {year != null && setYear && yearOptions?.length > 0 && (
+        <div className="clf-group">
+          <span className="clf-label">ปี</span>
+          <select
+            className="clf-select"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+          >
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="clf-group">
         <span className="clf-label">ไตรมาส</span>
         <div className="clf-chips">
@@ -1661,23 +1719,35 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   }
 
   if (widget.type === 'miceEventsQuarterlyChart') {
-    return renderQuarterlyChartPanel({
-      title: 'MICE Events Performance Over Time',
-      color: '#081f68',
-      yLabel: 'No. of Events',
-      data: fixedProfile.chartsQuarterly?.events || [],
-      yTickFormatter: formatYAxisTickThousands
-    });
+    return (
+      <QuarterlyChartPanel
+        title="MICE Events Performance Over Time"
+        color="#081f68"
+        yLabel="No. of Events"
+        yTickFormatter={formatYAxisTickThousands}
+        widgetKey="miceEventsQuarterlyChart"
+        globalFilter={globalFilter}
+        defaultData={fixedProfile.chartsQuarterly?.events || []}
+        valueKey="no_of_events"
+        lyKey="no_of_events_ly"
+      />
+    );
   }
 
   if (widget.type === 'miceVisitorsQuarterlyChart') {
-    return renderQuarterlyChartPanel({
-      title: 'MICE International Visitors Performance Over Time',
-      color: '#1d6fe8',
-      yLabel: 'No. of Visitors',
-      data: fixedProfile.chartsQuarterly?.visitors || [],
-      yTickFormatter: formatYAxisTickThousands
-    });
+    return (
+      <QuarterlyChartPanel
+        title="MICE International Visitors Performance Over Time"
+        color="#1d6fe8"
+        yLabel="No. of Visitors"
+        yTickFormatter={formatYAxisTickThousands}
+        widgetKey="miceVisitorsQuarterlyChart"
+        globalFilter={globalFilter}
+        defaultData={fixedProfile.chartsQuarterly?.visitors || []}
+        valueKey="no_of_visitors"
+        lyKey="no_of_visitors_ly"
+      />
+    );
   }
 
   if (widget.type === 'miceKpis') {
