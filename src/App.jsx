@@ -3856,7 +3856,7 @@ export default function App() {
                       maxYear={MICE_FILTER_OPTIONS.years[MICE_FILTER_OPTIONS.years.length - 1] || 2025}
                       valueMin={activeDashboardFilters.yearMin ?? 2007}
                       valueMax={activeDashboardFilters.yearMax ?? 2025}
-                      onChange={(min, max) => updateActiveDashboardFilters({ yearMin: min, yearMax: max })}
+                      onChange={(min, max) => updateActiveDashboardFilters({ yearMin: min, yearMax: max, year: max })}
                     />
                   </div>
                 </div>

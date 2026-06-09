@@ -373,7 +373,7 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
   const sectors    = useSectors();
   const allIndNames = sectors.map((s) => s.name);
 
-  const globalYear = globalFilter?.year ?? 2025;
+  const globalYear = globalFilter?.yearMax ?? globalFilter?.year ?? 2025;
   const [selectedYear, setSelectedYear] = useState(globalYear);
   const [quarters,     setQuarters]     = useState(ALL_QUARTERS);
   const [industries,   setIndustries]   = useState(allIndNames);
