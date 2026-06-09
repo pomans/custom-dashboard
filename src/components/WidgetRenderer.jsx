@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
-import { fetchWidgetDirect, fetchMasterSectors } from '../services/widgetApi';
+import { fetchWidgetDirect, fetchMasterSectors, fetchMasterCountries, transformDrillFlow } from '../services/widgetApi';
 import {
   Bar,
   BarChart,
@@ -370,18 +370,16 @@ const renderQuarterlyLegend = () => (
 );
 
 function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, globalFilter, defaultData, valueKey, lyKey }) {
-  const sectors    = useSectors();
-  const allIndNames = sectors.map((s) => s.name);
+  const showGeoFilter = widgetKey === 'miceVisitorsQuarterlyChart';
+  // All filters come from the global filter panel
+  const gContinent  = showGeoFilter ? (globalFilter?.continent || 'all') : 'all';
+  const gCountry    = showGeoFilter ? (globalFilter?.country   || 'all') : 'all';
+  const gQuarters   = (globalFilter?.quarters || 'Q1,Q2,Q3,Q4').split(',').map(s => s.trim()).filter(Boolean);
+  const gIndustry   = globalFilter?.industry || 'all';
+  const selectedYear = globalFilter?.yearMax ?? globalFilter?.year ?? 2025;
 
-  // Initial year = yearMax from global filter at mount time — NOT reactive to slider changes
-  const initYear = globalFilter?.yearMax ?? globalFilter?.year ?? 2025;
-  const [selectedYear, setSelectedYear] = useState(initYear);
-  const [quarters,     setQuarters]     = useState(ALL_QUARTERS);
-  const [industries,   setIndustries]   = useState(allIndNames);
-  const [localData,    setLocalData]    = useState(null);
-  const [loading,      setLoading]      = useState(false);
-
-  const isAllInds = industries.length === allIndNames.length && allIndNames.every((n) => industries.includes(n));
+  const [localData, setLocalData] = useState(null);
+  const [loading,   setLoading]   = useState(false);
 
   // Always fetch with only the params relevant to this chart — no yearMin/yearMax
   useEffect(() => {
@@ -391,35 +389,47 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
       market:   globalFilter?.market   || 'International',
       yearMode: globalFilter?.yearMode || 'calendar',
       year:     selectedYear,
-      quarters: quarters.join(','),
-      industry: isAllInds ? 'all' : industries.join(','),
+      quarters: gQuarters.join(','),
+      industry: gIndustry,
+      ...(gContinent !== 'all' ? { continent: gContinent } : {}),
+      ...(gCountry   !== 'all' ? { country:   gCountry   } : {}),
     };
     fetchWidgetDirect(widgetKey, filter, ac.signal)
       .then((rows) => {
         if (ac.signal.aborted) return;
+        const toNum = (v) => Number(v) || 0;
         const transformed = (rows || [])
           .sort((a, b) => String(a.quarter).localeCompare(String(b.quarter)))
           .map((r) => ({
             quarter:  String(r.quarter),
-            thisYear: num(r[valueKey]),
-            lastYear: lyKey ? num(r[lyKey]) : 0,
+            thisYear: toNum(r[valueKey]),
+            lastYear: lyKey ? toNum(r[lyKey]) : 0,
           }));
         setLocalData(transformed);
         setLoading(false);
       })
       .catch(() => { if (!ac.signal.aborted) setLoading(false); });
     return () => ac.abort();
-  }, [selectedYear, quarters, industries, widgetKey, globalFilter?.market, globalFilter?.yearMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedYear, globalFilter?.quarters, globalFilter?.industry, gContinent, gCountry, widgetKey, globalFilter?.market, globalFilter?.yearMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const data = localData ?? defaultData ?? [];
+  // quarter อนาคต: thisYear = null (ไม่ plot) แต่ lastYear ยังแสดงอยู่
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentQ = currentMonth <= 3 ? 'Q1' : currentMonth <= 6 ? 'Q2' : currentMonth <= 9 ? 'Q3' : 'Q4';
+  const QUARTER_ORDER = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const rawData = localData ?? defaultData ?? [];
+  const data = rawData.map((row) => {
+    const isFuture = selectedYear >= currentYear &&
+      QUARTER_ORDER.indexOf(row.quarter) > QUARTER_ORDER.indexOf(currentQ);
+    return isFuture ? { ...row, thisYear: null } : row;
+  });
   const withYoy = data.map((row) => ({
     ...row,
-    yoy: row.lastYear ? ((row.thisYear - row.lastYear) / Math.abs(row.lastYear)) * 100 : null,
+    yoy: (row.thisYear != null && row.lastYear)
+      ? ((row.thisYear - row.lastYear) / Math.abs(row.lastYear)) * 100
+      : null,
   }));
-
-  const yearMin     = globalFilter?.yearMin ?? 2007;
-  const yearMax     = globalFilter?.yearMax ?? globalYear;
-  const yearOptions = Array.from({ length: yearMax - yearMin + 1 }, (_, i) => yearMax - i);
 
   return (
     <div className="fixed-mice-chart">
@@ -427,11 +437,6 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
         <div className="fixed-mice-chart-title" style={{ background: color }}>{title}</div>
         <div className="fixed-mice-chart-rule" />
       </div>
-      <ChartLocalFilter
-        quarters={quarters} setQuarters={setQuarters}
-        industries={industries} setIndustries={setIndustries}
-        year={selectedYear} setYear={setSelectedYear} yearOptions={yearOptions}
-      />
       {loading ? (
         <div className="fixed-mice-chart-body">
           <WidgetSkeleton type="miceEventsQuarterlyChart" />
@@ -484,23 +489,15 @@ const renderYoyBadge = ({ x, y, value }) => {
 };
 
 function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, forecastSeries, yTickFormatter, valueKey, lyKey, yoyKey, globalFilter }) {
-  const { quarters, setQuarters, industries, setIndustries, localData, loading } = useChartLocalFilter(
-    widgetKey,
-    globalFilter,
-    (rows) => rows.sort((a, b) => Number(a.year) - Number(b.year)).map((r) => ({
-      year: Number(r.year), value: num(r[valueKey]), lastYear: lyKey ? num(r[lyKey]) : undefined, yoy: yoyKey ? num(r[yoyKey]) : undefined,
-    }))
-  );
-  const series = localData ?? actualSeries;
+  // quarters + industry filter now controlled globally — actualSeries is already re-fetched by App bulk fetch
+  const series = actualSeries;
   return (
     <div className="fixed-mice-chart">
       <div className="fixed-mice-chart-header">
         <div className="fixed-mice-chart-title" style={{ background: color }}>{title}</div>
         <div className="fixed-mice-chart-rule" />
       </div>
-      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industries={industries} setIndustries={setIndustries} />
       <div className="fixed-mice-chart-body">
-        {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
         <div className="fixed-mice-chart-axis-label">{yLabel}</div>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={[...series, ...forecastSeries]} margin={{ top: 42, right: 18, bottom: 10, left: 3 }}>
@@ -745,6 +742,18 @@ function useSectors() {
   return sectors;
 }
 
+let _cachedCountries = null;
+function useCountries() {
+  const [countries, setCountries] = useState(() => _cachedCountries || []);
+  useEffect(() => {
+    if (_cachedCountries) return;
+    fetchMasterCountries().then((data) => {
+      if (data) { _cachedCountries = data; setCountries(data); }
+    });
+  }, []);
+  return countries;
+}
+
 function useChartLocalFilter(widgetKey, globalFilter, transformFn) {
   const sectors    = useSectors();
   const allIndNames = sectors.map((s) => s.name);
@@ -852,7 +861,7 @@ const CHART_WIDGET_TYPES = new Set([
 ]);
 const TABLE_WIDGET_TYPES = new Set([
   'miceNationalityPerformance', 'miceNationalityIndustryMatrix',
-  'miceNationalityMatrixView', 'miceVisitorsBreakdown', 'miceDrillFlow',
+  'miceNationalityMatrixView', 'miceDrillFlow',
 ]);
 
 function WidgetSkeleton({ type }) {
@@ -1221,8 +1230,29 @@ function MiceNationalityMatrixView({ fixedProfile }) {
    Sankey-style drill-down with SVG bezier connectors
    Total → Nationality → Industry → Quarter
 ───────────────────────────────────────────── */
-function MiceDrillFlow({ fixedProfile }) {
-  const data = fixedProfile.sankeyFlow || { total: 0, nationality: [] };
+function MiceDrillFlow({ fixedProfile, globalFilter }) {
+  const [localData, setLocalData] = useState(null);
+  const [fetchLoading, setFetchLoading] = useState(false);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    setFetchLoading(true);
+    const filter = {
+      ...(globalFilter || {}),
+      nocache: true,
+    };
+    fetchWidgetDirect('miceDrillFlow', filter, ac.signal)
+      .then((rows) => {
+        if (!ac.signal.aborted) {
+          setLocalData(transformDrillFlow(rows || []));
+          setFetchLoading(false);
+        }
+      })
+      .catch(() => { if (!ac.signal.aborted) setFetchLoading(false); });
+    return () => ac.abort();
+  }, [globalFilter?.market, globalFilter?.yearMin, globalFilter?.yearMax, globalFilter?.yearMode, globalFilter?.continent, globalFilter?.country]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const data = (localData ?? fixedProfile.sankeyFlow) || { total: 0, nationality: [] };
   const [selNat, setSelNat] = useState(null);
   const [selInd, setSelInd] = useState(null);
   const [showAllNat, setShowAllNat] = useState(false);
@@ -1384,7 +1414,7 @@ function MiceDrillFlow({ fixedProfile }) {
   const clearInd = () => setSelInd(null);
 
   return (
-    <div className="df2-shell" ref={containerRef}>
+    <div className="df2-shell" ref={containerRef} style={fetchLoading ? { opacity: 0.6, pointerEvents: 'none' } : undefined}>
       {/* SVG overlay */}
       <svg className="df2-svg" aria-hidden="true">
         {paths.map(p => (
@@ -1506,20 +1536,8 @@ function MiceDrillFlow({ fixedProfile }) {
 
 /* ─── MiceDataTableWidget: ตาราง MICE Statistics รายปี / ไตรมาส ─────────── */
 function MiceDataTableWidget({ rows, globalFilter }) {
-  // per-widget quarter + industry filter
-  const { quarters, setQuarters, industries, setIndustries, localData, loading } = useChartLocalFilter(
-    'miceDataTable',
-    globalFilter,
-    (apiRows) => apiRows.map((r) => ({
-      year:     num(r.year),
-      quarter:  String(r.quarter || ''),
-      events:   num(r.no_of_events),
-      visitors: num(r.no_of_visitors),
-      revenue:  num(r.revenue_generated_million_baht),
-    }))
-  );
-
-  const displayRows = localData ?? rows;
+  // quarters + industry now come from global filter — use pre-fetched rows
+  const displayRows = rows;
   const fmt  = new Intl.NumberFormat('en-US');
   const fmtM = (v) => v >= 1000 ? `${(v/1000).toFixed(1)}K` : fmt.format(v);
 
@@ -1550,9 +1568,7 @@ function MiceDataTableWidget({ rows, globalFilter }) {
       <div className="fixed-mice-chart-title" style={{ background: '#1e3a5f', margin: '8px 12px 0', borderRadius: 8, fontSize: '0.85rem', padding: '6px 14px' }}>
         MICE Statistics
       </div>
-      <ChartLocalFilter quarters={quarters} setQuarters={setQuarters} industries={industries} setIndustries={setIndustries} />
       <div className="fixed-mice-table-shell-main" style={{ position: 'relative' }}>
-        {loading && <div style={{ position:'absolute', inset:0, background:'rgba(255,255,255,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2, fontSize:12, color:'#94a3b8' }}>กำลังโหลด…</div>}
         <table className="fixed-mice-table-heavy" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -1782,61 +1798,8 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     return <MiceNationalityIndustryMatrixWidget fixedProfile={fixedProfile} />;
   }
 
-  if (widget.type === 'miceVisitorsBreakdown') {
-    const breakdown = fixedProfile.breakdown || {};
-    const nationalityRows = breakdown.nationality || [];
-    const industryRows = breakdown.industry || [];
-    const quarterRows = breakdown.quarter || [];
-    const total = breakdown.total || 0;
-
-    return (
-      <div className="fixed-mice-breakdown">
-        <div className="fixed-mice-chart-title fixed-mice-chart-title-breakdown">MICE Visitors Breakdown</div>
-        <div className="fixed-mice-breakdown-root">
-          <div className="breakdown-root-card">
-            <strong>This Year</strong>
-            <span>{formatMetricValue(total)}</span>
-          </div>
-          <div className="breakdown-column">
-            <div className="breakdown-column-title">Nationality</div>
-            {nationalityRows.map((row) => (
-              <div key={row.label} className="breakdown-node">
-                <span>{row.label}</span>
-                <strong>{formatMetricValue(row.value)}</strong>
-                <div className="breakdown-track">
-                  <i style={{ width: `${Math.max(6, (row.value / nationalityRows[0].value) * 100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="breakdown-column">
-            <div className="breakdown-column-title">Industry</div>
-            {industryRows.map((row) => (
-              <div key={row.label} className="breakdown-node">
-                <span>{row.label}</span>
-                <strong>{formatMetricValue(row.value)}</strong>
-                <div className="breakdown-track">
-                  <i style={{ width: `${Math.max(6, (row.value / industryRows[0].value) * 100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="breakdown-column">
-            <div className="breakdown-column-title">Quarter</div>
-            {quarterRows.map((row) => (
-              <div key={row.label} className="breakdown-node">
-                <span>{row.label}</span>
-                <strong>{formatMetricValue(row.value)}</strong>
-                <div className="breakdown-track">
-                  <i style={{ width: `${Math.max(6, (row.value / quarterRows[0].value) * 100)}%` }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // miceVisitorsBreakdown — ยกเลิกแล้ว ใช้ miceDrillFlow แทน
+  if (widget.type === 'miceVisitorsBreakdown') return null;
 
   if (widget.type === 'line' || widget.type === 'bar' || widget.type === 'chart') {
     const xField = widget.mapping?.xField;
@@ -2108,7 +2071,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   }
 
   if (widget.type === 'miceDrillFlow') {
-    return <MiceDrillFlow fixedProfile={fixedProfile} />;
+    return <MiceDrillFlow fixedProfile={fixedProfile} globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceDataTable') {

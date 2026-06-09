@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog } from './data/sampleData';
-import { fetchWidgetsOnDashboard, activeMiceWidgetKey } from './services/widgetApi';
+import { fetchWidgetsOnDashboard, activeMiceWidgetKey, fetchMasterCountries, fetchMasterSectors } from './services/widgetApi';
 import { USE_SAMPLE_DATA } from './config/apiConfig';
 
 const MIN_GRID_COLS = 12;
@@ -25,6 +25,15 @@ const MM_PER_PX = 25.4 / 96;
 const LOCAL_STORAGE_KEY = 'bi-dashboard.workspace.v1';
 const TEXT_WIDGET_TYPES = ['textbox'];
 const toKebabLabel = (str) => str.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+// Widget types that filter by continent/country (nationality dimension)
+const GEO_FILTER_WIDGET_TYPES = new Set([
+  'miceNationalityPerformance',
+  'miceNationalityIndustryMatrix',
+  'miceNationalityMatrixView',
+  'miceDrillFlow',
+  'miceVisitorsQuarterlyChart',
+]);
+
 const NO_CONFIG_WIDGET_TYPES = [
   'miceStatCard',
   'miceEventsChart',
@@ -36,7 +45,6 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceNationalityPerformance',
   'miceNationalityIndustryMatrix',
   'miceNationalityMatrixView',
-  'miceVisitorsBreakdown',
   'miceDrillFlow',
   'miceDataTable'
 ];
@@ -47,6 +55,7 @@ const MICE_FILTER_DEFAULTS = {
   year: 2025,
   yearMin: 2007,
   yearMax: 2025,
+  quarters: 'Q1,Q2,Q3,Q4',  // ไตรมาสที่แสดง — ใช้ทุก widget
   industry: 'all',
   country: 'all',
   continent: 'all',       // Asia | Europe | … | all  — filters nationality-related widgets
@@ -277,16 +286,6 @@ const WidgetThumbnail = ({ type }) => {
           <path {...common} d="M18 7v14" />
         </svg>
       );
-    case 'miceVisitorsBreakdown':
-      return (
-        <svg viewBox="0 0 28 28" aria-hidden="true">
-          <rect x="3" y="4" width="22" height="20" rx="4" />
-          <path {...common} d="M6 18c3-8 6-8 9-3s6 5 7 1" />
-          <circle cx="9" cy="16" r="1.2" fill="currentColor" stroke="none" />
-          <circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none" />
-          <circle cx="20" cy="15" r="1.2" fill="currentColor" stroke="none" />
-        </svg>
-      );
     default:
       return (
         <svg viewBox="0 0 28 28" aria-hidden="true">
@@ -437,27 +436,6 @@ const PaletteWidgetThumbnail = ({ type }) => {
         )}
         {[16,25,34,43].map((y,i) => (
           <rect key={i} x="6" y={y} width="18" height="3" rx="1" fill={LG} />
-        ))}
-      </Wrap>
-    );
-  }
-
-  /* ── Breakdown columns ───────────────────────── */
-  if (type === 'miceVisitorsBreakdown') {
-    return (
-      <Wrap>
-        <rect x="4" y="19" width="13" height="18" rx="3" fill={B} />
-        {[[22,9],[22,22],[22,35]].map(([x,y],i) => (
-          <React.Fragment key={i}>
-            <path d={`M17,28 C19,28 20,${y+7} ${x},${y+7}`} fill="none" stroke={LB} strokeWidth="1.5" />
-            <rect x={x} y={y} width="13" height="12" rx="2.5" fill={LB} opacity={0.9-i*0.1} />
-          </React.Fragment>
-        ))}
-        {[[40,12],[40,24],[40,36]].map(([x,y],i) => (
-          <React.Fragment key={i}>
-            <path d={`M35,15 C37,15 38,${y+6} ${x},${y+6}`} fill="none" stroke={LB} strokeWidth="1" opacity="0.5" />
-            <rect x={x} y={y} width="13" height="10" rx="2.5" fill={LB} opacity={0.5-i*0.08} />
-          </React.Fragment>
         ))}
       </Wrap>
     );
@@ -829,7 +807,7 @@ const miceRevenueChartTemplate = widgetCatalog.find((widget) => widget.type === 
 const miceVisitorsChartTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsChart');
 const miceNationalityPerformanceTemplate = widgetCatalog.find((widget) => widget.type === 'miceNationalityPerformance');
 const miceNationalityIndustryMatrixTemplate = widgetCatalog.find((widget) => widget.type === 'miceNationalityIndustryMatrix');
-const miceVisitorsBreakdownTemplate = widgetCatalog.find((widget) => widget.type === 'miceVisitorsBreakdown');
+const miceDrillFlowTemplate = widgetCatalog.find((widget) => widget.type === 'miceDrillFlow');
 
 const initialWidgets = [
   createWidget([], miceEventsChartTemplate, 0, 3),
@@ -837,7 +815,7 @@ const initialWidgets = [
   createWidget([{ type: 'miceRevenueChart' }], miceVisitorsChartTemplate, 0, 17),
   createWidget([{ type: 'miceVisitorsChart' }], miceNationalityPerformanceTemplate, 0, 24),
   createWidget([{ type: 'miceNationalityPerformance' }], miceNationalityIndustryMatrixTemplate, 0, 33),
-  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceVisitorsBreakdownTemplate, 0, 42)
+  createWidget([{ type: 'miceNationalityIndustryMatrix' }], miceDrillFlowTemplate, 0, 42)
 ];
 
 const createDefaultWorkspace = () => {
@@ -989,6 +967,19 @@ export default function App() {
 
   const [editingName, setEditingName] = useState('');
 
+  // ── Master sector + country lists for filter dropdowns ───────────────────
+  const FALLBACK_SECTORS = [
+    { name: 'Meeting', short: 'Meeting' }, { name: 'Incentives', short: 'Incentives' },
+    { name: 'Conventions', short: 'Conventions' }, { name: 'Exhibitions', short: 'Exhibitions' },
+    { name: 'Mega Events', short: 'Mega Events' },
+  ];
+  const [masterSectors, setMasterSectors]   = useState(FALLBACK_SECTORS);
+  const [masterCountries, setMasterCountries] = useState([]);
+  useEffect(() => {
+    fetchMasterSectors().then((data) => { if (data) setMasterSectors(data); });
+    fetchMasterCountries().then((data) => { if (data) setMasterCountries(data); });
+  }, []);
+
   // ── API data state ─────────────────────────────────────────────────────────
   const [miceApiFixedProfile, setMiceApiFixedProfile] = useState(null);
   const [miceApiStatus, setMiceApiStatus] = useState('idle'); // idle | loading | loaded | error
@@ -999,6 +990,7 @@ export default function App() {
   const activeDashboardId = workspace.activeDashboardId;
   const activeDashboard = dashboards.find((dashboard) => dashboard.id === activeDashboardId) || dashboards[0];
   const widgets = activeDashboard?.widgets || [];
+  const hasGeoFilterWidgets = widgets.some((w) => GEO_FILTER_WIDGET_TYPES.has(w.type));
   const effectiveSidebarHidden = readOnly || sidebarHidden;
   const cellWidth = GRID_COL_WIDTH;
   const maxOccupiedCol = useMemo(() => {
@@ -1066,6 +1058,7 @@ export default function App() {
     activeDashboardFilters?.year,
     activeDashboardFilters?.yearMin,
     activeDashboardFilters?.yearMax,
+    activeDashboardFilters?.quarters,
     activeDashboardFilters?.industry,
     activeDashboardFilters?.country,
     activeDashboardFilters?.continent,
@@ -3653,7 +3646,12 @@ export default function App() {
                       dataset={dataset}
                       records={widgetRecords}
                       isPreview={isWidgetPreview}
-                      isSkeleton={NO_CONFIG_WIDGET_TYPES.includes(widget.type) && miceApiStatus === 'loading'}
+                      isSkeleton={
+                        NO_CONFIG_WIDGET_TYPES.includes(widget.type) &&
+                        miceApiStatus === 'loading' &&
+                        widget.type !== 'miceEventsQuarterlyChart' &&
+                        widget.type !== 'miceVisitorsQuarterlyChart'
+                      }
                       globalFilter={activeDashboardFilters}
                     />
                   </div>
@@ -3730,7 +3728,7 @@ export default function App() {
                   >
                     <div className="filter-drag-handle-text">
                       <strong>Filters</strong>
-                      <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
+                      <span>Controls all widgets — market, year, quarter, industry &amp; geography</span>
                     </div>
                     <button
                       type="button"
@@ -3762,7 +3760,7 @@ export default function App() {
                   <div className="dashboard-filters-header">
                     <div className="filter-header-label">
                       <strong>Filters</strong>
-                      <span>ควบคุม market และช่วงปีสำหรับทุก widget</span>
+                      <span>Controls all widgets — market, year, quarter, industry &amp; geography</span>
                     </div>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {/* Reload — ⟳ */}
@@ -3860,6 +3858,84 @@ export default function App() {
                     />
                   </div>
                 </div>
+                {/* Quarter · Industry · Continent · Country — compact inline row */}
+                {(() => {
+                  const selQ = (activeDashboardFilters.quarters || 'Q1,Q2,Q3,Q4').split(',').map(s => s.trim()).filter(Boolean);
+                  const selInd = activeDashboardFilters.industry || 'all';
+                  const selIndArr = selInd === 'all' ? masterSectors.map(s => s.name) : selInd.split(',').map(s => s.trim());
+                  const selContinent = activeDashboardFilters.continent || 'all';
+                  const selCountry   = activeDashboardFilters.country   || 'all';
+                  const continentOpts = [...new Map(masterCountries.map((c) => [c.continentName, c])).values()]
+                    .sort((a, b) => a.continentName.localeCompare(b.continentName));
+                  const countryOpts = selContinent === 'all'
+                    ? masterCountries
+                    : masterCountries.filter((c) => c.continentName === selContinent);
+                  const toggleQ = (q) => {
+                    const next = selQ.includes(q)
+                      ? (selQ.length > 1 ? selQ.filter(x => x !== q) : selQ)
+                      : [...selQ, q].sort();
+                    updateActiveDashboardFilters({ quarters: next.join(',') });
+                  };
+                  const toggleInd = (name) => {
+                    const allNames = masterSectors.map(s => s.name);
+                    const next = selIndArr.includes(name)
+                      ? (selIndArr.length > 1 ? selIndArr.filter(x => x !== name) : selIndArr)
+                      : [...selIndArr, name];
+                    const isAll = allNames.every(n => next.includes(n));
+                    updateActiveDashboardFilters({ industry: isAll ? 'all' : next.join(',') });
+                  };
+                  return (
+                    <div className="filter-row-full">
+                      {/* Quarter */}
+                      <div className="filter-chip-group">
+                        <span className="filter-chip-label">Quarter</span>
+                        <div className="filter-chip-row">
+                          {['Q1','Q2','Q3','Q4'].map(q => (
+                            <button key={q} type="button"
+                              className={`filter-chip-btn${selQ.includes(q) ? ' active' : ''}`}
+                              onClick={() => toggleQ(q)}
+                            >{q}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* separator */}
+                      <div className="filter-row-sep" />
+                      {/* Industry */}
+                      <div className="filter-chip-group">
+                        <span className="filter-chip-label">Industry</span>
+                        <div className="filter-chip-row">
+                          {masterSectors.map(s => (
+                            <button key={s.name} type="button"
+                              title={s.name}
+                              className={`filter-chip-btn${selIndArr.includes(s.name) ? ' active' : ''}`}
+                              onClick={() => toggleInd(s.name)}
+                            >{s.short}</button>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Continent + Country — only when dashboard has geo-filter widgets */}
+                      {hasGeoFilterWidgets && (<>
+                        <div className="filter-row-sep" />
+                        <div className="filter-chip-group">
+                          <span className="filter-chip-label">Continent</span>
+                          <select className="fp-select" value={selContinent}
+                            onChange={(e) => updateActiveDashboardFilters({ continent: e.target.value, country: 'all' })}>
+                            <option value="all">All</option>
+                            {continentOpts.map(c => <option key={c.continentName} value={c.continentName}>{c.continentName}</option>)}
+                          </select>
+                        </div>
+                        <div className="filter-chip-group">
+                          <span className="filter-chip-label">Country / Nationality</span>
+                          <select className="fp-select" value={selCountry}
+                            onChange={(e) => updateActiveDashboardFilters({ country: e.target.value })}>
+                            <option value="all">All</option>
+                            {countryOpts.map(c => <option key={c.countryCode} value={c.countryName}>{c.countryName}</option>)}
+                          </select>
+                        </div>
+                      </>)}
+                    </div>
+                  );
+                })()}
                 {!readOnly ? (
                   <button
                     type="button"

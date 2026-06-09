@@ -1890,6 +1890,90 @@ button {
   border-color: #0f172a;
 }
 
+/* ── Compact secondary-filter row (Quarter · Industry · Continent · Country) ── */
+.filter-row-full {
+  width: 100%;           /* fills the flex-wrap row entirely */
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;                /* gaps handled by separators + chip-group padding */
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 5px 8px;
+}
+
+/* individual group inside the row */
+.filter-chip-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  flex-shrink: 0;
+}
+
+.filter-chip-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* compact pill buttons — no stretching */
+.filter-chip-btn {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 0.71rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  flex-shrink: 0;
+}
+.filter-chip-btn:hover:not(.active) {
+  background: rgba(255,255,255,.7);
+  color: #334155;
+}
+.filter-chip-btn.active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15,23,42,.12), 0 0 0 1px rgba(15,23,42,.08);
+}
+
+/* thin vertical separator between groups */
+.filter-row-sep {
+  width: 1px;
+  height: 22px;
+  background: #d1dce8;
+  flex-shrink: 0;
+  align-self: center;
+}
+
+/* compact select inside filter-row-full */
+.fp-select {
+  height: 26px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #d1dce8;
+  border-radius: 6px;
+  padding: 0 6px;
+  cursor: pointer;
+  max-width: 160px;
+  flex-shrink: 0;
+}
+.fp-select:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
 .dashboard-filters.on-canvas {
   box-shadow: 0 2px 12px rgba(15, 23, 42, 0.07);
 }
@@ -1996,6 +2080,61 @@ button {
 /* filter-button-group: ไม่ flex ค่าที่แบ่งกัน */
 .dashboard-filters.vertical .filter-button-group {
   flex: unset;
+}
+
+/* compact row in vertical mode — each group becomes its own full-width block */
+.dashboard-filters.vertical .filter-row-full {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 8px 2px;
+  background: transparent;  /* no pill bg in vertical */
+  border-radius: 0;
+}
+/* group: label on top, chips below */
+.dashboard-filters.vertical .filter-chip-group {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 0;
+}
+/* chip row inside filter-chip-group: override legacy column rule */
+.dashboard-filters.vertical .filter-chip-group .filter-chip-row {
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dashboard-filters.vertical .filter-chip-group .filter-chip-row button {
+  width: auto;
+  min-height: 0;
+  justify-content: initial;
+}
+/* selects fill full width */
+.dashboard-filters.vertical .filter-chip-group .fp-select {
+  width: 100%;
+  max-width: 100%;
+  height: 30px;
+}
+/* chip buttons: outlined style for vertical */
+.dashboard-filters.vertical .filter-chip-btn {
+  height: 28px;
+  background: #fff;
+  border-color: #cbd5e1;
+}
+.dashboard-filters.vertical .filter-chip-btn.active {
+  background: #0f172a;
+  color: #fff;
+  border-color: #0f172a;
+  box-shadow: none;
+}
+/* label matches other filter group labels */
+.dashboard-filters.vertical .filter-chip-label {
+  font-size: 0.63rem;
+}
+/* hide side separators — use a subtle top border instead */
+.dashboard-filters.vertical .filter-row-sep {
+  display: none;
 }
 
 /* toggle row: เต็มความกว้าง */
@@ -5457,4 +5596,46 @@ th {
 .app-shell.embedded .palette {
   top: 12px;
   max-height: calc(100vh - 24px);
+}
+
+/* ── Quarterly Geo Filter (continent / country dropdowns) ── */
+.quarterly-geo-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 2px 12px 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.quarterly-geo-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.quarterly-geo-select {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  max-width: 180px;
+}
+.quarterly-geo-select:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+/* Industry chips wrapping inside filter panel */
+.filter-toggle-row.wrap-chips {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 28px;
+  padding: 2px;
+  gap: 2px;
 }

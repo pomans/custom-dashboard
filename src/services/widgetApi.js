@@ -27,7 +27,6 @@ const WIDGET_API_KEYS = {
   miceVisitorsQuarterlyChart:  ['miceVisitorsQuarterlyChart'],
   miceNationalityPerformance:  ['miceNationalityPerformance'],
   miceNationalityIndustryMatrix: ['miceNationalityIndustryMatrix'],
-  miceVisitorsBreakdown:       ['miceVisitorsBreakdown'],
   miceNationalityMatrixView:   ['miceNationalityMatrixView'],
   miceDrillFlow:               ['miceDrillFlow'],
   miceDataTable:               ['miceDataTable'],
@@ -45,7 +44,6 @@ const FETCH_PRIORITY = [
   'miceVisitorsQuarterlyChart',// 4 rows
   'miceNationalityPerformance',// ~20 nationality rows + country JOIN
   'miceNationalityIndustryMatrix', // nationality × sector pivot
-  'miceVisitorsBreakdown',     // UNION ALL 3 groups
   'miceNationalityMatrixView', // UNION ALL industry + quarter views
   'miceDrillFlow',             // full hierarchy — หนักสุด
   'miceDataTable',             // annual+quarterly table
@@ -92,8 +90,8 @@ function buildParams(filter) {
   };
   // gdsDimension is an int — only include when explicitly set (0 is valid)
   if (f.gdsDimension != null) params.gdsDimension = f.gdsDimension;
-  // nocache — bypass server MemoryCache (force reload)
-  if (f.nocache) params.nocache = 'true';
+  // nocache — bypass server MemoryCache เสมอ
+  params.nocache = 'true';
   // quarters — per-widget quarter filter (default all 4)
   if (f.quarters && f.quarters !== 'Q1,Q2,Q3,Q4') params.quarters = f.quarters;
   return new URLSearchParams(params).toString();
@@ -105,10 +103,13 @@ function buildQuarterlyParams(filter) {
   const params = {
     market:   f.market   || 'International',
     yearMode: f.yearMode || 'calendar',
-    year:     f.year     ?? 2025,
+    year:     f.year     ?? f.yearMax ?? 2025,
     industry: f.industry || 'all',
+    nocache:  'true',
   };
-  if (f.quarters && f.quarters !== 'Q1,Q2,Q3,Q4') params.quarters = f.quarters;
+  if (f.quarters  && f.quarters  !== 'Q1,Q2,Q3,Q4') params.quarters  = f.quarters;
+  if (f.continent && f.continent !== 'all')          params.continent = f.continent;
+  if (f.country   && f.country   !== 'all')          params.country   = f.country;
   return new URLSearchParams(params).toString();
 }
 
@@ -254,7 +255,7 @@ function transformMatrixView(rows) {
   };
 }
 
-function transformDrillFlow(rows) {
+export function transformDrillFlow(rows) {
   const natMap = {};
   rows.forEach((r) => {
     const nat = r.nationality;
@@ -444,4 +445,26 @@ export function fetchMasterSectors() {
       .catch(() => null);
   }
   return _sectorPromise;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Master Countries — ดึงจาก vw_dim_country ครั้งเดียว (module-level cache)
+// ─────────────────────────────────────────────────────────────────────────────
+let _countryPromise = null;
+
+export function fetchMasterCountries() {
+  if (!_countryPromise) {
+    _countryPromise = fetchRows('masterCountries', {})
+      .then((rows) => {
+        if (!rows?.length) return null;
+        return rows.map((r) => ({
+          countryCode:   String(r.country_code   || ''),
+          countryName:   String(r.country_name_en || ''),
+          continentCode: String(r.continent_code  || ''),
+          continentName: String(r.continent_name_en || ''),
+        }));
+      })
+      .catch(() => null);
+  }
+  return _countryPromise;
 }

@@ -573,17 +573,6 @@ export const widgetCatalog = [
     description: 'Visitors แยกตาม Nationality × ประเภทงาน Meetings · Incentives · Conventions · Exhibitions'
   },
   {
-    type: 'miceVisitorsBreakdown',
-    group: 'ready',
-    fixed: true,
-    defaultW: 12,
-    defaultH: 10,
-    label: 'Visitors Breakdown',
-    dataset: 'miceStatistics',
-    title: 'MICE Visitors Breakdown',
-    description: 'Breakdown นักเดินทาง MICE แยก Nationality, Continent และ Industry'
-  },
-  {
     type: 'miceNationalityMatrixView',
     group: 'ready',
     fixed: true,
@@ -600,10 +589,10 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 12,
-    label: 'MICE Drill-down Flow',
+    label: 'MICE Visitors Breakdown',
     dataset: 'miceStatistics',
-    title: 'MICE Visitors Drill-down',
-    description: 'Flow chart drill-down: Total → Nationality → Industry → Quarter'
+    title: 'MICE Visitors Breakdown',
+    description: 'Breakdown นักเดินทาง MICE แยก Nationality → Industry → Quarter'
   },
   {
     type: 'miceDataTable',
