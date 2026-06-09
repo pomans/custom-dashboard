@@ -987,6 +987,8 @@ export default function App() {
   const filterPanelRef = useRef(null);
   const [filterPanelActualPx, setFilterPanelActualPx] = useState(null);
 
+  const [editingName, setEditingName] = useState('');
+
   // ── API data state ─────────────────────────────────────────────────────────
   const [miceApiFixedProfile, setMiceApiFixedProfile] = useState(null);
   const [miceApiStatus, setMiceApiStatus] = useState('idle'); // idle | loading | loaded | error
@@ -1019,6 +1021,11 @@ export default function App() {
   // ── Fetch only the widgets currently on the dashboard, with Spark concurrency guard ──
   // Re-runs when: filter values change OR the set of MICE widget types on the dashboard changes
   const activeMiceKey = activeMiceWidgetKey(widgets);
+  // Sync editingName when active dashboard changes (e.g. user switches dashboards)
+  useEffect(() => {
+    setEditingName(activeDashboard?.name ?? '');
+  }, [activeDashboard?.id]);
+
   useEffect(() => {
     const miceWidgets = widgets.filter((w) => NO_CONFIG_WIDGET_TYPES.includes(w.type));
     if (!miceWidgets.length) return undefined;
@@ -2184,13 +2191,20 @@ export default function App() {
   };
 
   const renameActiveDashboard = (name) => {
-    const nextName = name.trim();
-    if (!nextName) return;
-
     updateActiveDashboard((dashboard) => ({
       ...dashboard,
-      name: nextName
+      name: name.trim(),
     }));
+  };
+
+  const commitDashboardName = () => {
+    const trimmed = editingName.trim();
+    if (!trimmed) {
+      // restore last saved name
+      setEditingName(activeDashboard?.name ?? '');
+      return;
+    }
+    renameActiveDashboard(trimmed);
   };
 
   const showToast = (message) => {
@@ -3031,12 +3045,20 @@ export default function App() {
           <input
             className="dashboard-name-input"
             type="text"
-            value={activeDashboard?.name || ''}
+            value={editingName}
             placeholder="ชื่อ Dashboard…"
             aria-label="ชื่อ Dashboard"
             data-tooltip="แก้ไขชื่อ Dashboard"
             data-tooltip-dir="down"
-            onChange={(event) => renameActiveDashboard(event.target.value)}
+            onChange={(event) => setEditingName(event.target.value)}
+            onBlur={commitDashboardName}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.target.blur();
+              if (event.key === 'Escape') {
+                setEditingName(activeDashboard?.name ?? '');
+                event.target.blur();
+              }
+            }}
           />
         </div>
 
