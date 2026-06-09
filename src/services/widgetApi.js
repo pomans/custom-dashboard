@@ -99,11 +99,29 @@ function buildParams(filter) {
   return new URLSearchParams(params).toString();
 }
 
+// Params builder for quarterly charts — sends only single year, no yearMin/yearMax
+function buildQuarterlyParams(filter) {
+  const f = filter || {};
+  const params = {
+    market:   f.market   || 'International',
+    yearMode: f.yearMode || 'calendar',
+    year:     f.year     ?? 2025,
+    industry: f.industry || 'all',
+  };
+  if (f.quarters && f.quarters !== 'Q1,Q2,Q3,Q4') params.quarters = f.quarters;
+  return new URLSearchParams(params).toString();
+}
+
+const QUARTERLY_WIDGET_KEYS = new Set(['miceEventsQuarterlyChart', 'miceVisitorsQuarterlyChart']);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Fetch one widget endpoint → rows array
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchRows(widgetKey, filter, signal) {
-  const url = `${WIDGET_ENDPOINT(widgetKey)}?${buildParams(filter)}`;
+  const urlParams = QUARTERLY_WIDGET_KEYS.has(widgetKey)
+    ? buildQuarterlyParams(filter)
+    : buildParams(filter);
+  const url = `${WIDGET_ENDPOINT(widgetKey)}?${urlParams}`;
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     signal,
