@@ -435,30 +435,33 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
         industries={industries} setIndustries={setIndustries}
         year={selectedYear} setYear={setSelectedYear} yearOptions={yearOptions}
       />
-      {renderQuarterlyLegend()}
-      <div className="fixed-mice-chart-body" style={{ position: 'relative' }}>
-        {loading && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2, fontSize: 12, color: '#94a3b8' }}>
-            กำลังโหลด…
+      {loading ? (
+        <div className="fixed-mice-chart-body">
+          <WidgetSkeleton type="miceEventsQuarterlyChart" />
+        </div>
+      ) : (
+        <>
+          {renderQuarterlyLegend()}
+          <div className="fixed-mice-chart-body">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={withYoy} margin={{ top: 28, right: 24, bottom: 28, left: 18 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
+                <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
+                <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
+                <Tooltip
+                  labelFormatter={(quarter) => `ไตรมาส ${quarter}`}
+                  formatter={(value, name) => [formatMetricValue(Number(value)), name]}
+                />
+                <Line type="monotone" dataKey="thisYear" name="ปีนี้ (This Year)" stroke="#081f68" strokeWidth={3} dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }} activeDot={{ r: 7 }}>
+                  <LabelList dataKey="yoy" content={renderYoyBadge} />
+                </Line>
+                <Line type="monotone" dataKey="lastYear" name="ปีที่แล้ว (Last Year)" stroke="#7ec8e3" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
-        )}
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={withYoy} margin={{ top: 28, right: 24, bottom: 28, left: 18 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
-            <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
-            <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
-            <Tooltip
-              labelFormatter={(quarter) => `ไตรมาส ${quarter}`}
-              formatter={(value, name) => [formatMetricValue(Number(value)), name]}
-            />
-            <Line type="monotone" dataKey="thisYear" name="ปีนี้ (This Year)" stroke="#081f68" strokeWidth={3} dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }} activeDot={{ r: 7 }}>
-              <LabelList dataKey="yoy" content={renderYoyBadge} />
-            </Line>
-            <Line type="monotone" dataKey="lastYear" name="ปีที่แล้ว (Last Year)" stroke="#7ec8e3" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="fixed-mice-chart-axis-label">{yLabel}</div>
+          <div className="fixed-mice-chart-axis-label">{yLabel}</div>
+        </>
+      )}
     </div>
   );
 }
