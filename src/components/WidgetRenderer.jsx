@@ -373,29 +373,26 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
   const sectors    = useSectors();
   const allIndNames = sectors.map((s) => s.name);
 
-  const globalYear = globalFilter?.yearMax ?? globalFilter?.year ?? 2025;
-  const [selectedYear, setSelectedYear] = useState(globalYear);
+  // Initial year = yearMax from global filter at mount time — NOT reactive to slider changes
+  const initYear = globalFilter?.yearMax ?? globalFilter?.year ?? 2025;
+  const [selectedYear, setSelectedYear] = useState(initYear);
   const [quarters,     setQuarters]     = useState(ALL_QUARTERS);
   const [industries,   setIndustries]   = useState(allIndNames);
   const [localData,    setLocalData]    = useState(null);
   const [loading,      setLoading]      = useState(false);
 
-  // Sync when user changes the global year (e.g. dashboard-level year picker)
-  useEffect(() => { setSelectedYear(globalYear); }, [globalYear]);
-
   const isAllInds = industries.length === allIndNames.length && allIndNames.every((n) => industries.includes(n));
-  const isDefault = selectedYear === globalYear && quarters.length === ALL_QUARTERS.length && isAllInds;
 
+  // Always fetch with only the params relevant to this chart — no yearMin/yearMax
   useEffect(() => {
-    if (isDefault) { setLocalData(null); return; }
     const ac = new AbortController();
     setLoading(true);
     const filter = {
-      ...(globalFilter || {}),
+      market:   globalFilter?.market   || 'International',
+      yearMode: globalFilter?.yearMode || 'calendar',
       year:     selectedYear,
       quarters: quarters.join(','),
       industry: isAllInds ? 'all' : industries.join(','),
-      nocache:  true,
     };
     fetchWidgetDirect(widgetKey, filter, ac.signal)
       .then((rows) => {
@@ -412,7 +409,7 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
       })
       .catch(() => { if (!ac.signal.aborted) setLoading(false); });
     return () => ac.abort();
-  }, [selectedYear, quarters, industries, widgetKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedYear, quarters, industries, widgetKey, globalFilter?.market, globalFilter?.yearMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const data = localData ?? defaultData ?? [];
   const withYoy = data.map((row) => ({
