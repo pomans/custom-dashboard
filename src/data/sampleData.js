@@ -501,7 +501,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 7,
-    label: 'MICE Events Quarterly Chart',
+    label: 'MICE Events Performance Over Time',
     dataset: 'miceStatistics',
     title: 'MICE Events Performance Over Time',
     description: 'จำนวนงาน MICE แยกรายไตรมาส เปรียบเทียบ This Year vs Last Year พร้อม %YoY'
@@ -512,7 +512,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 7,
-    label: 'MICE Visitors Quarterly Chart',
+    label: 'MICE International Visitors Performance Over Time',
     dataset: 'miceStatistics',
     title: 'MICE International Visitors Performance Over Time',
     description: 'จำนวนนักเดินทาง MICE International แยกรายไตรมาส เปรียบเทียบ This Year vs Last Year พร้อม %YoY'
