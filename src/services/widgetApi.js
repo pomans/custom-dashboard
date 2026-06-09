@@ -160,16 +160,25 @@ function transformKpis(rows, year) {
   };
 }
 
-// Annual series — {year, value, lastYear, yoy} — widget uses value; lastYear/yoy extra context
-function transformAnnualSeries(rows, valueKey, lyKey, yoyKey) {
-  return rows
+// Annual series — {year, value, lastYear, yoy}
+// YoY is derived from series values (current year vs full previous year) to match Power BI.
+// The API's pre-calculated yoy uses same-period comparison which diverges on partial current year.
+function transformAnnualSeries(rows, valueKey, lyKey) {
+  const sorted = rows
     .sort((a, b) => Number(a.year) - Number(b.year))
     .map((r) => ({
       year:     num(r.year),
       value:    num(r[valueKey]),
-      lastYear: lyKey  ? num(r[lyKey])     : undefined,
-      yoy:      yoyKey ? numYoy(r[yoyKey]) : undefined,
+      lastYear: lyKey ? num(r[lyKey]) : undefined,
     }));
+
+  return sorted.map((item, index) => {
+    const prev = sorted[index - 1]?.value;
+    return {
+      ...item,
+      yoy: prev != null && prev !== 0 ? ((item.value - prev) / Math.abs(prev)) * 100 : null,
+    };
+  });
 }
 
 // Quarterly chart — quarter values are already 'Q1'..'Q4' strings from view
@@ -271,16 +280,13 @@ function applyToProfile(apiKey, rows, filter, profile) {
       profile.kpis = transformKpis(rows, year);
       break;
     case 'miceEventsChart':
-      // SQL: year, no_of_events, no_of_events_ly, yoy_event
-      profile.charts.events = transformAnnualSeries(rows, 'no_of_events', 'no_of_events_ly', 'yoy_event');
+      profile.charts.events = transformAnnualSeries(rows, 'no_of_events', 'no_of_events_ly');
       break;
     case 'miceRevenueChart':
-      // SQL: year, revenue_generated, revenue_generated_ly, yoy_revenue
-      profile.charts.revenue = transformAnnualSeries(rows, 'revenue_generated', 'revenue_generated_ly', 'yoy_revenue');
+      profile.charts.revenue = transformAnnualSeries(rows, 'revenue_generated', 'revenue_generated_ly');
       break;
     case 'miceVisitorsChart':
-      // SQL: year, no_of_visitors, no_of_visitors_ly, yoy_visitors
-      profile.charts.visitors = transformAnnualSeries(rows, 'no_of_visitors', 'no_of_visitors_ly', 'yoy_visitors');
+      profile.charts.visitors = transformAnnualSeries(rows, 'no_of_visitors', 'no_of_visitors_ly');
       break;
     case 'miceEventsQuarterlyChart':
       // SQL: year, quarter('Q1'..'Q4'), no_of_events, no_of_events_ly, yoy_event
