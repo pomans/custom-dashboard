@@ -291,6 +291,64 @@ const MICE_FIXED_PROFILE = {
   }
 };
 
+export const FALLBACK_COUNTRIES = [
+  // Asia
+  { countryCode: 'TH', countryName: 'Thailand',             continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'CN', countryName: 'China',                continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'JP', countryName: 'Japan',                continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'SG', countryName: 'Singapore',            continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'MY', countryName: 'Malaysia',             continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'IN', countryName: 'India',                continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'KR', countryName: 'Korea, South',         continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'ID', countryName: 'Indonesia',            continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'PH', countryName: 'Philippines',          continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'VN', countryName: 'Vietnam',              continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'HK', countryName: 'Hong Kong',            continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'TW', countryName: 'Taiwan',               continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'BD', countryName: 'Bangladesh',           continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'PK', countryName: 'Pakistan',             continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'LK', countryName: 'Sri Lanka',            continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'AE', countryName: 'United Arab Emirates', continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'SA', countryName: 'Saudi Arabia',         continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'IL', countryName: 'Israel',               continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'MM', countryName: 'Myanmar',              continentCode: 'AS', continentName: 'Asia' },
+  { countryCode: 'KH', countryName: 'Cambodia',             continentCode: 'AS', continentName: 'Asia' },
+  // Europe
+  { countryCode: 'DE', countryName: 'Germany',              continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'GB', countryName: 'United Kingdom',       continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'FR', countryName: 'France',               continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'IT', countryName: 'Italy',                continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'ES', countryName: 'Spain',                continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'NL', countryName: 'Netherlands',          continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'SE', countryName: 'Sweden',               continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'CH', countryName: 'Switzerland',          continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'BE', countryName: 'Belgium',              continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'AT', countryName: 'Austria',              continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'PL', countryName: 'Poland',               continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'CZ', countryName: 'Czech Republic',       continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'DK', countryName: 'Denmark',              continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'NO', countryName: 'Norway',               continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'FI', countryName: 'Finland',              continentCode: 'EU', continentName: 'Europe' },
+  { countryCode: 'RU', countryName: 'Russia',               continentCode: 'EU', continentName: 'Europe' },
+  // North America
+  { countryCode: 'US', countryName: 'United States of America', continentCode: 'NA', continentName: 'North America' },
+  { countryCode: 'CA', countryName: 'Canada',               continentCode: 'NA', continentName: 'North America' },
+  { countryCode: 'MX', countryName: 'Mexico',               continentCode: 'NA', continentName: 'North America' },
+  // South America
+  { countryCode: 'BR', countryName: 'Brazil',               continentCode: 'SA', continentName: 'South America' },
+  { countryCode: 'AR', countryName: 'Argentina',            continentCode: 'SA', continentName: 'South America' },
+  { countryCode: 'CL', countryName: 'Chile',                continentCode: 'SA', continentName: 'South America' },
+  { countryCode: 'CO', countryName: 'Colombia',             continentCode: 'SA', continentName: 'South America' },
+  // Oceania
+  { countryCode: 'AU', countryName: 'Australia',            continentCode: 'OC', continentName: 'Oceania' },
+  { countryCode: 'NZ', countryName: 'New Zealand',          continentCode: 'OC', continentName: 'Oceania' },
+  // Africa
+  { countryCode: 'ZA', countryName: 'South Africa',         continentCode: 'AF', continentName: 'Africa' },
+  { countryCode: 'NG', countryName: 'Nigeria',              continentCode: 'AF', continentName: 'Africa' },
+  { countryCode: 'EG', countryName: 'Egypt',                continentCode: 'AF', continentName: 'Africa' },
+  { countryCode: 'KE', countryName: 'Kenya',                continentCode: 'AF', continentName: 'Africa' },
+];
+
 export const datasetLibrary = {
   miceStatistics: {
     id: 'miceStatistics',

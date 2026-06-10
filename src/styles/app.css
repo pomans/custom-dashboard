@@ -1864,7 +1864,7 @@ button {
   flex-direction: column;
   gap: 4px;
   flex: 1;
-  min-width: 0;
+  min-width: 90px;
 }
 
 .filter-chip-row {
@@ -1895,12 +1895,16 @@ button {
   width: 100%;           /* fills the flex-wrap row entirely */
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;   /* Firefox */
+  -ms-overflow-style: none;
   gap: 0;                /* gaps handled by separators + chip-group padding */
   background: #f1f5f9;
   border-radius: 10px;
   padding: 5px 8px;
 }
+.filter-row-full::-webkit-scrollbar { display: none; }
 
 /* individual group inside the row */
 .filter-chip-group {
@@ -2085,6 +2089,8 @@ button {
 /* compact row in vertical mode — each group becomes its own full-width block */
 .dashboard-filters.vertical .filter-row-full {
   flex-direction: column;
+  flex-wrap: wrap;        /* override nowrap from base */
+  overflow-x: visible;
   align-items: stretch;
   gap: 10px;
   padding: 8px 2px;

@@ -3,7 +3,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
-import { datasetLibrary, widgetCatalog } from './data/sampleData';
+import { datasetLibrary, widgetCatalog, FALLBACK_COUNTRIES } from './data/sampleData';
 import { fetchWidgetsOnDashboard, activeMiceWidgetKey, fetchMasterCountries, fetchMasterSectors } from './services/widgetApi';
 import { USE_SAMPLE_DATA } from './config/apiConfig';
 
@@ -974,7 +974,7 @@ export default function App() {
     { name: 'Mega Events', short: 'Mega Events' },
   ];
   const [masterSectors, setMasterSectors]   = useState(FALLBACK_SECTORS);
-  const [masterCountries, setMasterCountries] = useState([]);
+  const [masterCountries, setMasterCountries] = useState(FALLBACK_COUNTRIES);
   useEffect(() => {
     fetchMasterSectors().then((data) => { if (data) setMasterSectors(data); });
     fetchMasterCountries().then((data) => { if (data) setMasterCountries(data); });
@@ -3885,8 +3885,8 @@ export default function App() {
                     updateActiveDashboardFilters({ industry: isAll ? 'all' : next.join(',') });
                   };
                   return (
+                    <>
                     <div className="filter-row-full">
-                      {/* Quarter */}
                       <div className="filter-chip-group">
                         <span className="filter-chip-label">Quarter</span>
                         <div className="filter-chip-row">
@@ -3898,9 +3898,8 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                      {/* separator */}
-                      <div className="filter-row-sep" />
-                      {/* Industry */}
+                    </div>
+                    <div className="filter-row-full">
                       <div className="filter-chip-group">
                         <span className="filter-chip-label">Industry</span>
                         <div className="filter-chip-row">
@@ -3913,9 +3912,10 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                      {/* Continent + Country — only when dashboard has geo-filter widgets */}
-                      {hasGeoFilterWidgets && (<>
-                        <div className="filter-row-sep" />
+                    </div>
+                    {/* Continent + Country — separate row, only when dashboard has geo-filter widgets */}
+                    {hasGeoFilterWidgets && (
+                      <div className="filter-row-full">
                         <div className="filter-chip-group">
                           <span className="filter-chip-label">Continent</span>
                           <select className="fp-select" value={selContinent}
@@ -3924,6 +3924,7 @@ export default function App() {
                             {continentOpts.map(c => <option key={c.continentName} value={c.continentName}>{c.continentName}</option>)}
                           </select>
                         </div>
+                        <div className="filter-row-sep" />
                         <div className="filter-chip-group">
                           <span className="filter-chip-label">Country / Nationality</span>
                           <select className="fp-select" value={selCountry}
@@ -3932,8 +3933,9 @@ export default function App() {
                             {countryOpts.map(c => <option key={c.countryCode} value={c.countryName}>{c.countryName}</option>)}
                           </select>
                         </div>
-                      </>)}
-                    </div>
+                      </div>
+                    )}
+                    </>
                   );
                 })()}
                 {!readOnly ? (
