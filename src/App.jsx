@@ -3564,6 +3564,7 @@ export default function App() {
                   data-widget-type={widget.type}
                   data-widget-id={widget.id}
                   data-widget-title={widget.title}
+                  onDoubleClick={!readOnly && isTextboxWidget ? () => setActiveConfigWidgetId(widget.id) : undefined}
                   style={isNarrowView ? {
                     position: 'relative',
                     left: 'auto',
@@ -3631,7 +3632,27 @@ export default function App() {
                 {isTextboxWidget && !readOnly ? (
                   <div className="textbox-edit-overlay" aria-hidden="true">
                     <div className="textbox-drag-zone drag-handle" onMouseDown={startWidgetMove} />
-                    <div className="textbox-edit-controls">{widgetControls}</div>
+                    <div className="textbox-edit-controls">
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="Edit text"
+                        title="Edit text (double-click)"
+                        onClick={() => setActiveConfigWidgetId(widget.id)}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:14,height:14}}>
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button remove-toggle"
+                        aria-label="Remove widget"
+                        title="Remove"
+                        onClick={() => removeWidget(widget.id)}
+                      >×</button>
+                    </div>
                   </div>
                 ) : null}
 
