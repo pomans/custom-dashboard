@@ -1987,16 +1987,36 @@ button {
 }
 
 .dashboard-filters.on-canvas .resize-handle {
+  border-radius: 4px;
+  background: repeating-linear-gradient(
+    0deg,
+    #64748b,
+    #64748b 2px,
+    #e2e8f0 2px,
+    #e2e8f0 4px
+  );
+}
+
+/* Right edge — width resize */
+.dashboard-filters.on-canvas .filter-resize-e {
   width: 8px;
   height: 40px;
   right: 4px;
-  bottom: auto;
   top: 50%;
   transform: translateY(-50%);
-  border-radius: 4px;
   cursor: ew-resize;
+}
+
+/* Bottom edge — height resize */
+.dashboard-filters.on-canvas .filter-resize-s {
+  height: 8px;
+  width: 60px;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
   background: repeating-linear-gradient(
-    0deg,
+    90deg,
     #64748b,
     #64748b 2px,
     #e2e8f0 2px,
@@ -2007,6 +2027,7 @@ button {
 .dashboard-filters.on-canvas.editable {
   border: 1.5px solid #9BBADC;
   cursor: default;
+  position: relative;
 }
 
 .filter-drag-handle {
@@ -4432,7 +4453,9 @@ button.drill-node:focus .drill-bar-fill {
 }
 
 .widget-card:hover .resize-handle,
-.widget-card.selected .resize-handle {
+.widget-card.selected .resize-handle,
+.dashboard-filters.on-canvas.editable:hover .resize-handle,
+.dashboard-filters.on-canvas.editable .resize-handle:focus {
   opacity: 1;
 }
 

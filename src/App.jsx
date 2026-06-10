@@ -1776,6 +1776,18 @@ export default function App() {
         return;
       }
 
+      if (action.kind === 'resize-filter-h') {
+        updateActiveDashboard((dash) => ({
+          ...dash,
+          filterPanel: {
+            ...(dash.filterPanel || { x: 0, y: 0, w: 12, h: 3 }),
+            h: Math.max(2, action.origin.h + snapY),
+          }
+        }), { recordHistory: false });
+        if (snapY !== 0) gestureChangedRef.current = true;
+        return;
+      }
+
       setWidgets(
         (prev) =>
           prev.map((item) => {
@@ -1864,7 +1876,7 @@ export default function App() {
         gestureChangedRef.current &&
         gestureSnapshotRef.current &&
         (action.kind === 'move' || action.kind === 'move-selection' || action.kind === 'resize' ||
-         action.kind === 'move-filter' || action.kind === 'resize-filter')
+         action.kind === 'move-filter' || action.kind === 'resize-filter' || action.kind === 'resize-filter-h')
       ) {
         pushHistorySnapshot(gestureSnapshotRef.current);
       }
@@ -3938,11 +3950,11 @@ export default function App() {
                     </>
                   );
                 })()}
-                {!readOnly ? (
+                {!readOnly ? (<>
                   <button
                     type="button"
-                    aria-label="Resize filter panel"
-                    className="resize-handle"
+                    aria-label="Resize filter panel width"
+                    className="resize-handle filter-resize-e"
                     onMouseDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
@@ -3956,7 +3968,24 @@ export default function App() {
                       });
                     }}
                   />
-                ) : null}
+                  <button
+                    type="button"
+                    aria-label="Resize filter panel height"
+                    className="resize-handle filter-resize-s"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      gestureSnapshotRef.current = cloneWorkspace(workspace);
+                      gestureChangedRef.current = false;
+                      setAction({
+                        kind: 'resize-filter-h',
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        origin: { h: fp.h ?? 3 }
+                      });
+                    }}
+                  />
+                </>) : null}
               </section>
             );
           })() : null}
