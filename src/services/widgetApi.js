@@ -23,6 +23,9 @@ const WIDGET_API_KEYS = {
   miceEventsChart:             ['miceEventsChart'],
   miceRevenueChart:            ['miceRevenueChart'],
   miceVisitorsChart:           ['miceVisitorsChart'],
+  miceStayingPeriodChart:      ['miceStayingPeriodChart'],
+  miceSpendingPerDayChart:     ['miceSpendingPerDayChart'],
+  miceSpendingPerTripChart:    ['miceSpendingPerTripChart'],
   miceEventsQuarterlyChart:    ['miceEventsQuarterlyChart'],
   miceVisitorsQuarterlyChart:  ['miceVisitorsQuarterlyChart'],
   miceNationalityPerformance:  ['miceNationalityPerformance'],
@@ -40,6 +43,9 @@ const FETCH_PRIORITY = [
   'miceEventsChart',           // 20 rows annual
   'miceRevenueChart',          // 20 rows annual
   'miceVisitorsChart',         // 20 rows annual
+  'miceStayingPeriodChart',    // 20 rows annual (fiscal-only)
+  'miceSpendingPerDayChart',   // 20 rows annual (fiscal-only)
+  'miceSpendingPerTripChart',  // 20 rows annual (fiscal-only)
   'miceEventsQuarterlyChart',  // 4 rows (Q1–Q4 CASE WHEN)
   'miceVisitorsQuarterlyChart',// 4 rows
   'miceNationalityPerformance',// ~20 nationality rows + country JOIN
@@ -74,11 +80,15 @@ async function asyncPool(tasks, concurrency) {
 // ─────────────────────────────────────────────────────────────────────────────
 function buildParams(filter) {
   const f = filter || {};
+  // Single-year mode (yearMin === yearMax) wins over stale f.year, then fall back to yearMax / year / 2025.
+  const selectedYear =
+    (f.yearMin != null && f.yearMin === f.yearMax) ? f.yearMin
+    : (f.year ?? f.yearMax ?? 2025);
   const params = {
     // ── Core filters (dashboard-level) ─────────────────────────────────────
     market:      f.market      || 'International',   // International | Domestic | all
     yearMode:    f.yearMode    || 'calendar',         // calendar | fiscal
-    year:        f.year        ?? 2025,              // single selected year
+    year:        selectedYear,                        // single selected year
     yearMin:     f.yearMin     ?? f.yearFrom ?? 2007,// range start
     yearMax:     f.yearMax     ?? f.yearTo   ?? 2025,// range end
     industry:    f.industry    || 'all',              // Meetings | Incentives | … | all
@@ -103,7 +113,7 @@ function buildQuarterlyParams(filter) {
   const params = {
     market:   f.market   || 'International',
     yearMode: f.yearMode || 'calendar',
-    year:     f.year     ?? f.yearMax ?? 2025,
+    year:     (f.yearMin != null && f.yearMin === f.yearMax) ? f.yearMin : (f.year ?? f.yearMax ?? 2025),
     industry: f.industry || 'all',
     nocache:  'true',
   };
@@ -141,41 +151,22 @@ const sumF   = (arr, k) => arr.reduce((s, r) => s + Number(r[k] || 0), 0);
 const num    = (v)      => Number(v) || 0;
 const numYoy = (v)      => (v == null || v === '' || (typeof v === 'string' && v.trim() === '')) ? null : Number(v);
 
-// transformKpis — ใช้ _ly columns จาก view (pre-computed last year values)
-// Fallback: ถ้า year ไม่ match → ใช้ latest year ที่มีใน rows
-function transformKpis(rows, year) {
-  let cur = rows.filter((r) => Number(r.year) === year);
-  if (!cur.length) {
-    // fallback: ใช้ latest year ที่ Blendata ส่งมา
-    const maxYear = Math.max(...rows.map((r) => Number(r.year)));
-    cur = rows.filter((r) => Number(r.year) === maxYear);
-  }
-
-  const events     = sumF(cur, 'no_of_events');
-  const lastEvents = sumF(cur, 'no_of_events_ly');
-  const visitors   = sumF(cur, 'no_of_visitors');
-  const lastVis    = sumF(cur, 'no_of_visitors_ly');
-
-  // Top industry by no_of_events (view may or may not have sector_name breakdown)
-  const bySector = {};
-  cur.forEach((r) => {
-    const key = r.sector_name || 'All';
-    bySector[key] = (bySector[key] || 0) + num(r.no_of_events);
-  });
-  const topIndustry = Object.entries(bySector).sort((a, b) => b[1] - a[1])[0]?.[0] || '-';
-
-  // Use pre-computed yoy_event from view when possible (avoids /0 edge cases)
-  const eventsGrowth  = lastEvents ? yoyPct(events, lastEvents) : num(cur[0]?.yoy_event);
-  const visitorsGrowth = lastVis   ? yoyPct(visitors, lastVis)  : num(cur[0]?.yoy_visitors);
-
+// transformKpis — new shape: single row with 4 KPI fields per spec
+//   { no_of_events, no_of_events_ly, no_of_visitors, no_of_visitors_ly, top_nationality, top_industry }
+function transformKpis(rows /* , year */) {
+  const r = rows?.[0] || {};
+  const events     = num(r.no_of_events);
+  const lastEvents = num(r.no_of_events_ly);
+  const visitors   = num(r.no_of_visitors);
+  const lastVis    = num(r.no_of_visitors_ly);
   return {
     events,
-    eventsGrowth,
+    eventsGrowth:        lastEvents ? yoyPct(events, lastEvents) : 0,
     visitors,
-    visitorsGrowth,
-    topNationality:       '-',   // from miceNationalityPerformance separately
+    visitorsGrowth:      lastVis ? yoyPct(visitors, lastVis) : 0,
+    topNationality:       r.top_nationality || '-',
     topNationalityGrowth: 0,
-    topIndustry,
+    topIndustry:          r.top_industry || '-',
   };
 }
 
@@ -243,11 +234,27 @@ function transformMatrixView(rows) {
   function pivot(arr, dimKey) {
     const m = {};
     arr.forEach((r) => {
-      if (!m[r.nationality]) m[r.nationality] = { nationality: r.nationality, Total: 0 };
-      m[r.nationality][r[dimKey]] = Number(r.visitors || 0);
-      m[r.nationality].Total += Number(r.visitors || 0);
+      const nat = r.nationality;
+      const dim = r[dimKey];
+      const cur = Number(r.visitors || 0);
+      const ly  = Number(r.visitors_ly || 0);
+      if (!m[nat]) m[nat] = { nationality: nat, Total: 0, TotalLy: 0, _ly: {} };
+      m[nat][dim] = cur;
+      m[nat]._ly[dim] = ly;
+      m[nat].Total += cur;
+      m[nat].TotalLy += ly;
     });
-    return Object.values(m).sort((a, b) => b.Total - a.Total);
+    return Object.values(m)
+      .map((row) => ({
+        ...row,
+        // %Growth per dimension
+        ...Object.fromEntries(Object.entries(row._ly).map(([dim, prv]) => [
+          `${dim}__yoy`,
+          prv ? ((row[dim] - prv) / Math.abs(prv)) * 100 : (row[dim] > 0 ? 100 : 0),
+        ])),
+        TotalYoy: row.TotalLy ? ((row.Total - row.TotalLy) / Math.abs(row.TotalLy)) * 100 : (row.Total > 0 ? 100 : 0),
+      }))
+      .sort((a, b) => b.Total - a.Total);
   }
   return {
     nationalityIndustryMatrix2025: pivot(rows.filter((r) => r.view_type === 'industry'), 'dimension'),
@@ -293,7 +300,10 @@ export function transformDrillFlow(rows) {
 // Apply fetched rows to the fixedProfile object
 // ─────────────────────────────────────────────────────────────────────────────
 function applyToProfile(apiKey, rows, filter, profile) {
-  const year = filter?.year ?? 2025;
+  const f = filter || {};
+  const year =
+    (f.yearMin != null && f.yearMin === f.yearMax) ? f.yearMin
+    : (f.year ?? f.yearMax ?? 2025);
   switch (apiKey) {
     case 'miceKpis':
       profile.kpis = transformKpis(rows, year);
@@ -306,6 +316,15 @@ function applyToProfile(apiKey, rows, filter, profile) {
       break;
     case 'miceVisitorsChart':
       profile.charts.visitors = transformAnnualSeries(rows, 'no_of_visitors', 'no_of_visitors_ly');
+      break;
+    case 'miceStayingPeriodChart':
+      profile.charts.stayingPeriod = transformAnnualSeries(rows, 'staying_period', 'staying_period_ly');
+      break;
+    case 'miceSpendingPerDayChart':
+      profile.charts.spendingPerDay = transformAnnualSeries(rows, 'spending_per_head_per_day', 'spending_per_head_per_day_ly');
+      break;
+    case 'miceSpendingPerTripChart':
+      profile.charts.spendingPerTrip = transformAnnualSeries(rows, 'spending_per_head_per_trip', 'spending_per_head_per_trip_ly');
       break;
     case 'miceEventsQuarterlyChart':
       // SQL: year, quarter('Q1'..'Q4'), no_of_events, no_of_events_ly, yoy_event

@@ -3,7 +3,7 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
-import { datasetLibrary, widgetCatalog, FALLBACK_COUNTRIES } from './data/sampleData';
+import { datasetLibrary, widgetCatalog, FALLBACK_COUNTRIES, buildLiveDatasets } from './data/sampleData';
 import { fetchWidgetsOnDashboard, activeMiceWidgetKey, fetchMasterCountries, fetchMasterSectors } from './services/widgetApi';
 import { USE_SAMPLE_DATA } from './config/apiConfig';
 
@@ -39,6 +39,9 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceEventsChart',
   'miceRevenueChart',
   'miceVisitorsChart',
+  'miceStayingPeriodChart',
+  'miceSpendingPerDayChart',
+  'miceSpendingPerTripChart',
   'miceEventsQuarterlyChart',      // ← เพิ่ม: ต้องอยู่ในนี้เพื่อให้ fetchWidgetsOnDashboard fetch data
   'miceVisitorsQuarterlyChart',    // ← เพิ่ม: เดียวกัน
   'miceKpis',
@@ -345,7 +348,7 @@ const PaletteWidgetThumbnail = ({ type }) => {
   }
 
   /* ── Annual line chart ───────────────────────── */
-  if (type === 'miceEventsChart' || type === 'miceRevenueChart' || type === 'miceVisitorsChart' || type === 'line' || type === 'chart') {
+  if (type === 'miceEventsChart' || type === 'miceRevenueChart' || type === 'miceVisitorsChart' || type === 'miceStayingPeriodChart' || type === 'miceSpendingPerDayChart' || type === 'miceSpendingPerTripChart' || type === 'line' || type === 'chart') {
     const pts = [[10,40],[18,34],[26,29],[34,31],[42,20],[50,15],[58,17],[66,13]];
     const d = pts.map(([x,y],i) => `${i===0?'M':'L'}${x},${y}`).join(' ');
     const fd = pts.slice(-3).map(([x,y]) => `L${x},${y}`).join(' ').replace('L','M') + ' L72,11';
@@ -697,13 +700,21 @@ const normalizeWidget = (widget) => {
     };
   }
 
-  const fixedDataset = datasetLibrary[fixedDatasetId];
-  const shouldResetMapping = widget.dataset !== fixedDatasetId || !widget.mapping;
-  const defaultMapping = buildDefaultMapping(widget.type, fixedDataset);
+  // Configurable widgets: only allow MICE-prefixed datasets. Migrate legacy non-MICE
+  // saved datasets back to template default (miceStatistics) and reset mapping.
+  const isFixed = NO_CONFIG_WIDGET_TYPES.includes(widget.type);
+  const looksMice = typeof widget.dataset === 'string' && /^mice/i.test(widget.dataset);
+  const datasetId = isFixed
+    ? fixedDatasetId
+    : (looksMice ? widget.dataset : fixedDatasetId);
+
+  const resolvedDataset = datasetLibrary[datasetId];
+  const shouldResetMapping = widget.dataset !== datasetId || !widget.mapping;
+  const defaultMapping = buildDefaultMapping(widget.type, resolvedDataset);
 
   return {
     ...widget,
-    dataset: fixedDatasetId,
+    dataset: datasetId,
     mapping: shouldResetMapping ? defaultMapping : { ...defaultMapping, ...widget.mapping },
     textStyle: widget.textStyle ? { ...widget.textStyle } : {},
     preview: shouldDisablePreview ? false : Boolean(widget.preview),
@@ -983,6 +994,7 @@ export default function App() {
   // ── API data state ─────────────────────────────────────────────────────────
   const [miceApiFixedProfile, setMiceApiFixedProfile] = useState(null);
   const [miceApiStatus, setMiceApiStatus] = useState('idle'); // idle | loading | loaded | error
+  const [miceApiError, setMiceApiError] = useState(null);     // string | null
   const [refreshKey, setRefreshKey] = useState(0);            // increment → force reload (nocache)
 
   const dashboards = workspace.dashboards;
@@ -1013,6 +1025,12 @@ export default function App() {
   // ── Fetch only the widgets currently on the dashboard, with Spark concurrency guard ──
   // Re-runs when: filter values change OR the set of MICE widget types on the dashboard changes
   const activeMiceKey = activeMiceWidgetKey(widgets);
+  // Also re-fetch when configurable widgets bound to MICE datasets change
+  const configurableMiceKey = widgets
+    .filter((w) => !NO_CONFIG_WIDGET_TYPES.includes(w.type) && typeof w.dataset === 'string' && /^mice/i.test(w.dataset))
+    .map((w) => `${w.id}:${w.dataset}`)
+    .sort()
+    .join(',');
   // Sync editingName when active dashboard changes (e.g. user switches dashboards)
   useEffect(() => {
     setEditingName(activeDashboard?.name ?? '');
@@ -1020,7 +1038,27 @@ export default function App() {
 
   useEffect(() => {
     const miceWidgets = widgets.filter((w) => NO_CONFIG_WIDGET_TYPES.includes(w.type));
-    if (!miceWidgets.length) return undefined;
+    // Also pick up configurable widgets bound to a MICE dataset — they need API data too,
+    // but they aren't tied 1:1 to a single endpoint. Inject synthetic widget records for the
+    // baseline endpoints that cover most field mappings (nationality, annual, drill flow).
+    const configurableMice = widgets.some(
+      (w) => !NO_CONFIG_WIDGET_TYPES.includes(w.type)
+        && typeof w.dataset === 'string'
+        && /^mice/i.test(w.dataset)
+    );
+    const augmented = configurableMice
+      ? [
+          ...miceWidgets,
+          { type: 'miceNationalityPerformance' },
+          { type: 'miceEventsChart' },
+          { type: 'miceRevenueChart' },
+          { type: 'miceVisitorsChart' },
+          { type: 'miceDrillFlow' },
+        ]
+      : miceWidgets;
+    if (!augmented.length) return undefined;
+    // Use augmented list for the fetch instead of just fixed widgets below.
+    const widgetsForFetch = augmented;
 
     // Sample-data mode: ข้าม API fetch ทั้งหมด ใช้ sampleData fixedProfile โดยตรง
     if (USE_SAMPLE_DATA) {
@@ -1035,24 +1073,35 @@ export default function App() {
     const { signal } = abortController;
 
     setMiceApiStatus('loading');
+    setMiceApiError(null);
     // refreshKey > 0 → force reload: ส่ง nocache=true เพื่อ bypass server MemoryCache
     const filterForFetch = refreshKey > 0
       ? { ...activeDashboardFilters, nocache: true }
       : activeDashboardFilters;
-    fetchWidgetsOnDashboard(miceWidgets, filterForFetch, signal)
+    fetchWidgetsOnDashboard(widgetsForFetch, filterForFetch, signal)
       .then((profile) => {
-        if (!signal.aborted && profile) {
-          setMiceApiFixedProfile(profile);
-          setMiceApiStatus('loaded');
+        if (!signal.aborted) {
+          if (profile) {
+            setMiceApiFixedProfile(profile);
+            setMiceApiStatus('loaded');
+            setMiceApiError(null);
+          } else {
+            setMiceApiStatus('error');
+            setMiceApiError('ไม่ได้รับข้อมูลจาก API');
+          }
         }
       })
       .catch((err) => {
-        if (!signal.aborted) setMiceApiStatus('error');
+        if (!signal.aborted) {
+          setMiceApiStatus('error');
+          setMiceApiError(err?.message || String(err) || 'เชื่อมต่อ API ไม่สำเร็จ');
+        }
       });
     return () => { abortController.abort(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeMiceKey,                           // widget types on dashboard changed
+    activeMiceKey,                           // fixed widget types on dashboard changed
+    configurableMiceKey,                     // configurable widgets bound to MICE datasets changed
     activeDashboardFilters?.market,
     activeDashboardFilters?.yearMode,
     activeDashboardFilters?.year,
@@ -1088,7 +1137,13 @@ export default function App() {
     : widgets;
 
   const activeConfigWidget = widgets.find((widget) => widget.id === activeConfigWidgetId) || null;
-  const activeConfigDataset = activeConfigWidget ? datasetLibrary[activeConfigWidget.dataset] : null;
+  // Effective dataset library = sample data + live datasets (built from API fixedProfile)
+  const liveDatasets = useMemo(() => buildLiveDatasets(miceApiFixedProfile), [miceApiFixedProfile]);
+  const effectiveDatasetLibrary = useMemo(
+    () => ({ ...datasetLibrary, ...liveDatasets }),
+    [liveDatasets]
+  );
+  const activeConfigDataset = activeConfigWidget ? effectiveDatasetLibrary[activeConfigWidget.dataset] : null;
   const selectedWidgets = widgets.filter((widget) => selectedWidgetIds.includes(widget.id));
   const filterPanelGridH = filterPanelLayout ? Math.max(2, filterPanelLayout.h ?? 3) : 0;
   const effectiveMaxRow = filterPanelLayout
@@ -1371,14 +1426,32 @@ export default function App() {
   }, [readOnly, viewMode]);
 
   const fitToScreen = useCallback(() => {
-    if (!widgets.length || !stageWrapRef.current) return;
-    const rect = stageWrapRef.current.getBoundingClientRect();
-    const vw = stageViewportWidth ?? rect.width;
+    if (!widgets.length && !filterPanelLayout) return;
+    if (!stageWrapRef.current || !canvasRef.current) return;
+    const wrapRect = stageWrapRef.current.getBoundingClientRect();
+    const stageEl = stageWrapRef.current.querySelector('.dashboard-stage');
+    const stageMargin = stageEl ? parseFloat(getComputedStyle(stageEl).marginLeft) || 0 : 0;
+    const vw = wrapRect.width - stageMargin;
     if (!vw) return;
-    const PADDING = 32;
-    const zoom = (vw - PADDING) / occupiedContentWidth;
+    const PADDING = 16;
+    // Measure actual rendered span of widgets + filter panel
+    const items = canvasRef.current.querySelectorAll('.widget-card, .dashboard-filters');
+    let minLeft = Infinity;
+    let maxRight = -Infinity;
+    items.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0) return;
+      if (r.left < minLeft) minLeft = r.left;
+      if (r.right > maxRight) maxRight = r.right;
+    });
+    const z = canvasZoom || 1;
+    const spanScaled = maxRight > minLeft ? maxRight - minLeft : 0;
+    const actualWidth = spanScaled > 0
+      ? spanScaled / z
+      : Math.max(cellWidth, (effectiveMaxCol - effectiveMinCol) * cellWidth);
+    const zoom = (vw - PADDING) / actualWidth;
     setCanvasZoom(Math.max(ZOOM_MIN, Math.min(1, Math.round(zoom * 100) / 100)));
-  }, [stageViewportWidth, occupiedContentWidth, widgets.length]);
+  }, [effectiveMaxCol, effectiveMinCol, cellWidth, widgets.length, filterPanelLayout, canvasZoom]);
 
   // Auto Resize — ปรับขนาดทุก widget ให้พอดีกับ viewport (MIN_GRID_COLS columns)
 
@@ -1387,7 +1460,7 @@ export default function App() {
     if (isNarrowView) return;
     fitToScreen();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDashboardId, viewMode, isNarrowView]);
+  }, [activeDashboardId, viewMode, isNarrowView, stageViewportWidth]);
 
   // Keep dashboardsRef current for hashchange handler (avoids stale closure)
   useEffect(() => { dashboardsRef.current = dashboards; }, [dashboards]);
@@ -2296,12 +2369,73 @@ export default function App() {
 
     const { numericFields, dimensionFields } = getFieldGroups(dataset);
 
+    // Dataset selector — appears on top of mapping controls for configurable widget types.
+    // Only show MICE-related datasets (sample miceStatistics + live API-derived datasets)
+    // AND only those that have the field shape needed by this widget type.
+    const isDatasetCompatible = (ds, widgetType) => {
+      const fields = ds?.fields || [];
+      if (!fields.length) return false;
+      const numericFields   = fields.filter((f) => f.type === 'number');
+      const dimensionFields = fields.filter((f) => f.type !== 'number');
+      switch (widgetType) {
+        // X-axis + ≥1 numeric series
+        case 'line':
+        case 'bar':
+        case 'chart':
+          return fields.length >= 2 && numericFields.length >= 1;
+        // label (dim) + value (numeric)
+        case 'pie':
+        case 'treemap':
+        case 'rankingList':
+          return dimensionFields.length >= 1 && numericFields.length >= 1;
+        // single numeric metric
+        case 'summaryCard':
+          return numericFields.length >= 1;
+        // KPI card can show numeric metric or category (top-X label)
+        case 'kpiCard':
+          return numericFields.length >= 1 || dimensionFields.length >= 1;
+        // Table just needs ≥2 fields
+        case 'table':
+          return fields.length >= 2;
+        default:
+          return true;
+      }
+    };
+    const datasetOptions = Object.values(effectiveDatasetLibrary)
+      .filter((ds) => /^mice/i.test(ds.id))
+      .filter((ds) => isDatasetCompatible(ds, widget.type));
+    const datasetPicker = (
+      <label className="dataset-picker">
+        <span>Data Source</span>
+        <select
+          value={widget.dataset || ''}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            const nextDataset = effectiveDatasetLibrary[nextId];
+            const nextMapping = buildDefaultMapping(widget.type, nextDataset);
+            updateWorkspace((prev) => ({
+              ...prev,
+              dashboards: prev.dashboards.map((d) => d.id !== prev.activeDashboardId ? d : {
+                ...d,
+                widgets: d.widgets.map((w) => w.id !== widget.id ? w : { ...w, dataset: nextId, mapping: nextMapping }),
+              }),
+            }));
+          }}
+        >
+          {datasetOptions.map((ds) => (
+            <option key={ds.id} value={ds.id}>{ds.label}</option>
+          ))}
+        </select>
+      </label>
+    );
+
     if (widget.type === 'line' || widget.type === 'bar' || widget.type === 'chart') {
       const yFields = widget.mapping?.yFields || [];
       const selectedSeriesCount = yFields.length;
 
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           {widget.type === 'chart' ? (
             <label>
               <span>Chart Type</span>
@@ -2369,6 +2503,7 @@ export default function App() {
     if (widget.type === 'pie') {
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           <label>
             <span>Label Field</span>
             <select
@@ -2417,6 +2552,7 @@ export default function App() {
     if (widget.type === 'treemap') {
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           <label>
             <span>Group Field</span>
             <select
@@ -2466,6 +2602,7 @@ export default function App() {
     if (widget.type === 'summaryCard') {
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           <label>
             <span>Metric Field</span>
             <select
@@ -2541,6 +2678,7 @@ export default function App() {
     if (widget.type === 'kpiCard') {
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           <label>
             <span>Display Mode</span>
             <select
@@ -2661,6 +2799,7 @@ export default function App() {
     if (widget.type === 'rankingList') {
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           <label>
             <span>Label Field</span>
             <select
@@ -2723,6 +2862,7 @@ export default function App() {
 
       return (
         <div className="mapping-grid">
+          {datasetPicker}
           <div className="mapping-group">
             <div className="mapping-group-header">
               <span>Visible Columns</span>
@@ -3465,32 +3605,115 @@ export default function App() {
             ) : null}
 
             {displayWidgets.map((widget) => {
-              const baseDataset = datasetLibrary[widget.dataset];
-              // Inject API-fetched fixedProfile into miceStatistics dataset,
-              // merging only the keys that were successfully fetched (non-null).
-              const dataset = (widget.dataset === 'miceStatistics' && miceApiFixedProfile)
-                ? {
-                    ...baseDataset,
-                    fixedProfile: (() => {
-                      const merged = {
-                        ...(baseDataset?.fixedProfile || {}),
-                        ...miceApiFixedProfile,
-                        charts: {
-                          ...(baseDataset?.fixedProfile?.charts || {}),
-                          ...(miceApiFixedProfile.charts || {}),
+              const baseDataset = effectiveDatasetLibrary[widget.dataset];
+              // Build dataset with live API data only. If API hasn't returned data and
+              // USE_SAMPLE_DATA is off, expose empty records — the widget renderer will
+              // surface the API error instead of silently showing sample numbers.
+              const dataset = (widget.dataset === 'miceStatistics')
+                ? (miceApiFixedProfile
+                    ? {
+                        ...baseDataset,
+                        // Override records with live API data (sankeyFlow → flat rows).
+                        records: (() => {
+                          const yearVal = Number(activeDashboardFilters?.yearMax ?? activeDashboardFilters?.year ?? new Date().getFullYear());
+                          const marketVal = activeDashboardFilters?.market || 'International';
+                          const yearModeVal = activeDashboardFilters?.yearMode || 'calendar';
+                          // Preferred: nationalityPerformance gives correct per-nationality totals
+                          // (matches PBI Nationality Performance widget). Sankey breaks down into
+                          // industry/quarter which can sum to different values due to query joins.
+                          const nat = miceApiFixedProfile.nationalityPerformance;
+                          if (nat?.length) {
+                            return nat
+                              .filter((r) => r.nationality && String(r.nationality).trim())
+                              .map((r) => ({
+                                year: yearVal,
+                                quarter: 0, quarterLabel: '',
+                                market: marketVal, yearMode: yearModeVal,
+                                industry: '',
+                                nationality: r.nationality || '',
+                                country: r.nationality || '',
+                                continent: r.continent || '',
+                                miceVisitors: Number(r.current || 0),
+                                miceVisitorsLastYear: Number(r.previous || 0),
+                                yoy: Number(r.yoy || 0),
+                                miceEvents: 0, revenueGenerated: 0,
+                                avgStayDays: 0, avgSpendPerTrip: 0, avgSpendPerDay: 0,
+                              }));
+                          }
+                          // Fallback 1: drill flow — granularity per nationality × industry × quarter.
+                          const flow = miceApiFixedProfile.sankeyFlow;
+                          if (flow?.nationality?.length) {
+                            const rows = [];
+                            flow.nationality.forEach((natRow) => {
+                              (natRow.industry || []).forEach((ind) => {
+                                (ind.quarter || []).forEach((q) => {
+                                  rows.push({
+                                    year: yearVal,
+                                    quarter: Number(String(q.label || '').replace(/\D/g, '')) || 0,
+                                    quarterLabel: q.label,
+                                    market: marketVal,
+                                    yearMode: yearModeVal,
+                                    industry: ind.label,
+                                    nationality: natRow.label,
+                                    country: natRow.label,
+                                    continent: '',
+                                    miceVisitors: Number(q.value || 0),
+                                    miceEvents: 0,
+                                    revenueGenerated: 0,
+                                    avgStayDays: 0,
+                                    avgSpendPerTrip: 0,
+                                    avgSpendPerDay: 0,
+                                  });
+                                });
+                              });
+                            });
+                            return rows;
+                          }
+                          // Fallback 2: annual charts — yearly aggregates only (no nationality/industry).
+                          const events = miceApiFixedProfile.charts?.events || [];
+                          const revenue = miceApiFixedProfile.charts?.revenue || [];
+                          const visitors = miceApiFixedProfile.charts?.visitors || [];
+                          const stay = miceApiFixedProfile.charts?.stayingPeriod || [];
+                          const sDay = miceApiFixedProfile.charts?.spendingPerDay || [];
+                          const sTrip = miceApiFixedProfile.charts?.spendingPerTrip || [];
+                          const years = Array.from(new Set([
+                            ...events.map(r => r.year),
+                            ...revenue.map(r => r.year),
+                            ...visitors.map(r => r.year),
+                          ])).sort((a, b) => a - b);
+                          if (years.length) {
+                            const byY = (arr, y) => arr.find(r => r.year === y);
+                            return years.map((y) => ({
+                              year: y,
+                              quarter: 0, quarterLabel: '',
+                              market: marketVal, yearMode: yearModeVal,
+                              industry: '', nationality: '', country: '', continent: '',
+                              miceVisitors:     byY(visitors, y)?.value ?? 0,
+                              miceEvents:       byY(events, y)?.value ?? 0,
+                              revenueGenerated: byY(revenue, y)?.value ?? 0,
+                              avgStayDays:      byY(stay, y)?.value ?? 0,
+                              avgSpendPerTrip:  byY(sTrip, y)?.value ?? 0,
+                              avgSpendPerDay:   byY(sDay, y)?.value ?? 0,
+                            }));
+                          }
+                          return USE_SAMPLE_DATA ? (baseDataset?.records || []) : [];
+                        })(),
+                        fixedProfile: {
+                          ...(USE_SAMPLE_DATA ? (baseDataset?.fixedProfile || {}) : {}),
+                          ...miceApiFixedProfile,
+                          charts: {
+                            ...(USE_SAMPLE_DATA ? (baseDataset?.fixedProfile?.charts || {}) : {}),
+                            ...(miceApiFixedProfile.charts || {}),
+                          },
+                          chartsQuarterly: {
+                            ...(USE_SAMPLE_DATA ? (baseDataset?.fixedProfile?.chartsQuarterly || {}) : {}),
+                            ...(miceApiFixedProfile.chartsQuarterly || {}),
+                          },
                         },
-                        chartsQuarterly: {
-                          ...(baseDataset?.fixedProfile?.chartsQuarterly || {}),
-                          ...(miceApiFixedProfile.chartsQuarterly || {}),
-                        },
-                      };
-                      // Keep sampleData fallback for any key the API returned null for
-                      Object.keys(merged).forEach((k) => {
-                        if (merged[k] === null) merged[k] = baseDataset?.fixedProfile?.[k];
-                      });
-                      return merged;
-                    })()
-                  }
+                      }
+                    : (USE_SAMPLE_DATA
+                        ? baseDataset
+                        : { ...baseDataset, records: [], fixedProfile: {} }))
                 : baseDataset;
               const widgetRecords = getWidgetRecords(widget, dataset);
               const isWidgetPreview = readOnly || widget.preview;
@@ -3685,6 +3908,8 @@ export default function App() {
                         widget.type !== 'miceEventsQuarterlyChart' &&
                         widget.type !== 'miceVisitorsQuarterlyChart'
                       }
+                      apiStatus={miceApiStatus}
+                      apiError={miceApiError}
                       globalFilter={activeDashboardFilters}
                     />
                   </div>
@@ -3879,16 +4104,67 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-                  {/* Year Range */}
+                  {/* Year — Single dropdown OR Range slider */}
                   <div className="filter-button-group" style={{ flex: '2' }}>
-                    <span>Year Range</span>
-                    <YearRangeSlider
-                      minYear={MICE_FILTER_OPTIONS.years[0] || 2007}
-                      maxYear={MICE_FILTER_OPTIONS.years[MICE_FILTER_OPTIONS.years.length - 1] || 2025}
-                      valueMin={activeDashboardFilters.yearMin ?? 2007}
-                      valueMax={activeDashboardFilters.yearMax ?? 2025}
-                      onChange={(min, max) => updateActiveDashboardFilters({ yearMin: min, yearMax: max })}
-                    />
+                    {(() => {
+                      const minY = MICE_FILTER_OPTIONS.years[0] || 2007;
+                      const maxY = MICE_FILTER_OPTIONS.years[MICE_FILTER_OPTIONS.years.length - 1] || 2025;
+                      const curMin = activeDashboardFilters.yearMin ?? minY;
+                      const curMax = activeDashboardFilters.yearMax ?? maxY;
+                      const mode = activeDashboardFilters.yearPickMode
+                        || (curMin === curMax ? 'single' : 'range');
+                      const yearOptions = [];
+                      for (let y = maxY; y >= minY; y--) yearOptions.push(y);
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                            <span>Year</span>
+                            <div className="filter-toggle-row" style={{ marginLeft: 'auto' }}>
+                              <button
+                                type="button"
+                                className={mode === 'single' ? 'active' : ''}
+                                onClick={() => updateActiveDashboardFilters({
+                                  yearPickMode: 'single',
+                                  yearMin: curMax,
+                                  yearMax: curMax,
+                                })}
+                              >Single</button>
+                              <button
+                                type="button"
+                                className={mode === 'range' ? 'active' : ''}
+                                onClick={() => updateActiveDashboardFilters({
+                                  yearPickMode: 'range',
+                                  yearMin: minY,
+                                  yearMax: maxY,
+                                })}
+                              >Range</button>
+                            </div>
+                          </div>
+                          {mode === 'single' ? (
+                            <select
+                              className="filter-select"
+                              value={String(curMin)}
+                              onChange={(e) => {
+                                const v = Number(e.target.value);
+                                updateActiveDashboardFilters({ yearMin: v, yearMax: v });
+                              }}
+                            >
+                              {yearOptions.map((y) => (
+                                <option key={y} value={y}>{y}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <YearRangeSlider
+                              minYear={minY}
+                              maxYear={maxY}
+                              valueMin={curMin}
+                              valueMax={curMax}
+                              onChange={(min, max) => updateActiveDashboardFilters({ yearMin: min, yearMax: max })}
+                            />
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 {/* Quarter · Industry · Continent · Country — compact inline row */}

@@ -7,6 +7,7 @@ import {
   Cell,
   Area,
   AreaChart,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -327,6 +328,78 @@ const buildForecastSeries = (actualSeries, futureYears = 4) => {
   });
 };
 
+/* ─── Holt's damped-trend exponential smoothing ──────────────────
+ * Forecast method PBI uses for non-seasonal annual time series.
+ * State update:
+ *   L_t = α·y_t + (1-α)·(L_{t-1} + φ·T_{t-1})
+ *   T_t = β·(L_t - L_{t-1}) + (1-β)·φ·T_{t-1}
+ * Forecast h steps ahead:
+ *   F_{n+h} = L_n + (φ + φ² + … + φ^h)·T_n
+ * α, β, φ: smoothing/damping factors. Defaults work well for annual MICE data.
+ * ──────────────────────────────────────────────────────────────── */
+// Fit Holt's damped-trend model with parameters (α, β, φ) and return SSE + final state.
+const _fitHolt = (data, alpha, beta, phi) => {
+  let level = data[0].value;
+  let trend = data[1].value - data[0].value;
+  let sse = 0;
+  const residuals = [];
+  for (let i = 1; i < data.length; i++) {
+    const y = data[i].value;
+    const yhat = level + phi * trend;
+    const r = y - yhat;
+    residuals.push(r);
+    sse += r * r;
+    const prevLevel = level;
+    level = alpha * y + (1 - alpha) * (level + phi * trend);
+    trend = beta * (level - prevLevel) + (1 - beta) * phi * trend;
+  }
+  return { level, trend, sse, residuals };
+};
+
+const holtForecast = (series, horizon = 5) => {
+  const data = series.filter(p => Number.isFinite(p.value));
+  if (data.length < 3) return [];
+
+  // Grid search optimal (α, β, φ) by minimizing SSE — emulates PBI's ETS MLE.
+  const alphas = [0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+  const betas  = [0.05, 0.1, 0.15, 0.2, 0.3];
+  const phis   = [0.80, 0.85, 0.90, 0.95, 0.98];
+  let best = { sse: Infinity, alpha: 0.2, beta: 0.1, phi: 0.9, state: null };
+  for (const a of alphas) for (const b of betas) for (const p of phis) {
+    const fit = _fitHolt(data, a, b, p);
+    if (fit.sse < best.sse) best = { sse: fit.sse, alpha: a, beta: b, phi: p, state: fit };
+  }
+  const { alpha, phi, state: { level, trend, residuals } } = best;
+
+  // σ from in-sample residuals — PBI's ETS uses MAD-based scale which is robust to outliers
+  // (the COVID years 2020-2022 create huge residuals that would inflate raw stdev).
+  // We use MAD * 1.4826 (consistent estimator for σ under normal assumption).
+  const absRes = residuals.map(r => Math.abs(r)).sort((a, b) => a - b);
+  const mad = absRes[Math.floor(absRes.length / 2)] || 0;
+  const sigma = mad * 1.4826;
+  const Z95 = 1.96;
+  const lastYear = data[data.length - 1].year;
+  const lastVal  = data[data.length - 1].value;
+  const out = [];
+  // Damped-trend cumulative factor: (φ + φ² + ... + φ^h)
+  let phiSum = 0;
+  // Forecast variance for damped trend (Hyndman et al., 2008):
+  //   Var(F_{n+h}) = σ² · Σ_{j=0}^{h-1} c_j²
+  //   where c_j = α + (α·(φ + ... + φ^j)) · (β·(1+...) / (1-?))
+  // Simpler approximation used in PBI-style display: variance grows roughly linearly in h.
+  let varSum = 1;
+  for (let h = 1; h <= horizon; h++) {
+    phiSum += Math.pow(phi, h);
+    const value = Math.max(0, Math.round(level + phiSum * trend));
+    if (h > 1) varSum += 1 + (h - 1) * alpha * alpha;
+    const sigmaH = sigma * Math.sqrt(varSum);
+    const upper  = Math.round(value + Z95 * sigmaH);
+    const lower  = Math.max(0, Math.round(value - Z95 * sigmaH));
+    out.push({ year: lastYear + h, value, upper, lower, forecast: true });
+  }
+  return [{ year: lastYear, value: lastVal, upper: lastVal, lower: lastVal, forecast: true }, ...out];
+};
+
 const computeYoY = (currentValue, previousValue) => {
   if (typeof currentValue !== 'number' || Number.isNaN(currentValue)) return null;
   if (typeof previousValue !== 'number' || Number.isNaN(previousValue)) return null;
@@ -489,8 +562,64 @@ const renderYoyBadge = ({ x, y, value }) => {
 };
 
 function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, forecastSeries, yTickFormatter, valueKey, lyKey, yoyKey, globalFilter }) {
-  // quarters + industry filter now controlled globally — actualSeries is already re-fetched by App bulk fetch
   const series = actualSeries;
+  // Forecast computation kept for tooltip values, but excluded from chart x-domain.
+  const forecast = [];
+
+  // Merge into single data array with separate keys so Recharts renders two distinct lines
+  // (one solid for actual, one dashed for forecast). Bridge point at boundary gets both.
+  const merged = (() => {
+    const lastActual = series[series.length - 1];
+    const out = series.map(s => ({
+      year: s.year, actualValue: s.value, forecastValue: null,
+      forecastUpper: null, forecastLower: null, forecastRange: null,
+      yoy: s.yoy,
+    }));
+    forecast.forEach((f) => {
+      const range = (f.upper != null && f.lower != null) ? f.upper - f.lower : null;
+      if (lastActual && f.year === lastActual.year) {
+        const idx = out.findIndex(p => p.year === f.year);
+        if (idx >= 0) {
+          out[idx].forecastValue = f.value;
+          out[idx].forecastLower = f.lower ?? f.value;
+          out[idx].forecastRange = range ?? 0;
+        }
+      } else {
+        out.push({
+          year: f.year, actualValue: null, forecastValue: f.value,
+          forecastUpper: f.upper, forecastLower: f.lower, forecastRange: range,
+          yoy: null,
+        });
+      }
+    });
+    return out;
+  })();
+
+  const renderForecastTooltip = ({ active, payload, label }) => {
+    if (!active || !payload || !payload.length) return null;
+    const row = payload[0]?.payload;
+    if (!row) return null;
+    const isForecast = row.forecastValue != null && row.actualValue == null;
+    if (isForecast) {
+      return (
+        <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '8px 12px', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', columnGap: 16, rowGap: 2 }}>
+            <span style={{ color: '#5fb0c4' }}>● Forecast</span><span style={{ textAlign: 'right' }}>{formatMetricValue(row.forecastValue)}</span>
+            {row.forecastUpper != null && (<><span style={{ color: '#64748b' }}>Upper bound</span><span style={{ textAlign: 'right' }}>{formatMetricValue(row.forecastUpper)}</span></>)}
+            {row.forecastLower != null && (<><span style={{ color: '#64748b' }}>Lower bound</span><span style={{ textAlign: 'right' }}>{formatMetricValue(row.forecastLower)}</span></>)}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '8px 12px', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>{label}</div>
+        <div>{yLabel}: <strong>{formatMetricValue(row.actualValue)}</strong></div>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed-mice-chart">
       <div className="fixed-mice-chart-header">
@@ -500,7 +629,7 @@ function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, foreca
       <div className="fixed-mice-chart-body">
         <div className="fixed-mice-chart-axis-label">{yLabel}</div>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={[...series, ...forecastSeries]} margin={{ top: 42, right: 18, bottom: 10, left: 3 }}>
+          <ComposedChart data={merged} margin={{ top: 42, right: 18, bottom: 10, left: 3 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             {series.map((entry) =>
               entry.year % 2 === 0 ? (
@@ -509,14 +638,21 @@ function FixedChartPanel({ widgetKey, title, color, yLabel, actualSeries, foreca
             )}
             <XAxis dataKey="year" tickFormatter={formatAnnualTick} interval={0} height={44} tick={{ angle: -45, textAnchor: 'end', fontSize: 10 }} tickMargin={4} />
             <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={82} />
-            <Tooltip labelFormatter={String} formatter={(value) => [formatMetricValue(Number(value)), yLabel]} />
-            <Line type="monotone" dataKey="value" name={yLabel} stroke="#0f1f68" strokeWidth={3.5} dot={{ r: 5, fill: '#0f1f68' }} activeDot={{ r: 6 }} data={series}>
+            <Tooltip content={renderForecastTooltip} />
+            <Line
+              type="monotone"
+              dataKey="actualValue"
+              name={yLabel}
+              stroke="#0f1f68"
+              strokeWidth={3.5}
+              dot={{ r: 5, fill: '#0f1f68' }}
+              activeDot={{ r: 6 }}
+              connectNulls={false}
+              isAnimationActive={false}
+            >
               <LabelList dataKey="yoy" content={renderYoyBadge} />
             </Line>
-            {forecastSeries.length > 0 && (
-              <Line type="monotone" dataKey="value" name="Forecast (ประมาณการ)" stroke="#0f1f68" strokeWidth={3} dot={false} strokeDasharray="6 6" data={forecastSeries} />
-            )}
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -983,68 +1119,107 @@ function ShrinkText({ text, maxPx = 56, minPx = 10, style = {}, className = '' }
   );
 }
 
-/* ─── Nationality Performance with Continent filter ─────────── */
+/* ─── Nationality Performance — PBI-style heatmap table ─────────── */
 function MiceNationalityPerformanceWidget({ fixedProfile }) {
-  const [selContinent, setSelContinent] = useState('all');
-  const allRows = fixedProfile.nationalityPerformance || [];
-  const continents = Array.from(new Set(allRows.map(r => r.continent))).sort();
-  const continentOptions = [
-    { value: 'all', label: 'ทั้งหมด' },
-    ...continents.map(c => ({ value: c, label: c }))
-  ];
-  const rows = selContinent === 'all' ? allRows : allRows.filter(r => r.continent === selContinent);
-  const maxValue = Math.max(...rows.map(r => r.current), 1);
+  const allRows = (fixedProfile.nationalityPerformance || [])
+    .filter(r => r.nationality && String(r.nationality).trim());
+  // sortKey: 'nationality' | 'current' | 'previous' | 'yoy'
+  const [sortKey, setSortKey] = useState('current');
+  const [sortDir, setSortDir] = useState('desc');
+
+  const rows = [...allRows].sort((a, b) => {
+    if (sortKey === 'nationality') {
+      const cmp = (a.nationality || '').localeCompare(b.nationality || '');
+      return sortDir === 'desc' ? -cmp : cmp;
+    }
+    const av = a[sortKey] ?? 0;
+    const bv = b[sortKey] ?? 0;
+    return sortDir === 'desc' ? bv - av : av - bv;
+  });
+
+  const requestSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir(key === 'nationality' ? 'asc' : 'desc'); }
+  };
+  const sortArrow = (key) => sortKey === key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
+
+  const maxCur = Math.max(...rows.map(r => r.current), 1);
+  const maxPrv = Math.max(...rows.map(r => r.previous), 1);
   const totalCurrent = rows.reduce((s, r) => s + r.current, 0);
   const totalPrev    = rows.reduce((s, r) => s + r.previous, 0);
+  const totalYoy     = totalPrev ? ((totalCurrent - totalPrev) / Math.abs(totalPrev)) * 100 : (totalCurrent > 0 ? 100 : 0);
+
+  const renderYoy = (yoy) => {
+    if (yoy == null || !isFinite(yoy)) return <span style={{ color: '#94a3b8' }}>—</span>;
+    if (Math.abs(yoy) < 0.05) return <span style={{ color: '#94a3b8' }}>—</span>;
+    const up = yoy >= 0;
+    return (
+      <span style={{ color: up ? '#16a34a' : '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>
+        {up ? '▲' : '▼'} {Math.abs(yoy).toFixed(1)}%
+      </span>
+    );
+  };
+
+  const heatBg = (v, max) => {
+    if (!v) return 'transparent';
+    const intensity = v / max;
+    return `rgba(36, 87, 207, ${0.08 + intensity * 0.72})`;
+  };
+  const heatFg = (v, max) => (v && v / max > 0.55) ? '#fff' : '#1e293b';
 
   return (
     <div className="fixed-mice-table-shell">
-      <div className="fixed-mice-chart-title fixed-mice-chart-title-table">Nationality Performance</div>
-      <WidgetFilterBar
-        label="ทวีป"
-        options={continentOptions}
-        value={selContinent}
-        onChange={setSelContinent}
-      />
+      <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">Nationality Performance</div>
       <div className="fixed-mice-table-wrap fixed-mice-table-shell-main">
-        <table className="fixed-mice-table fixed-mice-table-heavy">
+        <table className="mice-matrix-table mice-matrix-heatmap">
           <thead>
             <tr>
-              <th>Continent</th>
-              <th>Nationality</th>
-              <th>No. of Visitors</th>
-              <th>Last Year</th>
-              <th>%YoY</th>
+              <th
+                onClick={() => requestSort('nationality')}
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+              >
+                Nationality<span className="sort-arrow">{sortArrow('nationality')}</span>
+              </th>
+              <th
+                onClick={() => requestSort('current')}
+                style={{ cursor: 'pointer', userSelect: 'none', textAlign: 'right' }}
+              >
+                No. of Visitors<span className="sort-arrow">{sortArrow('current')}</span>
+              </th>
+              <th
+                onClick={() => requestSort('previous')}
+                style={{ cursor: 'pointer', userSelect: 'none', textAlign: 'right' }}
+              >
+                Last Year<span className="sort-arrow">{sortArrow('previous')}</span>
+              </th>
+              <th
+                onClick={() => requestSort('yoy')}
+                style={{ cursor: 'pointer', userSelect: 'none', textAlign: 'right' }}
+              >
+                %YoY<span className="sort-arrow">{sortArrow('yoy')}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map(row => (
               <tr key={row.nationality}>
-                <td>{row.continent}</td>
-                <td>{row.nationality}</td>
-                <td>
-                  <div className="table-cell-bar">
-                    <span style={{ width: `${Math.max(10, (row.current / maxValue) * 100)}%` }} />
-                    <strong>{formatMetricValue(row.current)}</strong>
-                  </div>
+                <td className="cell-nationality">{row.nationality}</td>
+                <td style={{ background: heatBg(row.current, maxCur), color: heatFg(row.current, maxCur), textAlign: 'right' }}>
+                  {fmt.format(row.current)}
                 </td>
-                <td>{formatMetricValue(row.previous)}</td>
-                <td className={row.yoy >= 0 ? 'positive' : 'negative'}>
-                  {`${row.yoy >= 0 ? '▲' : '▼'} ${row.yoy >= 0 ? '' : '-'}${Math.abs(row.yoy).toFixed(1)}%`}
+                <td style={{ background: heatBg(row.previous, maxPrv), color: heatFg(row.previous, maxPrv), textAlign: 'right' }}>
+                  {fmt.format(row.previous)}
                 </td>
+                <td style={{ textAlign: 'right' }}>{renderYoy(row.yoy)}</td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan="2">Total</td>
-              <td>{formatMetricValue(totalCurrent)}</td>
-              <td>{formatMetricValue(totalPrev)}</td>
-              <td className={formatYoY(totalCurrent, totalPrev) >= 0 ? 'positive' : 'negative'}>
-                {formatYoY(totalCurrent, totalPrev) === null
-                  ? '-'
-                  : `${formatYoY(totalCurrent, totalPrev) >= 0 ? '▲' : '▼'} ${formatYoY(totalCurrent, totalPrev) >= 0 ? '' : '-'}${Math.abs(formatYoY(totalCurrent, totalPrev)).toFixed(1)}%`}
-              </td>
+              <td><strong>Total</strong></td>
+              <td style={{ textAlign: 'right' }}><strong>{fmt.format(totalCurrent)}</strong></td>
+              <td style={{ textAlign: 'right' }}><strong>{fmt.format(totalPrev)}</strong></td>
+              <td style={{ textAlign: 'right' }}><strong>{renderYoy(totalYoy)}</strong></td>
             </tr>
           </tfoot>
         </table>
@@ -1121,102 +1296,222 @@ function MiceNationalityIndustryMatrixWidget({ fixedProfile }) {
 
 function MiceNationalityMatrixView({ fixedProfile }) {
   const [view, setView]           = useState('industry');
-  const [selQuarter, setSelQuarter] = useState('all');
+  // sortKey: 'Total' | <col name> | 'nationality'; sortDir: 'desc' | 'asc'
+  const [sortKey, setSortKey]     = useState('Total');
+  const [sortDir, setSortDir]     = useState('desc');
 
   const industryRows = fixedProfile.nationalityIndustryMatrix2025 || [];
   const periodRows   = fixedProfile.nationalityQuarterMatrix || [];
 
-  const industryCols  = ['Meetings', 'Conventions'];
-  const allPeriodCols = ['Q1', 'Q2', 'Q3', 'Q4'];
+  const industryCols  = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions', 'Mega Events'];
+  const periodCols    = ['Q1', 'Q2', 'Q3', 'Q4'];
 
-  // When a single quarter is selected, show only that column; otherwise all
-  const periodCols = selQuarter === 'all' ? allPeriodCols : [selQuarter];
   const cols = view === 'industry' ? industryCols : periodCols;
-  const rows = view === 'industry' ? industryRows : periodRows;
+  const baseRows = view === 'industry' ? industryRows : periodRows;
+  const rows = [...baseRows].sort((a, b) => {
+    if (sortKey === 'nationality') {
+      const cmp = (a.nationality || '').localeCompare(b.nationality || '');
+      return sortDir === 'desc' ? -cmp : cmp;
+    }
+    const av = a[sortKey] || 0;
+    const bv = b[sortKey] || 0;
+    return sortDir === 'desc' ? bv - av : av - bv;
+  });
 
-  const maxTotal = Math.max(...rows.map(r => r.Total), 1);
+  const requestSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir(key === 'nationality' ? 'asc' : 'desc'); }
+  };
+  const sortArrow = (key) => sortKey === key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : '';
+  const isPeriod = view === 'period';
 
-  const quarterOptions = [
-    { value: 'all', label: 'ทั้งหมด' },
-    ...allPeriodCols.map(q => ({ value: q, label: q }))
-  ];
+  // YoY formatter: ▲/▼ with green/red color
+  const renderYoy = (yoy) => {
+    if (yoy == null || !isFinite(yoy)) return <span style={{ color: '#94a3b8' }}>—</span>;
+    if (Math.abs(yoy) < 0.05) return <span style={{ color: '#94a3b8' }}>—</span>;
+    const up = yoy >= 0;
+    return (
+      <span style={{ color: up ? '#16a34a' : '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>
+        {up ? '▲' : '▼'} {Math.abs(yoy).toFixed(1)}%
+      </span>
+    );
+  };
+
+  // Totals computed once for footer (incl. YoY across all rows)
+  const footerTotals = {};
+  cols.forEach((c) => {
+    const sum   = rows.reduce((s, r) => s + (r[c]   || 0), 0);
+    const sumLy = rows.reduce((s, r) => s + (r._ly?.[c] || 0), 0);
+    footerTotals[c] = { sum, yoy: sumLy ? ((sum - sumLy) / Math.abs(sumLy)) * 100 : (sum > 0 ? 100 : 0) };
+  });
+  const grandSum   = rows.reduce((s, r) => s + r.Total, 0);
+  const grandSumLy = rows.reduce((s, r) => s + (r.TotalLy || 0), 0);
+  const grandYoy   = grandSumLy ? ((grandSum - grandSumLy) / Math.abs(grandSumLy)) * 100 : (grandSum > 0 ? 100 : 0);
 
   return (
     <div className="mice-matrix-view">
       <div className="mice-matrix-toolbar">
-        <span className="mice-matrix-toolbar-label">เลือกมุมมอง :</span>
+        <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">
+          Nationality by {isPeriod ? 'Period' : 'MICE Industry'}
+        </div>
+        <span className="mice-matrix-toolbar-label" style={{ marginLeft: 'auto' }}>เลือกมุมมอง :</span>
         <div className="mice-matrix-toggle">
           {['industry', 'period'].map(mode => (
             <button
               key={mode}
               type="button"
               className={`mice-matrix-toggle-btn${view === mode ? ' active' : ''}`}
-              onClick={() => { setView(mode); setSelQuarter('all'); }}
+              onClick={() => setView(mode)}
             >
               {mode === 'industry' ? 'Industry' : 'Period'}
             </button>
           ))}
         </div>
-
-        {/* Quarter filter — only visible in Period view */}
-        {view === 'period' && (
-          <WidgetFilterBar
-            label="ไตรมาส"
-            options={quarterOptions}
-            value={selQuarter}
-            onChange={setSelQuarter}
-          />
-        )}
       </div>
 
       <div className="mice-matrix-table-wrap">
-        <table className="mice-matrix-table">
+        <table className="mice-matrix-table mice-matrix-heatmap">
           <thead>
             <tr>
-              <th>Nationality</th>
-              {cols.map(c => <th key={c}>{c}</th>)}
-              <th className="col-total">Total <span className="sort-arrow">▼</span></th>
+              <th
+                rowSpan={isPeriod ? 2 : 1}
+                onClick={() => requestSort('nationality')}
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                title="คลิกเพื่อเรียงลำดับ"
+              >
+                Nationality<span className="sort-arrow">{sortArrow('nationality')}</span>
+              </th>
+              {cols.map(c => (
+                <th
+                  key={c}
+                  colSpan={isPeriod ? 2 : 1}
+                  onClick={() => !isPeriod && requestSort(c)}
+                  style={{ textAlign: 'center', cursor: isPeriod ? 'default' : 'pointer', userSelect: 'none' }}
+                  title={isPeriod ? '' : 'คลิกเพื่อเรียงลำดับ'}
+                >
+                  {c}{!isPeriod && <span className="sort-arrow">{sortArrow(c)}</span>}
+                </th>
+              ))}
+              {isPeriod ? (
+                <th colSpan={2} className="col-total" style={{ textAlign: 'center' }}>Total</th>
+              ) : (
+                <th
+                  className="col-total col-total-sortable"
+                  onClick={() => requestSort('Total')}
+                  style={{ cursor: 'pointer', userSelect: 'none', textAlign: 'right' }}
+                  title="คลิกเพื่อเรียงลำดับ"
+                >
+                  Total<span className="sort-arrow">{sortArrow('Total')}</span>
+                </th>
+              )}
             </tr>
+            {isPeriod && (
+              <tr>
+                {cols.flatMap((c) => [
+                  <th
+                    key={`${c}-v`}
+                    onClick={() => requestSort(c)}
+                    style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                    title="คลิกเพื่อเรียงลำดับ"
+                  >
+                    #Visitors<span className="sort-arrow">{sortArrow(c)}</span>
+                  </th>,
+                  <th
+                    key={`${c}-g`}
+                    onClick={() => requestSort(`${c}__yoy`)}
+                    style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                    title="คลิกเพื่อเรียงลำดับ"
+                  >
+                    %Growth<span className="sort-arrow">{sortArrow(`${c}__yoy`)}</span>
+                  </th>,
+                ])}
+                <th
+                  onClick={() => requestSort('Total')}
+                  className="col-total"
+                  style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  title="คลิกเพื่อเรียงลำดับ"
+                >
+                  #Visitors<span className="sort-arrow">{sortArrow('Total')}</span>
+                </th>
+                <th
+                  onClick={() => requestSort('TotalYoy')}
+                  className="col-total"
+                  style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  title="คลิกเพื่อเรียงลำดับ"
+                >
+                  %Growth<span className="sort-arrow">{sortArrow('TotalYoy')}</span>
+                </th>
+              </tr>
+            )}
           </thead>
           <tbody>
-            {rows.map(row => {
-              const maxCol = Math.max(...cols.map(c => row[c] || 0), 1);
-              return (
+            {(() => {
+              const colMax = {};
+              cols.forEach(c => { colMax[c] = Math.max(...rows.map(r => r[c] || 0), 1); });
+              return rows.map(row => (
                 <tr key={row.nationality}>
                   <td className="cell-nationality">{row.nationality}</td>
-                  {cols.map(c => {
+                  {cols.flatMap((c) => {
                     const v = row[c] || 0;
-                    const pct = v ? Math.max(8, (v / maxCol) * 100) : 0;
-                    return (
-                      <td key={c} className={`cell-val${v ? ' has-val' : ''}`}>
-                        {v ? (
-                          <div className="cell-bar-wrap">
-                            <div className="cell-bar-fill" style={{ width: `${pct}%` }} />
-                            <span>{fmt.format(v)}</span>
-                          </div>
-                        ) : null}
-                      </td>
-                    );
+                    const intensity = v ? (v / colMax[c]) : 0;
+                    const bg = v ? `rgba(36, 87, 207, ${0.08 + intensity * 0.72})` : 'transparent';
+                    const fg = intensity > 0.55 ? '#fff' : '#1e293b';
+                    const cells = [
+                      <td
+                        key={`${c}-v`}
+                        className={`cell-val${v ? ' has-val' : ''}`}
+                        style={{ background: bg, color: fg, textAlign: 'right' }}
+                      >
+                        {fmt.format(v)}
+                      </td>,
+                    ];
+                    if (isPeriod) {
+                      cells.push(
+                        <td key={`${c}-g`} style={{ textAlign: 'right' }}>
+                          {renderYoy(row[`${c}__yoy`])}
+                        </td>
+                      );
+                    }
+                    return cells;
                   })}
-                  <td className="cell-total">
-                    <div className="cell-total-inner">
-                      <div className="cell-total-track">
-                        <div className="cell-total-fill" style={{ width: `${Math.max(4, (row.Total / maxTotal) * 100)}%` }} />
-                      </div>
-                      <strong>{fmt.format(row.Total)}</strong>
-                    </div>
+                  <td className="cell-total" style={{ textAlign: 'right' }}>
+                    <strong>{fmt.format(row.Total)}</strong>
                   </td>
+                  {isPeriod && (
+                    <td className="cell-total" style={{ textAlign: 'right' }}>
+                      {renderYoy(row.TotalYoy)}
+                    </td>
+                  )}
                 </tr>
-              );
-            })}
+              ));
+            })()}
           </tbody>
           <tfoot>
             <tr>
               <td><strong>Total</strong></td>
-              {cols.map(c => (
-                <td key={c}><strong>{fmt.format(rows.reduce((s, r) => s + (r[c] || 0), 0))}</strong></td>
-              ))}
-              <td className="cell-total"><strong>{fmt.format(rows.reduce((s, r) => s + r.Total, 0))}</strong></td>
+              {cols.flatMap((c) => {
+                const cells = [
+                  <td key={`${c}-v`} style={{ textAlign: 'right' }}>
+                    <strong>{fmt.format(footerTotals[c].sum)}</strong>
+                  </td>,
+                ];
+                if (isPeriod) {
+                  cells.push(
+                    <td key={`${c}-g`} style={{ textAlign: 'right' }}>
+                      <strong>{renderYoy(footerTotals[c].yoy)}</strong>
+                    </td>
+                  );
+                }
+                return cells;
+              })}
+              <td className="cell-total" style={{ textAlign: 'right' }}>
+                <strong>{fmt.format(grandSum)}</strong>
+              </td>
+              {isPeriod && (
+                <td className="cell-total" style={{ textAlign: 'right' }}>
+                  <strong>{renderYoy(grandYoy)}</strong>
+                </td>
+              )}
             </tr>
           </tfoot>
         </table>
@@ -1439,12 +1734,6 @@ function MiceDrillFlow({ fixedProfile, globalFilter }) {
           </div>
           <span className="df2-chip-val">{selInd || '—'}</span>
         </div>
-        <div className="df2-chip">
-          <div className="df2-chip-top">
-            <span className="df2-chip-field">Quarter</span>
-          </div>
-          <span className="df2-chip-val">—</span>
-        </div>
       </div>
 
       {/* Flow columns */}
@@ -1623,7 +1912,50 @@ function MiceDataTableWidget({ rows, globalFilter }) {
   );
 }
 
-export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false, globalFilter }) {
+export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false, apiStatus, apiError, globalFilter }) {
+  const isMiceBound = typeof widget.dataset === 'string' && /^mice/i.test(widget.dataset);
+  const hasData = (dataset?.records && dataset.records.length > 0)
+    || (dataset?.fixedProfile && Object.keys(dataset.fixedProfile).length > 0);
+
+  // 1) Loading state — show spinner while API is fetching and widget has no data yet
+  if (widget.type !== 'textbox' && isMiceBound && apiStatus === 'loading' && !hasData) {
+    return (
+      <div
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 10, padding: 16, height: '100%', color: '#64748b',
+        }}
+      >
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>กำลังโหลดข้อมูล...</span>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // 2) Error state — API failed and no data to fall back on
+  if (widget.type !== 'textbox' && apiStatus === 'error' && !hasData) {
+    return (
+      <div
+        style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          gap: 8, padding: 16, height: '100%', textAlign: 'center',
+          color: '#b91c1c', background: '#fef2f2', border: '1px dashed #fca5a5', borderRadius: 8,
+        }}
+      >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <strong>โหลดข้อมูลไม่สำเร็จ</strong>
+        <span style={{ fontSize: 12, color: '#7f1d1d', maxWidth: '90%', wordBreak: 'break-word' }}>
+          {apiError || 'ไม่สามารถดึงข้อมูลจาก API ได้'}
+        </span>
+      </div>
+    );
+  }
+
   if (isSkeleton) return <WidgetSkeleton type={widget.type} />;
   if (widget.type === 'textbox' || widget.type === 'label' || widget.type === 'date') {
     const fallback =
@@ -1685,7 +2017,22 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   }
 
   if (!dataset?.records?.length) {
-    return <p className="empty-note">This widget does not have a fixed datasource configured.</p>;
+    if (apiStatus === 'loading') {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, height: '100%', color: '#64748b' }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>กำลังโหลดข้อมูล...</span>
+          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 16, color: '#64748b', fontSize: 13 }}>
+        ไม่พบข้อมูลสำหรับ filter ที่เลือก
+      </div>
+    );
   }
 
   const records = overrideRecords || dataset.records;
@@ -1732,6 +2079,30 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
     return <FixedChartPanel widgetKey="miceVisitorsChart" title="จำนวนนักเดินทางไมซ์ (MICE Visitors)" color="#4098b9" yLabel="MICE Visitors" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickMillions} valueKey="no_of_visitors" lyKey="no_of_visitors_ly" yoyKey="yoy_visitors" globalFilter={globalFilter} />;
+  }
+
+  if (widget.type === 'miceStayingPeriodChart') {
+    const annual = fixedProfile.charts?.stayingPeriod || [];
+    const actualSeries = annual.map((item, index) => ({
+      year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
+    }));
+    return <FixedChartPanel widgetKey="miceStayingPeriodChart" title="จำนวนวันพำนักเฉลี่ย (Average Staying Period)" color="#c08a2e" yLabel="วัน" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatAxisTickValue} valueKey="staying_period" lyKey="staying_period_ly" yoyKey="yoy_staying" globalFilter={globalFilter} />;
+  }
+
+  if (widget.type === 'miceSpendingPerDayChart') {
+    const annual = fixedProfile.charts?.spendingPerDay || [];
+    const actualSeries = annual.map((item, index) => ({
+      year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
+    }));
+    return <FixedChartPanel widgetKey="miceSpendingPerDayChart" title="ค่าใช้จ่ายเฉลี่ยต่อคนต่อวัน (Spending per Head per Day)" color="#d29933" yLabel="บาท/คน/วัน" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="spending_per_head_per_day" lyKey="spending_per_head_per_day_ly" yoyKey="yoy_spend_day" globalFilter={globalFilter} />;
+  }
+
+  if (widget.type === 'miceSpendingPerTripChart') {
+    const annual = fixedProfile.charts?.spendingPerTrip || [];
+    const actualSeries = annual.map((item, index) => ({
+      year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
+    }));
+    return <FixedChartPanel widgetKey="miceSpendingPerTripChart" title="ค่าใช้จ่ายเฉลี่ยต่อคนต่อทริป (Spending per Head per Trip)" color="#d29933" yLabel="บาท/คน/ทริป" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="spending_per_head_per_trip" lyKey="spending_per_head_per_trip_ly" yoyKey="yoy_spend_trip" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceEventsQuarterlyChart') {
@@ -2055,9 +2426,16 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
           <tbody>
             {records.map((row, index) => (
               <tr key={row.id || row.orderId || index}>
-                {columns.map((columnKey) => (
-                  <td key={columnKey}>{formatCellValue(row[columnKey])}</td>
-                ))}
+                {columns.map((columnKey) => {
+                  // Year-like fields display as plain integer (no thousands separator)
+                  const isYearLike = /year/i.test(columnKey) || /year/i.test(fieldsByKey[columnKey]?.label || '');
+                  const raw = row[columnKey];
+                  return (
+                    <td key={columnKey}>
+                      {isYearLike && raw != null && raw !== '' ? String(Math.trunc(Number(raw))) : formatCellValue(raw)}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

@@ -349,6 +349,204 @@ export const FALLBACK_COUNTRIES = [
   { countryCode: 'KE', countryName: 'Kenya',                continentCode: 'AF', continentName: 'Africa' },
 ];
 
+/**
+ * Build live datasets from API-fetched fixedProfile.
+ * Each dataset returns flat `records` ที่ configurable widgets (Chart, Bar, Pie, Table, …)
+ * map fields ผ่าน widget.mapping ได้
+ */
+export const buildLiveDatasets = (fixedProfile) => {
+  if (!fixedProfile) return {};
+  const out = {};
+
+  // 1) Annual trend — events + revenue + visitors + staying + spending per year
+  const events = fixedProfile.charts?.events || [];
+  const revenue = fixedProfile.charts?.revenue || [];
+  const visitors = fixedProfile.charts?.visitors || [];
+  const stay = fixedProfile.charts?.stayingPeriod || [];
+  const spendDay = fixedProfile.charts?.spendingPerDay || [];
+  const spendTrip = fixedProfile.charts?.spendingPerTrip || [];
+  const years = Array.from(new Set([
+    ...events.map(r => r.year), ...revenue.map(r => r.year), ...visitors.map(r => r.year),
+  ])).sort((a, b) => a - b);
+  if (years.length) {
+    const byYear = (arr, y) => arr.find(r => r.year === y);
+    out.miceAnnualLive = {
+      id: 'miceAnnualLive',
+      label: 'MICE Annual (Live)',
+      description: 'แนวโน้มรายปี — events / revenue / visitors / staying / spending (ดึงจาก API ตาม filter ปัจจุบัน)',
+      fields: [
+        { key: 'year', label: 'Year', type: 'number' },
+        { key: 'events', label: 'No. of Events', type: 'number' },
+        { key: 'revenue', label: 'Revenue (M Baht)', type: 'number' },
+        { key: 'visitors', label: 'No. of Visitors', type: 'number' },
+        { key: 'stayingPeriod', label: 'Avg Staying (days)', type: 'number' },
+        { key: 'spendingPerDay', label: 'Spending per Day', type: 'number' },
+        { key: 'spendingPerTrip', label: 'Spending per Trip', type: 'number' },
+      ],
+      records: years.map((y) => ({
+        year: y,
+        events:        byYear(events, y)?.value ?? 0,
+        revenue:       byYear(revenue, y)?.value ?? 0,
+        visitors:      byYear(visitors, y)?.value ?? 0,
+        stayingPeriod: byYear(stay, y)?.value ?? 0,
+        spendingPerDay: byYear(spendDay, y)?.value ?? 0,
+        spendingPerTrip: byYear(spendTrip, y)?.value ?? 0,
+      })),
+    };
+  }
+
+  // 2) Nationality performance — country breakdown with YoY
+  const nat = fixedProfile.nationalityPerformance || [];
+  if (nat.length) {
+    out.miceNationalityLive = {
+      id: 'miceNationalityLive',
+      label: 'MICE Nationality (Live)',
+      description: 'ผลงานรายสัญชาติ — visitors ปีนี้/ปีที่แล้ว + %YoY (ดึงจาก API ตาม filter ปัจจุบัน)',
+      fields: [
+        { key: 'continent', label: 'Continent', type: 'category' },
+        { key: 'nationality', label: 'Nationality', type: 'category' },
+        { key: 'current', label: 'Visitors (Current)', type: 'number' },
+        { key: 'previous', label: 'Visitors (Last Year)', type: 'number' },
+        { key: 'yoy', label: '%YoY', type: 'number' },
+      ],
+      records: nat.map(r => ({
+        continent: r.continent || '',
+        nationality: r.nationality || '',
+        current: Number(r.current || 0),
+        previous: Number(r.previous || 0),
+        yoy: Number(r.yoy || 0),
+      })),
+    };
+  }
+
+  // 3) Quarterly — year + quarter × events/visitors
+  const evQ = fixedProfile.chartsQuarterly?.events || [];
+  const viQ = fixedProfile.chartsQuarterly?.visitors || [];
+  if (evQ.length || viQ.length) {
+    const merged = {};
+    [...evQ, ...viQ].forEach(r => {
+      const k = `${r.year}-${r.quarter}`;
+      if (!merged[k]) merged[k] = { year: r.year, quarter: r.quarter, events: 0, visitors: 0 };
+    });
+    evQ.forEach(r => { merged[`${r.year}-${r.quarter}`].events = Number(r.value || 0); });
+    viQ.forEach(r => { merged[`${r.year}-${r.quarter}`].visitors = Number(r.value || 0); });
+    out.miceQuarterlyLive = {
+      id: 'miceQuarterlyLive',
+      label: 'MICE Quarterly (Live)',
+      description: 'รายไตรมาส — events + visitors แยกตามปีและไตรมาส (ดึงจาก API)',
+      fields: [
+        { key: 'year', label: 'Year', type: 'number' },
+        { key: 'quarter', label: 'Quarter', type: 'category' },
+        { key: 'events', label: 'No. of Events', type: 'number' },
+        { key: 'visitors', label: 'No. of Visitors', type: 'number' },
+      ],
+      records: Object.values(merged),
+    };
+  }
+
+  // 4) KPI summary — single row aggregate (matches PBI top cards)
+  const kpis = fixedProfile.kpis;
+  if (kpis) {
+    out.miceKpiLive = {
+      id: 'miceKpiLive',
+      label: 'MICE KPI (Live)',
+      description: 'สรุป KPI หลัก — MICE Inter Visitors / %YoY / Top Nationality / Top Industry / Events / %YoY (ดึงจาก API)',
+      fields: [
+        { key: 'events',                label: 'MICE Events',         type: 'number' },
+        { key: 'eventsGrowth',          label: 'Events %YoY',         type: 'number' },
+        { key: 'visitors',              label: 'MICE Inter Visitors', type: 'number' },
+        { key: 'visitorsGrowth',        label: 'Visitors %YoY',       type: 'number' },
+        { key: 'topNationality',        label: 'Top Nationality',     type: 'category' },
+        { key: 'topNationalityGrowth',  label: 'Top Nat %YoY',        type: 'number' },
+        { key: 'topIndustry',           label: 'Top Industry',        type: 'category' },
+      ],
+      records: [{
+        events:               Number(kpis.events || 0),
+        eventsGrowth:         Number(kpis.eventsGrowth || 0),
+        visitors:             Number(kpis.visitors || 0),
+        visitorsGrowth:       Number(kpis.visitorsGrowth || 0),
+        topNationality:       String(kpis.topNationality || '-'),
+        topNationalityGrowth: Number(kpis.topNationalityGrowth || 0),
+        topIndustry:          String(kpis.topIndustry || '-'),
+      }],
+    };
+  }
+
+  // 5) Quarterly detail — same Q1-Q4 view used by PBI quarterly charts (events + visitors + YoY)
+  const evQDetail = fixedProfile.chartsQuarterly?.events || [];
+  const viQDetail = fixedProfile.chartsQuarterly?.visitors || [];
+  if (evQDetail.length || viQDetail.length) {
+    const merged = {};
+    [...evQDetail, ...viQDetail].forEach(r => {
+      const k = r.quarter;
+      if (!merged[k]) merged[k] = {
+        quarter: k,
+        eventsThis: 0, eventsLast: 0, eventsYoy: 0,
+        visitorsThis: 0, visitorsLast: 0, visitorsYoy: 0,
+      };
+    });
+    evQDetail.forEach(r => {
+      merged[r.quarter].eventsThis = Number(r.thisYear || 0);
+      merged[r.quarter].eventsLast = Number(r.lastYear || 0);
+      merged[r.quarter].eventsYoy  = Number(r.yoy || 0);
+    });
+    viQDetail.forEach(r => {
+      merged[r.quarter].visitorsThis = Number(r.thisYear || 0);
+      merged[r.quarter].visitorsLast = Number(r.lastYear || 0);
+      merged[r.quarter].visitorsYoy  = Number(r.yoy || 0);
+    });
+    out.miceQuarterlyDetailLive = {
+      id: 'miceQuarterlyDetailLive',
+      label: 'MICE Quarterly Detail (Live)',
+      description: 'รายไตรมาส — events + visitors (This Year / Last Year / %YoY) แบบเดียวกับกราฟ PBI',
+      fields: [
+        { key: 'quarter',       label: 'Quarter',                type: 'category' },
+        { key: 'eventsThis',    label: 'Events (This Year)',     type: 'number' },
+        { key: 'eventsLast',    label: 'Events (Last Year)',     type: 'number' },
+        { key: 'eventsYoy',     label: 'Events %YoY',            type: 'number' },
+        { key: 'visitorsThis',  label: 'Visitors (This Year)',   type: 'number' },
+        { key: 'visitorsLast',  label: 'Visitors (Last Year)',   type: 'number' },
+        { key: 'visitorsYoy',   label: 'Visitors %YoY',          type: 'number' },
+      ],
+      records: Object.values(merged),
+    };
+  }
+
+  // 6) Drill flow — flat nationality × industry × quarter rows (Visitors Breakdown sankey)
+  const flow = fixedProfile.sankeyFlow;
+  if (flow?.nationality?.length) {
+    const records = [];
+    flow.nationality.forEach((nat) => {
+      (nat.industry || []).forEach((ind) => {
+        (ind.quarter || []).forEach((q) => {
+          records.push({
+            nationality: nat.label,
+            industry:    ind.label,
+            quarter:     q.label,
+            visitors:    Number(q.value || 0),
+          });
+        });
+      });
+    });
+    if (records.length) {
+      out.miceDrillFlowLive = {
+        id: 'miceDrillFlowLive',
+        label: 'MICE Drill Flow (Live)',
+        description: 'รายละเอียดผู้เดินทาง MICE แยกตามสัญชาติ × อุตสาหกรรม × ไตรมาส (Visitors Breakdown)',
+        fields: [
+          { key: 'nationality', label: 'Nationality', type: 'category' },
+          { key: 'industry',    label: 'Industry',    type: 'category' },
+          { key: 'quarter',     label: 'Quarter',     type: 'category' },
+          { key: 'visitors',    label: 'Visitors',    type: 'number' },
+        ],
+        records,
+      };
+    }
+  }
+
+  return out;
+};
+
 export const datasetLibrary = {
   miceStatistics: {
     id: 'miceStatistics',
@@ -609,6 +807,39 @@ export const widgetCatalog = [
     description: 'นักเดินทางที่เข้าร่วมงาน Meetings, Incentive Travel, Conventions & Exhibitions'
   },
   {
+    type: 'miceStayingPeriodChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 6,
+    label: 'Average Staying Period',
+    dataset: 'miceStatistics',
+    title: 'จำนวนวันพำนักเฉลี่ย (Average Staying Period)',
+    description: 'จำนวนวันพำนักเฉลี่ยต่อทริปของผู้เดินทาง MICE รายปี (Fiscal Year)'
+  },
+  {
+    type: 'miceSpendingPerDayChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 6,
+    label: 'Spending per Head per Day',
+    dataset: 'miceStatistics',
+    title: 'ค่าใช้จ่ายเฉลี่ยต่อคนต่อวัน (Spending per Head per Day)',
+    description: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อวันของผู้เดินทาง MICE (บาท/คน/วัน) — Fiscal Year'
+  },
+  {
+    type: 'miceSpendingPerTripChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 6,
+    label: 'Spending per Head per Trip',
+    dataset: 'miceStatistics',
+    title: 'ค่าใช้จ่ายเฉลี่ยต่อคนต่อทริป (Spending per Head per Trip)',
+    description: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อทริปของผู้เดินทาง MICE (บาท/คน/ทริป) — Fiscal Year'
+  },
+  {
     type: 'miceNationalityPerformance',
     group: 'ready',
     fixed: true,
@@ -683,56 +914,56 @@ export const widgetCatalog = [
     type: 'line',
     group: 'configurable',
     label: 'Line',
-    dataset: 'monthlyBusiness',
-    title: 'Revenue Trend',
+    dataset: 'miceStatistics',
+    title: 'MICE Trend',
     description: 'แสดงแนวโน้มข้อมูลตามลำดับ'
   },
   {
     type: 'bar',
     group: 'configurable',
     label: 'Bar',
-    dataset: 'regionalPerformance',
-    title: 'Regional Performance',
+    dataset: 'miceStatistics',
+    title: 'MICE Comparison',
     description: 'เปรียบเทียบค่าระหว่างหมวดหมู่'
   },
   {
     type: 'pie',
     group: 'configurable',
     label: 'Pie',
-    dataset: 'marketingChannels',
-    title: 'Channel Distribution',
+    dataset: 'miceStatistics',
+    title: 'MICE Distribution',
     description: 'แสดงสัดส่วนของแต่ละรายการ'
   },
   {
     type: 'treemap',
     group: 'configurable',
     label: 'Treemap',
-    dataset: 'productMix',
-    title: 'Product Mix',
+    dataset: 'miceStatistics',
+    title: 'MICE Breakdown',
     description: 'แสดงขนาดข้อมูลแบบจัดกลุ่ม'
   },
   {
     type: 'summaryCard',
     group: 'configurable',
     label: 'Summary Card',
-    dataset: 'monthlyBusiness',
-    title: 'Total Revenue',
+    dataset: 'miceStatistics',
+    title: 'MICE Summary',
     description: 'สรุปตัวเลขสำคัญแบบการ์ด'
   },
   {
     type: 'rankingList',
     group: 'configurable',
     label: 'Ranking List',
-    dataset: 'regionalPerformance',
-    title: 'Top Regions',
+    dataset: 'miceStatistics',
+    title: 'Top MICE',
     description: 'จัดอันดับรายการตามค่า Top N'
   },
   {
     type: 'table',
     group: 'configurable',
     label: 'Table',
-    dataset: 'orderRecords',
-    title: 'Order Records',
+    dataset: 'miceStatistics',
+    title: 'MICE Records',
     description: 'แสดงข้อมูลเป็นแถวและคอลัมน์'
   },
   { type: 'textbox', group: 'configurable', label: 'TextBox', dataset: '', title: 'Text Box', description: 'แสดงข้อความและ expression' }

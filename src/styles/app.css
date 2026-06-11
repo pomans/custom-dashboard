@@ -14,6 +14,7 @@
 
 body {
   margin: 0;
+  overflow-x: hidden;
 }
 
 svg,
@@ -1623,26 +1624,8 @@ button {
 }
 
 .dashboard-stage-wrap.read-only {
-  /* Allow horizontal scroll when canvas is wider than viewport */
-  overflow-x: auto;
-  overflow-y: clip;
+  overflow: hidden;
   width: 100%;
-  /* Styled scrollbar */
-  scrollbar-width: thin;
-  scrollbar-color: #C5D8EC transparent;
-}
-
-.dashboard-stage-wrap.read-only::-webkit-scrollbar {
-  height: 6px;
-}
-
-.dashboard-stage-wrap.read-only::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.dashboard-stage-wrap.read-only::-webkit-scrollbar-thumb {
-  background: #C5D8EC;
-  border-radius: 999px;
 }
 
 /* Narrow (reflow) mode — widgets stack vertically, no scroll needed */
@@ -3163,11 +3146,14 @@ button {
 .sort-arrow { font-size: 0.7em; color: #1B61AA; }
 
 .mice-matrix-table tfoot td {
+  position: sticky;
+  bottom: 0;
   padding: 8px 12px;
   text-align: right;
   border-top: 2px solid #e2e8f0;
   background: #f8fafc;
   font-variant-numeric: tabular-nums;
+  z-index: 1;
 }
 
 .mice-matrix-table tfoot td:first-child { text-align: left; }
