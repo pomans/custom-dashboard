@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import placeholderSvg from './assets/placeholder.svg';
 import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog, FALLBACK_COUNTRIES, buildLiveDatasets } from './data/sampleData';
@@ -56,6 +57,37 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceStatPerfHistoricalChart',
   'miceStatPerfFyKpiCard',
   'miceStatPerfFySectorBar',
+];
+const WIDGET_GROUP_MAP = {
+  // ── International Visitors Performance ────────────────────────────────────
+  miceStatCard:               'visitors',
+  miceEventsQuarterlyChart:   'visitors',
+  miceVisitorsQuarterlyChart: 'visitors',
+  miceNationalityPerformance: 'visitors',
+  miceNationalityIndustryMatrix: 'visitors',
+  miceNationalityMatrixView:  'visitors',
+  miceDrillFlow:              'visitors',
+  // ── แนวโน้มสถิติ (Trends) ──────────────────────────────────────────────────
+  miceEventsChart:            'trends',
+  miceRevenueChart:           'trends',
+  miceVisitorsChart:          'trends',
+  miceStayingPeriodChart:     'trends',
+  miceSpendingPerDayChart:    'trends',
+  miceSpendingPerTripChart:   'trends',
+  // ── สถิติผลการดำเนินงาน (Stat Performance) ────────────────────────────────
+  miceDataTable:              'stat-perf',
+  miceStatPerfKpiCard:        'stat-perf',
+  miceStatPerfSectorBar:      'stat-perf',
+  miceStatPerfSectorTable:    'stat-perf',
+  miceStatPerfHistoricalChart:'stat-perf',
+  miceStatPerfFyKpiCard:      'stat-perf',
+  miceStatPerfFySectorBar:    'stat-perf',
+};
+const PALETTE_GROUPS = [
+  { id: 'stat-perf',    label: 'MICE Stat Performance' },
+  { id: 'visitors',     label: 'International Visitors' },
+  { id: 'trends',       label: 'Trends' },
+  { id: 'configurable', label: 'Configurable' },
 ];
 const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {
@@ -956,6 +988,12 @@ export default function App() {
   const [readOnly, setReadOnly] = useState(true);
   const [viewMode, setViewMode] = useState('list');
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
+  const [openPaletteGroups, setOpenPaletteGroups] = useState(() => new Set(PALETTE_GROUPS.map((g) => g.id)));
+  const togglePaletteGroup = (id) => setOpenPaletteGroups((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [activeConfigWidgetId, setActiveConfigWidgetId] = useState(null);
   const [selectedWidgetIds, setSelectedWidgetIds] = useState([]);
@@ -1093,14 +1131,14 @@ export default function App() {
             setMiceApiError(null);
           } else {
             setMiceApiStatus('error');
-            setMiceApiError('ไม่ได้รับข้อมูลจาก API');
+            setMiceApiError('No data received from API');
           }
         }
       })
       .catch((err) => {
         if (!signal.aborted) {
           setMiceApiStatus('error');
-          setMiceApiError(err?.message || String(err) || 'เชื่อมต่อ API ไม่สำเร็จ');
+          setMiceApiError(err?.message || String(err) || 'API connection failed');
         }
       });
     return () => { abortController.abort(); };
@@ -2302,7 +2340,7 @@ export default function App() {
   const createNewDashboard = () => {
     if (readOnly) return;
     if (activeIsEmpty) {
-      showToast('ไม่สามารถสร้าง Dashboard ใหม่ได้ — กรุณาเพิ่ม widget ใน canvas ปัจจุบันก่อน');
+      showToast('Cannot create a new Dashboard — please add at least one widget to the current canvas first.');
       return;
     }
     const newDashboard = createDashboard(`Dashboard ${dashboards.length + 1}`, []);
@@ -2317,7 +2355,7 @@ export default function App() {
 
   const openNewDashboardDialog = () => {
     if (activeIsEmpty) {
-      showToast('ไม่สามารถสร้าง Dashboard ใหม่ได้ — กรุณาเพิ่ม widget ใน canvas ปัจจุบันก่อน');
+      showToast('Cannot create a new Dashboard — please add at least one widget to the current canvas first.');
       return;
     }
     setNewDashboardDraftName(`Dashboard ${dashboards.length + 1}`);
@@ -2909,49 +2947,34 @@ export default function App() {
 
   const renderDashboardListPage = () => (
     <div className="dashboard-list-page">
-      <header className="dashboard-list-topbar">
-        <div className="dashboard-list-topbar-bg" aria-hidden="true">
-          <svg className="dashboard-list-topbar-deco" viewBox="0 0 600 90" fill="none" preserveAspectRatio="xMaxYMid slice">
-            <circle cx="520" cy="-10" r="110" fill="rgba(255,255,255,0.07)" />
-            <circle cx="420" cy="80" r="70" fill="rgba(255,255,255,0.05)" />
-            <circle cx="580" cy="60" r="50" fill="rgba(255,255,255,0.06)" />
-          </svg>
+      {/* ── Page Header ── */}
+      <header className="dl-page-header">
+        <div className="dl-page-header-left">
+          <h1 className="dl-page-title">Custom Dashboard</h1>
+          <p className="dl-page-subtitle">เลือก dashboard เพื่อดูหรือแก้ไข</p>
         </div>
-        <div className="dashboard-list-heading">
-          <div className="dashboard-list-heading-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <rect x="2" y="2" width="9" height="9" rx="2" fill="currentColor" opacity="0.9"/>
-              <rect x="13" y="2" width="9" height="9" rx="2" fill="currentColor" opacity="0.6"/>
-              <rect x="2" y="13" width="9" height="9" rx="2" fill="currentColor" opacity="0.6"/>
-              <rect x="13" y="13" width="9" height="9" rx="2" fill="currentColor" opacity="0.3"/>
+        <div className="dl-page-header-right">
+          <button type="button" className="dl-btn-import" onClick={() => listImportRef.current?.click()}>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14" style={{flexShrink:0}}>
+              <path d="M13 3H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M10 7v4M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-          </div>
-          <div>
-            <h1>Dashboard List</h1>
-            <p>เลือก dashboard เพื่อดูหรือแก้ไข</p>
-          </div>
-        </div>
-        <div className="dashboard-list-header-actions">
-          <button type="button" className="dashboard-list-header-btn" onClick={() => listImportRef.current?.click()}>
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{width:14,height:14,flexShrink:0}}>
-              <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Import
+            นำเข้าข้อมูล
           </button>
           <input ref={listImportRef} type="file" accept="application/json,.json" style={{display:'none'}} onChange={importDashboardFile} />
-          <button type="button" className="dashboard-list-header-btn primary" onClick={openNewDashboardDialog}>
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" style={{width:14,height:14,flexShrink:0}}>
+          <button type="button" className="dl-btn-new" onClick={openNewDashboardDialog}>
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14" style={{flexShrink:0}}>
               <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
             </svg>
-            New Dashboard
+            เพิ่มแดชบอร์ด
           </button>
         </div>
       </header>
 
       <main className="dashboard-list-content">
-        <section className="dashboard-list-summary">
-          <strong>{dashboards.length} dashboards</strong>
-          <span>Select a dashboard card to open its detail view.</span>
+        {/* ── Toolbar strip ── */}
+        <div className="dl-toolbar">
+          <strong className="dl-toolbar-count">{dashboards.length} Dashboards</strong>
           <div className="dashboard-list-layout-toggle">
             <button
               type="button"
@@ -2981,87 +3004,88 @@ export default function App() {
               </svg>
             </button>
           </div>
-        </section>
+        </div>
 
-        <div className={`dashboard-list-grid${dashboardListLayout === 'list' ? ' list-view' : ''}`}>
+        {/* ── Cards / Rows ── */}
+        <div className={`dl-grid${dashboardListLayout === 'list' ? ' dl-list' : ''}`}>
           {dashboardCards.map((dashboard) => (
             <div
               key={dashboard.id}
-              className={`dashboard-list-card${dashboard.id === activeDashboardId ? ' active' : ''}`}
+              className={`dl-card${dashboard.id === activeDashboardId ? ' active' : ''}`}
               onClick={() => openDashboardDetail(dashboard.id)}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => e.key === 'Enter' && openDashboardDetail(dashboard.id)}
             >
-              <div className="dashboard-list-card-thumb-wrap">
-                <DashboardMiniMap widgets={dashboard.widgets} />
+              {/* Thumbnail — card view only */}
+              <div className="dl-card-thumb">
+                <img src={placeholderSvg} alt="" className="dl-card-thumb-img" />
               </div>
-              <div className="dashboard-list-card-body">
-                <div className="dashboard-list-card-header">
-                  <strong className="dashboard-list-card-name">{dashboard.name}</strong>
-                  <span className="dashboard-list-badge">Active</span>
+
+              {/* Body */}
+              <div className="dl-card-body">
+                <div className="dl-card-info">
+                  <strong className="dl-card-name">{dashboard.name}</strong>
+                  <span className="dl-card-meta">มี {dashboard.widgetCount} ชุดข้อมูล</span>
+                  <div className="dl-card-actions" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className="dl-action-btn"
+                      onClick={() => saveDashboardFile(dashboard)}
+                      title="Download JSON"
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
+                        <path d="M13 3H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M10 7v4M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      ดาวน์โหลด
+                    </button>
+                    <button
+                      type="button"
+                      className="dl-action-btn danger"
+                      onClick={() => setConfirmDeleteId(dashboard.id)}
+                      disabled={dashboards.length <= 1}
+                      title="Delete Dashboard"
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
+                        <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      ลบ
+                    </button>
+                    <button
+                      type="button"
+                      className="dl-action-btn"
+                      title="Share"
+                      onClick={() => {
+                        const url = window.location.origin + window.location.pathname + '#/' + encodeURIComponent(dashboard.id);
+                        navigator.clipboard?.writeText(url);
+                      }}
+                    >
+                      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
+                        <circle cx="13" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                        <circle cx="3" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                        <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                        <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                      แชร์
+                    </button>
+                  </div>
                 </div>
-                <div className="dashboard-list-meta">
-                  <span>{dashboard.widgetCount} widgets{dashboard.hasFilters ? ' · Has filters' : ''}</span>
-                </div>
-                <div className="dashboard-list-card-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className="dashboard-list-card-action-btn"
-                    onClick={() => saveDashboardFile(dashboard)}
-                    title="Export JSON"
-                  >
-                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
-                      <path d="M8 2v8M5 7l3 3 3-3M3 13h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Export
-                  </button>
-                  <button
-                    type="button"
-                    className="dashboard-list-card-action-btn danger"
-                    onClick={() => setConfirmDeleteId(dashboard.id)}
-                    disabled={dashboards.length <= 1}
-                    title="Remove Dashboard"
-                  >
-                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
-                      <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                    Remove
-                  </button>
-                  <button
-                    type="button"
-                    className="dashboard-list-card-action-btn icon-only"
-                    title="Copy link"
-                    onClick={() => {
-                      const url = window.location.origin + window.location.pathname + '#/' + encodeURIComponent(dashboard.id);
-                      navigator.clipboard?.writeText(url);
-                    }}
-                  >
-                    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="13" height="13">
-                      <circle cx="13" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                      <circle cx="3" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                      <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                      <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </div>
+                {/* Chevron — list view only */}
+                <button
+                  type="button"
+                  className="dl-card-chevron"
+                  onClick={(e) => { e.stopPropagation(); openDashboardDetail(dashboard.id); }}
+                  aria-label="Open dashboard"
+                >
+                  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
+                    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
               </div>
             </div>
           ))}
 
-          {/* New Dashboard card */}
-          <button type="button" className="dashboard-list-card new-card" onClick={openNewDashboardDialog}>
-            <div className="new-card-icon">
-              <svg viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                <circle cx="20" cy="20" r="19" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" />
-                <path d="M20 12v16M12 20h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <div className="new-card-label">
-              <strong>New Dashboard</strong>
-              <span>สร้าง dashboard ใหม่</span>
-            </div>
-          </button>
         </div>
       </main>
 
@@ -3080,21 +3104,21 @@ export default function App() {
               </div>
               <div>
                 <h2>New Dashboard</h2>
-                <p>ตั้งชื่อ dashboard ใหม่ของคุณ</p>
+                <p>Give your new dashboard a name</p>
               </div>
-              <button type="button" className="new-dashboard-dialog-close" onClick={() => setNewDashboardDialog(false)} aria-label="ปิด">✕</button>
+              <button type="button" className="new-dashboard-dialog-close" onClick={() => setNewDashboardDialog(false)} aria-label="Close">✕</button>
             </div>
 
             <div className="new-dashboard-dialog-body">
               <label className="new-dashboard-name-label">
-                <span>ชื่อ Dashboard</span>
+                <span>Dashboard Name</span>
                 <input
                   type="text"
                   className="new-dashboard-name-input"
                   value={newDashboardDraftName}
                   onChange={(e) => setNewDashboardDraftName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') confirmNewDashboard(); if (e.key === 'Escape') setNewDashboardDialog(false); }}
-                  placeholder="ชื่อ dashboard…"
+                  placeholder="Dashboard name…"
                   autoFocus
                   maxLength={80}
                 />
@@ -3102,14 +3126,14 @@ export default function App() {
             </div>
 
             <div className="new-dashboard-dialog-footer">
-              <button type="button" className="dashboard-action" onClick={() => setNewDashboardDialog(false)}>ยกเลิก</button>
+              <button type="button" className="dashboard-action" onClick={() => setNewDashboardDialog(false)}>Cancel</button>
               <button
                 type="button"
                 className="dashboard-action primary"
                 onClick={confirmNewDashboard}
                 disabled={!newDashboardDraftName.trim()}
               >
-                สร้าง Dashboard
+                Create Dashboard
               </button>
             </div>
           </div>
@@ -3130,7 +3154,7 @@ export default function App() {
               </div>
               <div className="confirm-delete-body">
                 <h3>Remove Dashboard</h3>
-                <p>ต้องการลบ <strong>"{target?.name}"</strong> ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+                <p>Remove <strong>"{target?.name}"</strong>? This action cannot be undone.</p>
               </div>
               <div className="confirm-delete-footer">
                 <button type="button" className="dashboard-action" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
@@ -3169,7 +3193,7 @@ export default function App() {
           </div>
           <div className="topbar-brand-text">
             <button type="button" className="topbar-back-link" onClick={openDashboardList}>
-              ← รายการ Dashboard
+              ← Dashboard List
             </button>
             <span className="topbar-brand-name">Data Hub Dashboard Builder</span>
           </div>
@@ -3183,8 +3207,8 @@ export default function App() {
             className="dashboard-switcher"
             value={activeDashboardId}
             onChange={(event) => selectDashboard(event.target.value)}
-            aria-label="เลือก Dashboard"
-            data-tooltip="เลือก Dashboard"
+            aria-label="Select Dashboard"
+            data-tooltip="Select Dashboard"
             data-tooltip-dir="down"
           >
             {dashboards.map((dashboard) => (
@@ -3197,9 +3221,9 @@ export default function App() {
             className="dashboard-name-input"
             type="text"
             value={editingName}
-            placeholder="ชื่อ Dashboard…"
-            aria-label="ชื่อ Dashboard"
-            data-tooltip="แก้ไขชื่อ Dashboard"
+            placeholder="Dashboard name…"
+            aria-label="Dashboard Name"
+            data-tooltip="Edit Dashboard Name"
             data-tooltip-dir="down"
             onChange={(event) => setEditingName(event.target.value)}
             onBlur={commitDashboardName}
@@ -3222,7 +3246,7 @@ export default function App() {
             type="button"
             className={`topbar-hamburger${hamburgerOpen ? ' open' : ''}`}
             onClick={() => setHamburgerOpen((v) => !v)}
-            aria-label="เมนู"
+            aria-label="Menu"
             aria-expanded={hamburgerOpen}
           >
             <span /><span /><span />
@@ -3233,21 +3257,21 @@ export default function App() {
             <div className="topbar-hamburger-menu" onClick={() => setHamburgerOpen(false)}>
               <div className="hamburger-menu-group">
                 <span className="hamburger-menu-label">Dashboard</span>
-                <button type="button" className="hamburger-menu-item" onClick={createNewDashboard}><ToolbarIcon name="plus" /> สร้างใหม่</button>
-                <button type="button" className="hamburger-menu-item" onClick={duplicateActiveDashboard}><ToolbarIcon name="copy" /> ทำสำเนา</button>
-                <button type="button" className="hamburger-menu-item danger" onClick={deleteActiveDashboard} disabled={dashboards.length <= 1}><ToolbarIcon name="trash" /> ลบ Dashboard</button>
+                <button type="button" className="hamburger-menu-item" onClick={createNewDashboard}><ToolbarIcon name="plus" /> New</button>
+                <button type="button" className="hamburger-menu-item" onClick={duplicateActiveDashboard}><ToolbarIcon name="copy" /> Duplicate</button>
+                <button type="button" className="hamburger-menu-item danger" onClick={deleteActiveDashboard} disabled={dashboards.length <= 1}><ToolbarIcon name="trash" /> Delete Dashboard</button>
               </div>
               <div className="hamburger-menu-divider" />
               <div className="hamburger-menu-group">
-                <span className="hamburger-menu-label">ไฟล์</span>
+                <span className="hamburger-menu-label">File</span>
                 <button type="button" className="hamburger-menu-item" onClick={saveActiveDashboardFile}><ToolbarIcon name="save" /> Export JSON</button>
                 <button type="button" className="hamburger-menu-item" onClick={openDashboardImportPicker}><ToolbarIcon name="upload" /> Import JSON</button>
               </div>
               <div className="hamburger-menu-divider" />
               <div className="hamburger-menu-group">
-                <span className="hamburger-menu-label">ส่งออก</span>
-                <button type="button" className="hamburger-menu-item" onClick={printActiveDashboard}><ToolbarIcon name="print" /> พิมพ์</button>
-                <button type="button" className="hamburger-menu-item" onClick={downloadActiveDashboardPdf}><ToolbarIcon name="download" /> ดาวน์โหลด PDF</button>
+                <span className="hamburger-menu-label">Export</span>
+                <button type="button" className="hamburger-menu-item" onClick={printActiveDashboard}><ToolbarIcon name="print" /> Print</button>
+                <button type="button" className="hamburger-menu-item" onClick={downloadActiveDashboardPdf}><ToolbarIcon name="download" /> Download PDF</button>
               </div>
             </div>
           )}
@@ -3256,10 +3280,10 @@ export default function App() {
           <div className="topbar-btn-groups">
             {/* Group A: Manage */}
             <div className="topbar-btn-group">
-              <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label="สร้าง Dashboard ใหม่" data-tooltip="สร้างใหม่" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label="New Dashboard" data-tooltip="New" data-tooltip-dir="down">
                 <ToolbarIcon name="plus" />
               </button>
-              <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label="ทำสำเนา" data-tooltip="ทำสำเนา" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label="Duplicate" data-tooltip="Duplicate" data-tooltip-dir="down">
                 <ToolbarIcon name="copy" />
               </button>
               <button
@@ -3267,8 +3291,8 @@ export default function App() {
                 className="dashboard-action danger icon-only"
                 onClick={deleteActiveDashboard}
                 disabled={dashboards.length <= 1}
-                aria-label="ลบ Dashboard"
-                data-tooltip="ลบ Dashboard"
+                aria-label="Delete Dashboard"
+                data-tooltip="Delete Dashboard"
                 data-tooltip-dir="down"
               >
                 <ToolbarIcon name="trash" />
@@ -3292,10 +3316,10 @@ export default function App() {
 
             {/* Group C: Output */}
             <div className="topbar-btn-group">
-              <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="พิมพ์" data-tooltip="พิมพ์ (Print)" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="Print" data-tooltip="Print" data-tooltip-dir="down">
                 <ToolbarIcon name="print" />
               </button>
-              <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="ดาวน์โหลด PDF" data-tooltip="ดาวน์โหลด PDF" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="Download PDF" data-tooltip="Download PDF" data-tooltip-dir="down">
                 <ToolbarIcon name="download" />
               </button>
             </div>
@@ -3323,7 +3347,7 @@ export default function App() {
           )}
           {!isNarrowView && (
             <>
-              <div className="zoom-controls" data-tooltip="Ctrl+Scroll หรือ Ctrl+/−" data-tooltip-dir="down">
+              <div className="zoom-controls" data-tooltip="Ctrl+Scroll or Ctrl+/−" data-tooltip-dir="down">
                 <button
                   type="button"
                   className="zoom-btn"
@@ -3336,7 +3360,7 @@ export default function App() {
                   className="zoom-level"
                   onClick={() => setCanvasZoom(1)}
                   aria-label="Reset zoom"
-                  data-tooltip="คลิกเพื่อ Reset เป็น 100%"
+                  data-tooltip="Click to reset to 100%"
                   data-tooltip-dir="down"
                 >{Math.round(canvasZoom * 100)}%</button>
                 <button
@@ -3363,7 +3387,7 @@ export default function App() {
                 className="zoom-btn fit-screen-btn"
                 onClick={autoResize}
                 aria-label="Auto Resize"
-                data-tooltip="Auto Resize — ปรับขนาด widget ให้พอดีหน้าจอ"
+                data-tooltip="Auto Resize — fit widgets to screen width"
                 data-tooltip-dir="down"
                 disabled={readOnly}
               >
@@ -3381,7 +3405,7 @@ export default function App() {
                 className="zoom-btn fit-screen-btn"
                 onClick={autoArrange}
                 aria-label="Auto Arrange"
-                data-tooltip="Auto Arrange — จัดเรียง widget อัตโนมัติไม่ให้ overlap"
+                data-tooltip="Auto Arrange — pack widgets without overlap"
                 data-tooltip-dir="down"
                 disabled={readOnly}
               >
@@ -3400,8 +3424,8 @@ export default function App() {
             type="button"
             className="sidebar-toggle icon-only"
             onClick={() => setSidebarHidden((prev) => !prev)}
-            aria-label={sidebarHidden ? 'แสดง Palette' : 'ซ่อน Palette'}
-            data-tooltip={sidebarHidden ? 'แสดง Palette' : 'ซ่อน Palette'}
+            aria-label={sidebarHidden ? 'Show Palette' : 'Hide Palette'}
+            data-tooltip={sidebarHidden ? 'Show Palette' : 'Hide Palette'}
             data-tooltip-dir="down"
             disabled={readOnly}
           >
@@ -3415,8 +3439,8 @@ export default function App() {
               setReadOnly((prev) => !prev);
               if (goingToEdit && window.innerWidth <= 768) setSidebarHidden(true);
             }}
-            aria-label={readOnly ? 'เข้าสู่โหมดแก้ไข' : 'ดูตัวอย่าง'}
-            data-tooltip={readOnly ? 'เข้าสู่โหมดแก้ไข' : 'ดูตัวอย่าง'}
+            aria-label={readOnly ? 'Enter Edit Mode' : 'Preview'}
+            data-tooltip={readOnly ? 'Enter Edit Mode' : 'Preview'}
             data-tooltip-dir="down"
           >
             <ToolbarIcon name={readOnly ? 'edit' : 'preview'} />
@@ -3425,8 +3449,8 @@ export default function App() {
             type="button"
             className="wizard-help-btn"
             onClick={openWizard}
-            aria-label="คู่มือการใช้งาน"
-            data-tooltip="คู่มือการใช้งาน"
+            aria-label="User Guide"
+            data-tooltip="User Guide"
             data-tooltip-dir="down"
           >
             <ToolbarIcon name="help" />
@@ -3443,7 +3467,7 @@ export default function App() {
             <div className="palette-section-header">
               <div>
                 <h3>Widget Palette</h3>
-                {!paletteCollapsed ? <p>ลาก widget พร้อมใช้ หรือ widget ที่ config ได้ไปวางบน canvas</p> : null}
+                {!paletteCollapsed ? <p>Drag a ready-to-use or configurable widget onto the canvas</p> : null}
               </div>
               <button
                 type="button"
@@ -3455,57 +3479,60 @@ export default function App() {
             </div>
             {!paletteCollapsed ? (
               <div className="palette-groups">
-                <section className="palette-subgroup">
-                  <h4>พร้อมใช้</h4>
-                  <div className="palette-list">
-                    {widgetCatalog
-                      .filter((item) => item.group === 'ready')
-                      .map((item) => (
-                          <button
-                            key={item.paletteKey || item.type}
-                            type="button"
-                            className="palette-item palette-item-ready"
-                            draggable={!readOnly}
-                            disabled={readOnly}
-                            onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
-                          >
-                            <span className="palette-item-thumb" aria-hidden="true">
-                              <PaletteWidgetThumbnail type={item.type} />
-                            </span>
-                            <span className="palette-item-text">
-                              <strong>{item.label}</strong>
-                              {item.description ? <small>{item.description}</small> : null}
-                            </span>
-                          </button>
-                      ))}
-                  </div>
-                </section>
-
-                <section className="palette-subgroup">
-                  <h4>กำหนดค่าได้</h4>
-                  <div className="palette-list">
-                    {widgetCatalog
-                      .filter((item) => item.group !== 'ready')
-                      .map((item) => (
-                          <button
-                            key={item.paletteKey || item.type}
-                            type="button"
-                            className="palette-item"
-                            draggable={!readOnly}
-                            disabled={readOnly}
-                            onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
-                          >
-                            <span className="palette-item-thumb" aria-hidden="true">
-                              <PaletteWidgetThumbnail type={item.type} />
-                            </span>
-                            <span className="palette-item-text">
-                              <strong>{item.label}</strong>
-                              {item.description ? <small>{item.description}</small> : null}
-                            </span>
-                          </button>
-                      ))}
-                  </div>
-                </section>
+                {PALETTE_GROUPS.map(({ id, label }) => {
+                  const items = widgetCatalog.filter(
+                    (item) => (WIDGET_GROUP_MAP[item.type] || item.group) === id
+                  );
+                  if (!items.length) return null;
+                  const isOpen  = openPaletteGroups.has(id);
+                  const isFixed = id !== 'configurable';
+                  return (
+                    <section key={id} className={`palette-folder${isOpen ? ' open' : ''}`}>
+                      <button
+                        type="button"
+                        className="palette-folder-header"
+                        onClick={() => togglePaletteGroup(id)}
+                        aria-expanded={isOpen}
+                      >
+                        <svg className="palette-folder-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                          {isOpen
+                            ? <path d="M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2z"/>
+                            : <path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/>
+                          }
+                        </svg>
+                        <span className="palette-folder-label">{label}</span>
+                        <span className="palette-folder-count">{items.length}</span>
+                        <svg className={`palette-folder-chevron${isOpen ? ' open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </button>
+                      {isOpen && (
+                        <div className="palette-folder-body">
+                          <div className="palette-list">
+                            {items.map((item) => (
+                              <button
+                                key={item.paletteKey || item.type}
+                                type="button"
+                                className={`palette-item${isFixed ? ' palette-item-ready' : ''}`}
+                                draggable={!readOnly}
+                                disabled={readOnly}
+                                onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
+                              >
+                                <span className="palette-item-thumb" aria-hidden="true">
+                                  <PaletteWidgetThumbnail type={item.type} />
+                                </span>
+                                <span className="palette-item-text">
+                                  <strong>{item.label}</strong>
+                                  {item.description ? <small>{item.description}</small> : null}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
             ) : null}
           </section>
@@ -3997,7 +4024,7 @@ export default function App() {
                     <button
                       type="button"
                       className="filter-orientation-btn"
-                      title={fpOrientation === 'horizontal' ? 'เปลี่ยนเป็น vertical' : 'เปลี่ยนเป็น horizontal'}
+                      title={fpOrientation === 'horizontal' ? 'Switch to vertical' : 'Switch to horizontal'}
                       onClick={(event) => {
                         event.stopPropagation();
                         updateActiveDashboard((dash) => ({
