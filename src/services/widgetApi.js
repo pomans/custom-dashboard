@@ -37,6 +37,8 @@ const WIDGET_API_KEYS = {
   miceStatPerfSectorBar:       ['miceStatPerfSector'],
   miceStatPerfSectorTable:     ['miceStatPerfSector'],
   miceStatPerfHistoricalChart: ['miceStatPerfHistorical'],
+  miceStatPerfFyKpiCard:       ['miceStatPerfFyKpi'],
+  miceStatPerfFySectorBar:     ['miceStatPerfFySector'],
   // FETCH_PRIORITY entry handled below
 };
 
@@ -60,6 +62,8 @@ const FETCH_PRIORITY = [
   'miceStatPerfKpi',           // 1 row aggregate
   'miceStatPerfSector',        // ~5 rows sector breakdown
   'miceStatPerfHistorical',    // ~90 rows all-years sector
+  'miceStatPerfFyKpi',         // 1 row FY aggregate (staying/spending)
+  'miceStatPerfFySector',      // ~5 rows FY sector breakdown
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -363,6 +367,30 @@ function transformStatPerfHistorical(rows) {
   }));
 }
 
+function transformStatPerfFyKpi(rows) {
+  const r = rows?.[0] || {};
+  return {
+    stayingPeriod:      num(r.staying_period),
+    stayingPeriodLy:    num(r.staying_period_ly),
+    yoyStaying:         numYoy(r.yoy_staying) ?? 0,
+    spendingPerDay:     num(r.spending_per_head_per_day),
+    spendingPerDayLy:   num(r.spending_per_head_per_day_ly),
+    yoySpendDay:        numYoy(r.yoy_spend_day) ?? 0,
+    spendingPerTrip:    num(r.spending_per_head_per_trip),
+    spendingPerTripLy:  num(r.spending_per_head_per_trip_ly),
+    yoySpendTrip:       numYoy(r.yoy_spend_trip) ?? 0,
+  };
+}
+
+function transformStatPerfFySector(rows) {
+  return rows.map((r) => ({
+    sector_name:           String(r.sector_name || ''),
+    staying_period:        num(r.staying_period),
+    spending_per_head_per_day:  num(r.spending_per_head_per_day),
+    spending_per_head_per_trip: num(r.spending_per_head_per_trip),
+  }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Apply fetched rows to the fixedProfile object
 // ─────────────────────────────────────────────────────────────────────────────
@@ -447,6 +475,12 @@ function applyToProfile(apiKey, rows, filter, profile) {
       break;
     case 'miceStatPerfHistorical':
       profile.statPerfHistorical = transformStatPerfHistorical(rows);
+      break;
+    case 'miceStatPerfFyKpi':
+      profile.statPerfFyKpi = transformStatPerfFyKpi(rows);
+      break;
+    case 'miceStatPerfFySector':
+      profile.statPerfFySector = transformStatPerfFySector(rows);
       break;
     default:
       break;

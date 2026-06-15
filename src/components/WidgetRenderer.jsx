@@ -2094,6 +2094,69 @@ function MiceStatPerfHistoricalChart({ fixedProfile }) {
   );
 }
 
+const fmtDec1 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function MiceStatPerfFyKpiCard({ fixedProfile, metric }) {
+  const kpi = fixedProfile.statPerfFyKpi || {};
+  const CONFIGS = {
+    stayingPeriod:  { value: kpi.stayingPeriod,  fmt: (v) => fmtDec2.format(v), label: 'ประมาณระยะเวลาอยู่เฉลี่ย (วัน)',          yoy: kpi.yoyStaying   },
+    spendingPerDay: { value: kpi.spendingPerDay,  fmt: (v) => fmtDec2.format(v), label: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อวัน (บาท)',      yoy: kpi.yoySpendDay  },
+    spendingPerTrip:{ value: kpi.spendingPerTrip, fmt: (v) => fmtDec2.format(v), label: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อทริป (บาท)',     yoy: kpi.yoySpendTrip },
+  };
+  const cfg = CONFIGS[metric] || CONFIGS.stayingPeriod;
+  const hasYoy = cfg.yoy != null && isFinite(cfg.yoy);
+  const yoyUp  = cfg.yoy >= 0;
+  return (
+    <div className="stat-perf-kpi-card">
+      <div className="stat-perf-kpi-value">
+        {cfg.value != null ? cfg.fmt(cfg.value) : '—'}
+      </div>
+      {hasYoy && (
+        <div className={`stat-perf-kpi-yoy ${yoyUp ? 'up' : 'down'}`}>
+          %Growth (YoY) {yoyUp ? '▲' : '▼'} {Math.abs(cfg.yoy).toFixed(1)}%
+        </div>
+      )}
+      <div className="stat-perf-kpi-label">{cfg.label}</div>
+    </div>
+  );
+}
+
+function MiceStatPerfFySectorBar({ fixedProfile, metric }) {
+  const rows = [...(fixedProfile.statPerfFySector || [])].sort(
+    (a, b) => (b[metric] || 0) - (a[metric] || 0)
+  );
+  const METRIC_CFG = {
+    stayingPeriod:  { key: 'staying_period',              title: 'ระยะเวลาอยู่เฉลี่ยแยกตามอุตสาหกรรม (วัน)',    fmt: (v) => fmtDec1.format(v) },
+    spendingPerDay: { key: 'spending_per_head_per_day',   title: 'ค่าใช้จ่ายต่อหัวต่อวันแยกตามอุตสาหกรรม (บาท)', fmt: (v) => fmtInt.format(Math.round(v)) },
+    spendingPerTrip:{ key: 'spending_per_head_per_trip',  title: 'ค่าใช้จ่ายต่อหัวต่อทริปแยกตามอุตสาหกรรม (บาท)', fmt: (v) => fmtInt.format(Math.round(v)) },
+  };
+  const cfg   = METRIC_CFG[metric] || METRIC_CFG.stayingPeriod;
+  const max   = rows.reduce((m, r) => Math.max(m, r[cfg.key] || 0), 0);
+  return (
+    <div className="stat-perf-sector-bar">
+      <div className="stat-perf-sector-bar-title">{cfg.title}</div>
+      <div className="stat-perf-sector-bar-rows">
+        {rows.map((row) => {
+          const val   = row[cfg.key] || 0;
+          const pct   = max > 0 ? (val / max) * 100 : 0;
+          const color = STAT_PERF_SECTOR_COLORS[row.sector_name] || '#94a3b8';
+          return (
+            <div key={row.sector_name} className="stat-perf-sector-bar-row">
+              <div className="stat-perf-sector-bar-label">{row.sector_name}</div>
+              <div className="stat-perf-sector-bar-with-pct">
+                <div className="stat-perf-sector-bar-track">
+                  <div className="stat-perf-sector-bar-fill" style={{ width: `${pct}%`, background: color }} />
+                </div>
+                <span className="stat-perf-sector-bar-pct">{cfg.fmt(val)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false, apiStatus, apiError, globalFilter }) {
   const isMiceBound = typeof widget.dataset === 'string' && /^mice/i.test(widget.dataset);
   const hasData = (dataset?.records && dataset.records.length > 0)
@@ -2214,6 +2277,14 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
 
   if (widget.type === 'miceStatPerfHistoricalChart') {
     return <MiceStatPerfHistoricalChart fixedProfile={fixedProfile} />;
+  }
+
+  if (widget.type === 'miceStatPerfFyKpiCard') {
+    return <MiceStatPerfFyKpiCard fixedProfile={fixedProfile} metric={widget.metric || 'stayingPeriod'} />;
+  }
+
+  if (widget.type === 'miceStatPerfFySectorBar') {
+    return <MiceStatPerfFySectorBar fixedProfile={fixedProfile} metric={widget.metric || 'stayingPeriod'} />;
   }
 
   if (!dataset?.records?.length) {

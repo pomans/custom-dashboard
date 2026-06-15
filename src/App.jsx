@@ -54,6 +54,8 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceStatPerfSectorBar',
   'miceStatPerfSectorTable',
   'miceStatPerfHistoricalChart',
+  'miceStatPerfFyKpiCard',
+  'miceStatPerfFySectorBar',
 ];
 const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {
