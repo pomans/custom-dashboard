@@ -3785,7 +3785,49 @@ export default function App() {
               };
               const widgetControls = (
                 <div className="widget-controls">
-                  {!TEXT_WIDGET_TYPES.includes(widget.type) ? (
+                  {TEXT_WIDGET_TYPES.includes(widget.type) ? (
+                    <>
+                      <button
+                        type="button"
+                        className={`icon-button align-toggle ${(widget.textAlign || 'left') === 'left' ? 'active' : ''}`}
+                        aria-label="Align left"
+                        title="Align left"
+                        onClick={(e) => { e.stopPropagation(); updateWidgetTextAlign(widget.id, 'left'); }}
+                      >
+                        <ToolbarIcon name="align-left" />
+                      </button>
+                      <button
+                        type="button"
+                        className={`icon-button align-toggle ${widget.textAlign === 'center' ? 'active' : ''}`}
+                        aria-label="Align center"
+                        title="Align center"
+                        onClick={(e) => { e.stopPropagation(); updateWidgetTextAlign(widget.id, 'center'); }}
+                      >
+                        <ToolbarIcon name="align-center" />
+                      </button>
+                      <button
+                        type="button"
+                        className={`icon-button align-toggle ${widget.textAlign === 'right' ? 'active' : ''}`}
+                        aria-label="Align right"
+                        title="Align right"
+                        onClick={(e) => { e.stopPropagation(); updateWidgetTextAlign(widget.id, 'right'); }}
+                      >
+                        <ToolbarIcon name="align-right" />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button config-toggle"
+                        aria-label="Widget settings"
+                        title="Settings"
+                        onClick={() => setActiveConfigWidgetId(widget.id)}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:16,height:16}}>
+                          <circle cx="12" cy="12" r="3" />
+                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                        </svg>
+                      </button>
+                    </>
+                  ) : (
                     <button
                       type="button"
                       className="icon-button config-toggle"
@@ -3798,7 +3840,7 @@ export default function App() {
                         <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                       </svg>
                     </button>
-                  ) : null}
+                  )}
                   <button
                     type="button"
                     className="icon-button remove-toggle"

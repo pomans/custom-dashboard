@@ -1327,6 +1327,11 @@ button {
   display: none;
 }
 
+.builder-layout.read-only-preview .dashboard-stage-wrap {
+  display: flex;
+  justify-content: safe center;
+}
+
 .builder-layout.sidebar-hidden {
   /* palette is hidden, but layout stays the same */
 }
@@ -5187,7 +5192,8 @@ th {
 
   .palette {
     position: static;
-    width: auto;
+    width: 300px;
+    flex-shrink: 0;
     max-height: none;
   }
 
@@ -5271,9 +5277,81 @@ th {
   .dashboard-list-meta { font-size: 0.78rem; }
   .dashboard-list-preview span { font-size: 0.7rem; }
 
-  /* ── Filters widget ── */
-  .dashboard-filters-grid { grid-template-columns: 1fr; }
+  /* ══ Dashboard list page (dl-* layout) ══ */
+  .dashboard-list-page { min-width: 0; }
+  .dashboard-list-content { min-width: 0; }
+
+  .dl-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 4px 2px;
+  }
+  .dl-page-title { font-size: 1.5rem; }
+  .dl-page-header-right { width: 100%; }
+  .dl-btn-import,
+  .dl-btn-new {
+    flex: 1;
+    justify-content: center;
+    padding: 0 12px;
+  }
+
+  .dl-toolbar { flex-wrap: wrap; }
+
+  .dl-grid {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 12px;
+    min-width: 0;
+  }
+  .dl-card { min-width: 0; }
+  .dl-card-name { white-space: normal; }
+  .dl-card-actions { gap: 6px; }
+
+  /* List view rows: keep meta + chevron readable on narrow screens */
+  .dl-list .dl-card-info { column-gap: 8px; }
+  .dl-list .dl-card-meta { padding: 0 8px; }
+
+  /* ══ Filters widget ══ */
+  /* grid is display:flex — force single-column stacking */
+  .dashboard-filters-grid { flex-direction: column; align-items: stretch; }
+  .dashboard-filters label,
+  .filter-button-group { width: 100%; min-width: 0; }
   .filter-chip-row { flex-wrap: wrap; gap: 6px; }
+
+  /* chip groups must wrap & shrink so no control is clipped off-screen */
+  .filter-chip-group {
+    flex-wrap: wrap;
+    flex-shrink: 1;
+    min-width: 0;
+    width: 100%;
+  }
+  .filter-row-sep { display: none; }
+  .fp-select {
+    flex-shrink: 1;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* ══ Builder topbar: compact for phones ══ */
+  .topbar {
+    left: 8px;
+    right: 8px;
+    padding: 0 10px;
+  }
+  .topbar-divider { margin: 0 8px; }
+  /* free up width: hide dashboard switcher/name input + the "DASHBOARD LIST" link */
+  .topbar-selector { display: none; }
+  .topbar-back-link { display: none; }
+  /* drop layout tools + zoom (no pinch/precise control on phones); keep core toggles */
+  .topbar-view-controls .fit-screen-btn,
+  .topbar-view-controls .zoom-controls { display: none; }
+  .topbar-view-controls {
+    padding-left: 8px;
+    gap: 4px;
+  }
+  .topbar-view-controls .topbar-divider { display: none; }
 }
 
 /* ── Narrow view (isNarrowView) filter + topbar compact styles ── */
@@ -5312,20 +5390,24 @@ th {
   padding: 0 8px;
 }
 
-/* ── Responsive builder: narrow viewport ── */
-@media (max-width: 768px) {
+/* ── Responsive builder: narrow viewport (tablets + phones) ── */
+/* At ≤960px the palette floats as an overlay so the canvas always gets full
+   width — matches the topbar's compact/hamburger breakpoint. */
+@media (max-width: 960px) {
   /* Canvas fills full width — palette floats as overlay */
   .builder-layout .dashboard-stage {
     margin-left: 0 !important;
   }
 
-  /* Palette: narrower, slides from left as overlay */
+  /* Palette: slides from left as a floating overlay (not docked) */
   .palette {
-    width: 280px;
-    top: 76px;
-    left: 8px;
-    max-height: calc(100vh - 96px);
+    position: fixed;
+    width: 300px;
+    top: 84px;
+    left: 12px;
+    max-height: calc(100vh - 104px);
     box-shadow: 0 8px 32px rgba(15, 23, 42, 0.18);
+    z-index: 950;
   }
 
   /* Semi-transparent scrim behind palette when open */
