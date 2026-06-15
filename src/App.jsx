@@ -49,7 +49,11 @@ const NO_CONFIG_WIDGET_TYPES = [
   'miceNationalityIndustryMatrix',
   'miceNationalityMatrixView',
   'miceDrillFlow',
-  'miceDataTable'
+  'miceDataTable',
+  'miceStatPerfKpiCard',
+  'miceStatPerfSectorBar',
+  'miceStatPerfSectorTable',
+  'miceStatPerfHistoricalChart',
 ];
 const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {

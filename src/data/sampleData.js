@@ -123,6 +123,24 @@ const makeSeries = (values) =>
     value
   }));
 
+const _SP_REV = [52699, 58398, 53226, 69552, 81636, 89460, 81721, 103149, 96910, 117320, 129860, 97020, 12000, 0, 145000, 54000, 95000, 48000];
+const _SP_WEIGHTS = {
+  Meetings:    [0.26, 0.26, 0.26, 0.26, 0.26, 0.27, 0.26, 0.27, 0.26, 0.26, 0.25, 0.25, 0.30, 0.30, 0.25, 0.25, 0.25, 0.25],
+  Incentives:  [0.30, 0.30, 0.29, 0.28, 0.29, 0.29, 0.30, 0.30, 0.30, 0.29, 0.29, 0.29, 0.32, 0.30, 0.29, 0.29, 0.29, 0.29],
+  Conventions: [0.13, 0.13, 0.13, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.12, 0.14, 0.14, 0.12, 0.11, 0.11, 0.11],
+  Exhibitions: [0.31, 0.31, 0.32, 0.32, 0.31, 0.30, 0.30, 0.29, 0.30, 0.31, 0.32, 0.32, 0.24, 0.24, 0.34, 0.35, 0.35, 0.34],
+  'Mega Events':[0.00, 0.00, 0.00, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.00, 0.02, 0.00, 0.00, 0.00, 0.01],
+};
+function createStatPerfHistorical() {
+  const result = [];
+  _SP_REV.forEach((total, i) => {
+    Object.entries(_SP_WEIGHTS).forEach(([sec, w]) => {
+      result.push({ year: 2008 + i, sector_name: sec, revenue_generated: Math.round(total * w[i]) });
+    });
+  });
+  return result;
+}
+
 const MICE_FIXED_PROFILE = {
   charts: {
     events: makeSeries([
@@ -288,7 +306,28 @@ const MICE_FIXED_PROFILE = {
       { quarter: 'Q3', thisYear: 148000, lastYear: 216691 },
       { quarter: 'Q4', thisYear: 60000, lastYear: 234375 }
     ]
-  }
+  },
+  statPerfKpi: {
+    visitors:          1111856,
+    visitorsLy:        1701234,
+    yoyVisitors:       -34.6,
+    revenue:           64833.17,
+    revenueLy:         94750,
+    yoyRevenue:        -31.6,
+    events:            2443,
+    eventsLy:          2823,
+    yoyEvents:         -13.5,
+    revenuePerEvent:   26538342.57,
+    revenuePerVisitor: 58310.76,
+    visitorsPerEvent:  455.12,
+  },
+  statPerfSector: [
+    { sector_name: 'Meetings',     no_of_visitors: 279575,  revenue_generated: 16115, no_of_events: 832 },
+    { sector_name: 'Incentives',   no_of_visitors: 329961,  revenue_generated: 19052, no_of_events: 813 },
+    { sector_name: 'Conventions',  no_of_visitors: 142189,  revenue_generated:  7419, no_of_events: 660 },
+    { sector_name: 'Exhibitions',  no_of_visitors: 360131,  revenue_generated: 22247, no_of_events: 138 },
+  ],
+  statPerfHistorical: createStatPerfHistorical(),
 };
 
 export const FALLBACK_COUNTRIES = [
@@ -893,6 +932,146 @@ export const widgetCatalog = [
     dataset: 'miceStatistics',
     title: 'MICE Statistics',
     description: 'ตารางสถิติ MICE รายปี: Events, Visitors, Revenue แยกตาม Quarter'
+  },
+  // ── MICE Statistics Performance ─────────────────────────────────────────────
+  {
+    type: 'miceStatPerfKpiCard',
+    paletteKey: 'miceStatPerfKpiCard:visitors',
+    group: 'ready',
+    fixed: true,
+    metric: 'visitors',
+    defaultW: 4,
+    defaultH: 3,
+    label: 'Stat Perf — จำนวนนักเดินทางไมซ์ (KPI)',
+    dataset: 'miceStatistics',
+    title: 'จำนวนนักเดินทางไมซ์',
+    description: 'จำนวนนักเดินทางไมซ์รวม พร้อม %YoY'
+  },
+  {
+    type: 'miceStatPerfKpiCard',
+    paletteKey: 'miceStatPerfKpiCard:revenue',
+    group: 'ready',
+    fixed: true,
+    metric: 'revenue',
+    defaultW: 4,
+    defaultH: 3,
+    label: 'Stat Perf — รายได้จากการจัดงาน (KPI)',
+    dataset: 'miceStatistics',
+    title: 'รายได้จากการจัดงาน (ล้านบาท)',
+    description: 'รายได้รวมจากการจัดงาน MICE พร้อม %YoY'
+  },
+  {
+    type: 'miceStatPerfKpiCard',
+    paletteKey: 'miceStatPerfKpiCard:events',
+    group: 'ready',
+    fixed: true,
+    metric: 'events',
+    defaultW: 4,
+    defaultH: 3,
+    label: 'Stat Perf — จำนวนงานไมซ์ (KPI)',
+    dataset: 'miceStatistics',
+    title: 'จำนวนงานไมซ์',
+    description: 'จำนวนงาน MICE รวม พร้อม %YoY'
+  },
+  {
+    type: 'miceStatPerfKpiCard',
+    paletteKey: 'miceStatPerfKpiCard:revenuePerEvent',
+    group: 'ready',
+    fixed: true,
+    metric: 'revenuePerEvent',
+    defaultW: 4,
+    defaultH: 3,
+    label: 'Stat Perf — รายได้เฉลี่ยต่อ 1 งาน (KPI)',
+    dataset: 'miceStatistics',
+    title: 'รายได้เฉลี่ยต่อ 1 งาน (บาท)',
+    description: 'รายได้เฉลี่ยต่องาน MICE'
+  },
+  {
+    type: 'miceStatPerfKpiCard',
+    paletteKey: 'miceStatPerfKpiCard:revenuePerVisitor',
+    group: 'ready',
+    fixed: true,
+    metric: 'revenuePerVisitor',
+    defaultW: 4,
+    defaultH: 3,
+    label: 'Stat Perf — รายได้เฉลี่ยต่อ 1 คน (KPI)',
+    dataset: 'miceStatistics',
+    title: 'รายได้เฉลี่ยต่อ 1 คน (บาท)',
+    description: 'รายได้เฉลี่ยต่อนักเดินทาง MICE 1 คน'
+  },
+  {
+    type: 'miceStatPerfKpiCard',
+    paletteKey: 'miceStatPerfKpiCard:visitorsPerEvent',
+    group: 'ready',
+    fixed: true,
+    metric: 'visitorsPerEvent',
+    defaultW: 4,
+    defaultH: 3,
+    label: 'Stat Perf — นักเดินทางต่อ 1 งาน (KPI)',
+    dataset: 'miceStatistics',
+    title: 'นักเดินทางต่อ 1 งาน (คน)',
+    description: 'จำนวนนักเดินทางเฉลี่ยต่องาน MICE'
+  },
+  {
+    type: 'miceStatPerfSectorBar',
+    paletteKey: 'miceStatPerfSectorBar:visitors',
+    group: 'ready',
+    fixed: true,
+    metric: 'visitors',
+    defaultW: 6,
+    defaultH: 5,
+    label: 'Stat Perf — สัดส่วนนักเดินทางไมซ์',
+    dataset: 'miceStatistics',
+    title: 'สัดส่วนนักเดินทางไมซ์',
+    description: 'แผนภูมิแท่งแนวนอนแสดงสัดส่วนนักเดินทางแยกตามประเภทงาน'
+  },
+  {
+    type: 'miceStatPerfSectorBar',
+    paletteKey: 'miceStatPerfSectorBar:revenue',
+    group: 'ready',
+    fixed: true,
+    metric: 'revenue',
+    defaultW: 6,
+    defaultH: 5,
+    label: 'Stat Perf — สัดส่วนรายได้จากการจัดงานไมซ์',
+    dataset: 'miceStatistics',
+    title: 'สัดส่วนรายได้จากการจัดงานไมซ์',
+    description: 'แผนภูมิแท่งแนวนอนแสดงสัดส่วนรายได้แยกตามประเภทงาน'
+  },
+  {
+    type: 'miceStatPerfSectorBar',
+    paletteKey: 'miceStatPerfSectorBar:events',
+    group: 'ready',
+    fixed: true,
+    metric: 'events',
+    defaultW: 6,
+    defaultH: 5,
+    label: 'Stat Perf — สัดส่วนจำนวนงานไมซ์',
+    dataset: 'miceStatistics',
+    title: 'สัดส่วนจำนวนงานไมซ์',
+    description: 'แผนภูมิแท่งแนวนอนแสดงสัดส่วนจำนวนงานแยกตามประเภทงาน'
+  },
+  {
+    type: 'miceStatPerfSectorTable',
+    group: 'ready',
+    fixed: true,
+    defaultW: 6,
+    defaultH: 6,
+    label: 'Stat Perf — ตารางสัดส่วนตามประเภทงาน',
+    dataset: 'miceStatistics',
+    title: 'สัดส่วนตามประเภทงาน',
+    description: 'ตารางแสดง #Visitors, Revenue, #Events แยกตาม Sector พร้อม Total'
+  },
+  {
+    type: 'miceStatPerfHistoricalChart',
+    group: 'ready',
+    fixed: true,
+    defaultW: 12,
+    defaultH: 8,
+    label: 'Stat Perf — สัดส่วนรายได้รายปีตามอุตสาหกรรม',
+    dataset: 'miceStatistics',
+    title: 'สัดส่วนรายได้จากการจัดงานไมซ์ตามอุตสาหกรรม',
+    description: '100% Stacked Bar แสดงสัดส่วนรายได้ MICE แยกตามประเภทงาน ครอบคลุมปี 2008–2025'
   },
   {
     type: 'chart',

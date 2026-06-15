@@ -1912,6 +1912,188 @@ function MiceDataTableWidget({ rows, globalFilter }) {
   );
 }
 
+// ── MICE Statistics Performance ───────────────────────────────────────────────
+
+const STAT_PERF_SECTOR_COLORS = {
+  Meetings:      '#5b9bd5',
+  Incentives:    '#8064a2',
+  Conventions:   '#f79646',
+  Exhibitions:   '#c0504d',
+  'Mega Events': '#9bbb59',
+};
+const STAT_PERF_SECTOR_ORDER = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions', 'Mega Events'];
+
+const fmtInt   = new Intl.NumberFormat('en-US');
+const fmtDec2  = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function MiceStatPerfKpiCard({ fixedProfile, metric }) {
+  const kpi = fixedProfile.statPerfKpi || {};
+  const CONFIGS = {
+    visitors:          { value: kpi.visitors,          fmt: (v) => fmtInt.format(v),  label: 'จำนวนนักเดินทางไมซ์ (คน)',      yoy: kpi.yoyVisitors },
+    revenue:           { value: kpi.revenue,            fmt: (v) => fmtDec2.format(v), label: 'รายได้จากการจัดงาน (ล้านบาท)',  yoy: kpi.yoyRevenue },
+    events:            { value: kpi.events,             fmt: (v) => fmtInt.format(v),  label: 'จำนวนงานไมซ์ (งาน)',            yoy: kpi.yoyEvents },
+    revenuePerEvent:   { value: kpi.revenuePerEvent,    fmt: (v) => fmtDec2.format(v), label: 'รายได้เฉลี่ยต่อ 1 งาน (บาท)',   yoy: null },
+    revenuePerVisitor: { value: kpi.revenuePerVisitor,  fmt: (v) => fmtDec2.format(v), label: 'รายได้เฉลี่ยต่อ 1 คน (บาท)',    yoy: null },
+    visitorsPerEvent:  { value: kpi.visitorsPerEvent,   fmt: (v) => fmtDec2.format(v), label: 'นักเดินทางต่อ 1 งาน (คน)',      yoy: null },
+  };
+  const cfg = CONFIGS[metric] || CONFIGS.visitors;
+  const hasYoy = cfg.yoy != null && isFinite(cfg.yoy);
+  const yoyUp  = cfg.yoy >= 0;
+
+  return (
+    <div className="stat-perf-kpi-card">
+      <div className="stat-perf-kpi-value">
+        {cfg.value != null ? cfg.fmt(cfg.value) : '—'}
+      </div>
+      {hasYoy && (
+        <div className={`stat-perf-kpi-yoy ${yoyUp ? 'up' : 'down'}`}>
+          %Growth (YoY) {yoyUp ? '▲' : '▼'} {Math.abs(cfg.yoy).toFixed(1)}%
+        </div>
+      )}
+      <div className="stat-perf-kpi-label">{cfg.label}</div>
+    </div>
+  );
+}
+
+function MiceStatPerfSectorBar({ fixedProfile, metric }) {
+  const rows = fixedProfile.statPerfSector || [];
+  const METRIC_CFG = {
+    visitors: { key: 'no_of_visitors',    title: 'สัดส่วนนักเดินทางไมซ์' },
+    revenue:  { key: 'revenue_generated', title: 'สัดส่วนรายได้จากการจัดงานไมซ์' },
+    events:   { key: 'no_of_events',      title: 'สัดส่วนจำนวนงานไมซ์' },
+  };
+  const cfg    = METRIC_CFG[metric] || METRIC_CFG.visitors;
+  const total  = rows.reduce((s, r) => s + (r[cfg.key] || 0), 0);
+  const sorted = [...rows].sort((a, b) => (b[cfg.key] || 0) - (a[cfg.key] || 0));
+
+  return (
+    <div className="stat-perf-sector-bar">
+      <div className="stat-perf-sector-bar-title">{cfg.title}</div>
+      <div className="stat-perf-sector-bar-rows">
+        {sorted.map((row) => {
+          const val   = row[cfg.key] || 0;
+          const pct   = total > 0 ? (val / total) * 100 : 0;
+          const color = STAT_PERF_SECTOR_COLORS[row.sector_name] || '#94a3b8';
+          return (
+            <div key={row.sector_name} className="stat-perf-sector-bar-row">
+              <div className="stat-perf-sector-bar-label">{row.sector_name}</div>
+              <div className="stat-perf-sector-bar-with-pct">
+                <div className="stat-perf-sector-bar-track">
+                  <div className="stat-perf-sector-bar-fill" style={{ width: `${pct}%`, background: color }} />
+                </div>
+                <span className="stat-perf-sector-bar-pct">{pct.toFixed(2)}%</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MiceStatPerfSectorTable({ fixedProfile }) {
+  const rows   = [...(fixedProfile.statPerfSector || [])].sort(
+    (a, b) => STAT_PERF_SECTOR_ORDER.indexOf(a.sector_name) - STAT_PERF_SECTOR_ORDER.indexOf(b.sector_name)
+  );
+  const totals = rows.reduce(
+    (s, r) => ({ visitors: s.visitors + (r.no_of_visitors || 0), revenue: s.revenue + (r.revenue_generated || 0), events: s.events + (r.no_of_events || 0) }),
+    { visitors: 0, revenue: 0, events: 0 }
+  );
+
+  return (
+    <div className="stat-perf-sector-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Sector</th>
+            <th style={{ textAlign: 'right' }}>#Visitors</th>
+            <th style={{ textAlign: 'right' }}>Revenue</th>
+            <th style={{ textAlign: 'right' }}>#Events</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.sector_name}>
+              <td>{row.sector_name}</td>
+              <td style={{ textAlign: 'right' }}>{fmtInt.format(row.no_of_visitors)}</td>
+              <td style={{ textAlign: 'right' }}>{fmtInt.format(row.revenue_generated)}</td>
+              <td style={{ textAlign: 'right' }}>{fmtInt.format(row.no_of_events)}</td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td><strong>Total</strong></td>
+            <td style={{ textAlign: 'right' }}><strong>{fmtInt.format(totals.visitors)}</strong></td>
+            <td style={{ textAlign: 'right' }}><strong>{fmtInt.format(totals.revenue)}</strong></td>
+            <td style={{ textAlign: 'right' }}><strong>{fmtInt.format(totals.events)}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
+function MiceStatPerfHistoricalChart({ fixedProfile }) {
+  const rawRows = fixedProfile.statPerfHistorical || [];
+
+  // Pivot: year → { sector: value, ... }
+  const yearMap = {};
+  rawRows.forEach((r) => {
+    if (!yearMap[r.year]) yearMap[r.year] = { year: r.year };
+    yearMap[r.year][r.sector_name] = r.revenue_generated;
+  });
+
+  const activeSectors = STAT_PERF_SECTOR_ORDER.filter((s) =>
+    rawRows.some((r) => r.sector_name === s && r.revenue_generated > 0)
+  );
+
+  const data = Object.values(yearMap)
+    .sort((a, b) => a.year - b.year)
+    .map((row) => {
+      const yearTotal = activeSectors.reduce((s, sec) => s + (row[sec] || 0), 0);
+      const result = { year: row.year, _total: yearTotal };
+      activeSectors.forEach((sec) => {
+        result[sec] = yearTotal > 0 ? ((row[sec] || 0) / yearTotal) * 100 : 0;
+      });
+      return result;
+    });
+
+  return (
+    <div className="stat-perf-historical">
+      <div className="stat-perf-historical-title">สัดส่วนรายได้จากการจัดงานไมซ์ตามอุตสาหกรรม</div>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 40, left: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
+          <XAxis dataKey="year" tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={45} />
+          <YAxis tickFormatter={(v) => `${Math.round(v)}%`} domain={[0, 100]} width={36} tick={{ fontSize: 10 }} />
+          <Tooltip
+            formatter={(value, name) => [`${value.toFixed(1)}%`, name]}
+            labelFormatter={(label) => `ปี ${label}`}
+          />
+          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+          {activeSectors.map((sec) => {
+            const makeLabel = ({ x, y, width, height, index }) => {
+              const pct = data[index]?.[sec] || 0;
+              if (pct < 5 || height < 10) return null;
+              return (
+                <text key={`${sec}-${index}`} x={x + width / 2} y={y + height / 2} fill="#fff" textAnchor="middle" dominantBaseline="middle" fontSize={10} fontWeight={600}>
+                  {pct.toFixed(1)}%
+                </text>
+              );
+            };
+            return (
+              <Bar key={sec} dataKey={sec} stackId="stack" fill={STAT_PERF_SECTOR_COLORS[sec] || '#94a3b8'} isAnimationActive={false}>
+                <LabelList content={makeLabel} />
+              </Bar>
+            );
+          })}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export default function WidgetRenderer({ widget, dataset, records: overrideRecords, isPreview, isSkeleton = false, apiStatus, apiError, globalFilter }) {
   const isMiceBound = typeof widget.dataset === 'string' && /^mice/i.test(widget.dataset);
   const hasData = (dataset?.records && dataset.records.length > 0)
@@ -2016,6 +2198,24 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     );
   }
 
+  const fixedProfile = dataset?.fixedProfile || {};
+
+  if (widget.type === 'miceStatPerfKpiCard') {
+    return <MiceStatPerfKpiCard fixedProfile={fixedProfile} metric={widget.metric || 'visitors'} />;
+  }
+
+  if (widget.type === 'miceStatPerfSectorBar') {
+    return <MiceStatPerfSectorBar fixedProfile={fixedProfile} metric={widget.metric || 'visitors'} />;
+  }
+
+  if (widget.type === 'miceStatPerfSectorTable') {
+    return <MiceStatPerfSectorTable fixedProfile={fixedProfile} />;
+  }
+
+  if (widget.type === 'miceStatPerfHistoricalChart') {
+    return <MiceStatPerfHistoricalChart fixedProfile={fixedProfile} />;
+  }
+
   if (!dataset?.records?.length) {
     if (apiStatus === 'loading') {
       return (
@@ -2037,7 +2237,6 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
 
   const records = overrideRecords || dataset.records;
   const fieldsByKey = Object.fromEntries((dataset.fields || []).map((field) => [field.key, field]));
-  const fixedProfile = dataset.fixedProfile || {};
 
   if (widget.type === 'miceStatCard') {
     const profile = fixedProfile.kpis || {};

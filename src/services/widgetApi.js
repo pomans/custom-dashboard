@@ -33,6 +33,10 @@ const WIDGET_API_KEYS = {
   miceNationalityMatrixView:   ['miceNationalityMatrixView'],
   miceDrillFlow:               ['miceDrillFlow'],
   miceDataTable:               ['miceDataTable'],
+  miceStatPerfKpiCard:         ['miceStatPerfKpi'],
+  miceStatPerfSectorBar:       ['miceStatPerfSector'],
+  miceStatPerfSectorTable:     ['miceStatPerfSector'],
+  miceStatPerfHistoricalChart: ['miceStatPerfHistorical'],
   // FETCH_PRIORITY entry handled below
 };
 
@@ -53,6 +57,9 @@ const FETCH_PRIORITY = [
   'miceNationalityMatrixView', // UNION ALL industry + quarter views
   'miceDrillFlow',             // full hierarchy — หนักสุด
   'miceDataTable',             // annual+quarterly table
+  'miceStatPerfKpi',           // 1 row aggregate
+  'miceStatPerfSector',        // ~5 rows sector breakdown
+  'miceStatPerfHistorical',    // ~90 rows all-years sector
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,13 +132,32 @@ function buildQuarterlyParams(filter) {
 
 const QUARTERLY_WIDGET_KEYS = new Set(['miceEventsQuarterlyChart', 'miceVisitorsQuarterlyChart']);
 
+// Historical widgets always fetch the full year range regardless of global filter
+const HISTORICAL_WIDGET_KEYS = new Set(['miceStatPerfHistorical']);
+
+function buildHistoricalParams(filter) {
+  const f = filter || {};
+  const params = {
+    market:   f.market   || 'International',
+    yearMode: f.yearMode || 'calendar',
+    yearMin:  2008,
+    yearMax:  2025,
+    industry: f.industry || 'all',
+    nocache:  'true',
+  };
+  if (f.quarters && f.quarters !== 'Q1,Q2,Q3,Q4') params.quarters = f.quarters;
+  return new URLSearchParams(params).toString();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Fetch one widget endpoint → rows array
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchRows(widgetKey, filter, signal) {
   const urlParams = QUARTERLY_WIDGET_KEYS.has(widgetKey)
     ? buildQuarterlyParams(filter)
-    : buildParams(filter);
+    : HISTORICAL_WIDGET_KEYS.has(widgetKey)
+      ? buildHistoricalParams(filter)
+      : buildParams(filter);
   const url = `${WIDGET_ENDPOINT(widgetKey)}?${urlParams}`;
   const res = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -296,6 +322,47 @@ export function transformDrillFlow(rows) {
   return { total: natList.reduce((s, n) => s + n.value, 0), nationality: natList };
 }
 
+// ─── MICE Statistics Performance transformers ────────────────────────────────
+
+function transformStatPerfKpi(rows) {
+  const r = rows?.[0] || {};
+  const visitors   = num(r.no_of_visitors);
+  const visitorsLy = num(r.no_of_visitors_ly);
+  const revenue    = num(r.revenue_generated);
+  const revenueLy  = num(r.revenue_generated_ly);
+  const events     = num(r.no_of_events);
+  const eventsLy   = num(r.no_of_events_ly);
+  // API returns revenue_per_event / revenue_per_visitor in million baht → convert to baht
+  const revenuePerEvent   = num(r.revenue_per_event)   * 1_000_000;
+  const revenuePerVisitor = num(r.revenue_per_visitor) * 1_000_000;
+  const visitorsPerEvent  = num(r.visitors_per_event);
+  return {
+    visitors,    visitorsLy,    yoyVisitors:  visitorsLy  ? yoyPct(visitors,  visitorsLy)  : (numYoy(r.yoy_visitors)  ?? 0),
+    revenue,     revenueLy,     yoyRevenue:   revenueLy   ? yoyPct(revenue,   revenueLy)   : (numYoy(r.yoy_revenue)   ?? 0),
+    events,      eventsLy,      yoyEvents:    eventsLy    ? yoyPct(events,    eventsLy)    : (numYoy(r.yoy_event)     ?? 0),
+    revenuePerEvent,
+    revenuePerVisitor,
+    visitorsPerEvent,
+  };
+}
+
+function transformStatPerfSector(rows) {
+  return rows.map((r) => ({
+    sector_name:       String(r.sector_name || ''),
+    no_of_visitors:    num(r.no_of_visitors),
+    revenue_generated: num(r.revenue_generated),
+    no_of_events:      num(r.no_of_events),
+  }));
+}
+
+function transformStatPerfHistorical(rows) {
+  return rows.map((r) => ({
+    year:              num(r.calendar_year_en),
+    sector_name:       String(r.sector_name || ''),
+    revenue_generated: num(r.revenue_generated),
+  }));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Apply fetched rows to the fixedProfile object
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,6 +438,15 @@ function applyToProfile(apiKey, rows, filter, profile) {
         visitors: num(r.no_of_visitors),
         revenue:  num(r.revenue_generated_million_baht),
       }));
+      break;
+    case 'miceStatPerfKpi':
+      profile.statPerfKpi = transformStatPerfKpi(rows);
+      break;
+    case 'miceStatPerfSector':
+      profile.statPerfSector = transformStatPerfSector(rows);
+      break;
+    case 'miceStatPerfHistorical':
+      profile.statPerfHistorical = transformStatPerfHistorical(rows);
       break;
     default:
       break;
