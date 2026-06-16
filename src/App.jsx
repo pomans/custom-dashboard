@@ -3027,14 +3027,14 @@ export default function App() {
               <path d="M13 3H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.5"/>
               <path d="M10 7v4M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            นำเข้าข้อมูล
+            Import
           </button>
           <input ref={listImportRef} type="file" accept="application/json,.json" style={{display:'none'}} onChange={importDashboardFile} />
           <button type="button" className="dl-btn-new" onClick={openNewDashboardDialog}>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14" style={{flexShrink:0}}>
               <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
             </svg>
-            เพิ่มแดชบอร์ด
+            New Dashboard
           </button>
         </div>
       </header>
@@ -3106,7 +3106,7 @@ export default function App() {
                         <path d="M13 3H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.5"/>
                         <path d="M10 7v4M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      ดาวน์โหลด
+                      Download
                     </button>
                     <button
                       type="button"
@@ -3118,7 +3118,7 @@ export default function App() {
                       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
                         <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      ลบ
+                      Delete
                     </button>
                     <button
                       type="button"
@@ -3135,7 +3135,7 @@ export default function App() {
                         <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
                         <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
                       </svg>
-                      แชร์
+                      Share
                     </button>
                   </div>
                 </div>
