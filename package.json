@@ -1,6 +1,6 @@
 {
   "name": "tceb-dashboard-builder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MICE Data Hub Dashboard Builder — embeddable React component",
   "type": "module",
   "main": "./dist/dashboard-builder.cjs.js",
@@ -21,7 +21,7 @@
     "build:lib": "npm run gen:scoped && vite build --mode lib",
     "build:all": "npm run build && npm run build:lib",
     "preview": "vite preview --base /custom-dashboard/",
-    "pack": "npm run build:lib && npm pack"
+    "pack": "npm version patch --no-git-tag-version && npm run build:lib && npm pack"
   },
   "peerDependencies": {
     "react": ">=18",
