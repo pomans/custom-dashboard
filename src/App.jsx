@@ -1707,7 +1707,12 @@ export default function App() {
     // Filter panel: pin ไว้ที่ (0, 0) เสมอ — widgets จะอยู่ใต้มัน
     const hasFp = Boolean(filterPanelLayout);
     const fpW   = hasFp ? Math.min(filterPanelLayout.w ?? viewportCols, viewportCols) : 0;
-    const fpH   = hasFp ? Math.max(2, filterPanelLayout.h ?? 3) : 0;
+    // อ่าน rendered height จาก DOM โดยตรง (แม่นยำกว่า state ที่อาจ stale)
+    const fpHStored = hasFp ? Math.max(2, filterPanelLayout.h ?? 3) : 0;
+    const fpHActual = hasFp && filterPanelRef.current
+      ? Math.ceil((filterPanelRef.current.offsetHeight + WIDGET_VISUAL_INSET * 2) / GRID_ROW_HEIGHT)
+      : 0;
+    const fpH = Math.max(fpHStored, fpHActual);
 
     // colHeight: บล็อก columns ที่ filter panel ครอง (x=0..fpW, y=0..fpH)
     const colHeight = new Array(viewportCols).fill(0);
