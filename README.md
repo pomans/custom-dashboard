@@ -22,8 +22,8 @@ MICE Data Hub Dashboard Builder — React component สำหรับสร้�
 ## ติดตั้ง
 
 ```bash
-# จาก .tgz file ที่ได้รับมา
-npm install ./tceb-dashboard-builder-1.0.0.tgz
+# จาก .tgz file ที่ได้รับมา (เปลี่ยน x.x.x เป็น version ล่าสุด)
+npm install ./tceb-dashboard-builder-1.0.2.tgz
 ```
 
 ### Peer Dependencies (ต้องมีใน host app)
@@ -317,48 +317,51 @@ npm run dev        # Vite dev server → http://localhost:5173/custom-dashboard/
 
 ---
 
-### Step-by-step: สร้าง npm package (.tgz)
+### Step-by-step: สร้างและติดตั้ง npm package (.tgz)
 
-**1. ติดตั้ง dependencies**
+**1. ติดตั้ง dependencies (ครั้งแรกเท่านั้น)**
 
 ```bash
 npm install
 ```
 
-**2. (ถ้าจะอัปเดต version) แก้ `package.json`**
-
-```json
-{
-  "name": "tceb-dashboard-builder",
-  "version": "1.0.1"   ← แก้ตรงนี้
-}
-```
-
-**3. Build + Pack**
+**2. Build + Pack**
 
 ```bash
 npm run pack
 ```
 
-คำสั่งนี้รัน `build:lib` แล้วสร้างไฟล์ `.tgz` อัตโนมัติ
+คำสั่งนี้ทำทุกอย่างอัตโนมัติใน sequence เดียว:
+1. **bump patch version** — `package.json` version เพิ่มขึ้นเองทุกครั้ง (e.g. `1.0.2` → `1.0.3`)
+2. **gen:scoped** — regenerate `app-scoped.css` จาก `app.css` พร้อม `.dashboard-builder-root` prefix
+3. **build:lib** — bundle เป็น ES module + CommonJS ใน `dist/`
+4. **npm pack** — สร้าง `tceb-dashboard-builder-x.x.x.tgz`
 
-**4. ตรวจสอบ output**
+**3. ตรวจสอบ output**
 
 ```bash
 ls dist/
-# dashboard-builder.es.js    ← ES module
-# dashboard-builder.cjs.js   ← CommonJS (webpack/CRA)
-# style.css                  ← CSS (inject อัตโนมัติแล้ว แต่มีให้ fallback)
+# dashboard-builder.es.js    ← ES module (Vite / modern bundlers)
+# dashboard-builder.cjs.js   ← CommonJS (webpack / CRA)
 
 ls *.tgz
-# tceb-dashboard-builder-1.0.1.tgz
+# tceb-dashboard-builder-1.0.3.tgz  ← ชื่อตาม version ที่ bump
 ```
 
-**5. ติดตั้งใน host project**
+**4. คัดลอก .tgz ไปยัง host project และติดตั้ง**
 
 ```bash
-# คัดลอก .tgz ไปยัง host project แล้วรัน:
-npm install ./tceb-dashboard-builder-1.0.1.tgz
+cp tceb-dashboard-builder-1.0.3.tgz /path/to/tceb-web/
+
+# ใน tceb-web:
+rm -rf node_modules/tceb-dashboard-builder   # ล้าง cache ก่อน
+npm install ./tceb-dashboard-builder-1.0.3.tgz
+```
+
+**5. Restart dev server ของ host app**
+
+```bash
+npm start
 ```
 
 ---
