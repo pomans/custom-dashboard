@@ -524,13 +524,13 @@ function QuarterlyChartPanel({ title, color, yLabel, yTickFormatter, widgetKey, 
                 <XAxis dataKey="quarter" tick={{ fontSize: 13 }} tickMargin={8} />
                 <YAxis tickFormatter={yTickFormatter || formatAxisTickValue} width={72} tick={{ fontSize: 12 }} />
                 <Tooltip
-                  labelFormatter={(quarter) => `ไตรมาส ${quarter}`}
+                  labelFormatter={(quarter) => `Quarter ${quarter}`}
                   formatter={(value, name) => [formatMetricValue(Number(value)), name]}
                 />
-                <Line type="monotone" dataKey="thisYear" name="ปีนี้ (This Year)" stroke="#081f68" strokeWidth={3} dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }} activeDot={{ r: 7 }}>
+                <Line type="monotone" dataKey="thisYear" name="This Year" stroke="#081f68" strokeWidth={3} dot={{ r: 5, fill: '#081f68', stroke: '#081f68' }} activeDot={{ r: 7 }}>
                   <LabelList dataKey="yoy" content={renderYoyBadge} />
                 </Line>
-                <Line type="monotone" dataKey="lastYear" name="ปีที่แล้ว (Last Year)" stroke="#7ec8e3" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }} />
+                <Line type="monotone" dataKey="lastYear" name="Last Year" stroke="#7ec8e3" strokeWidth={2} strokeDasharray="6 4" dot={{ r: 4, fill: '#7ec8e3', stroke: '#7ec8e3' }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -950,7 +950,7 @@ function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries, ye
     <div className="chart-local-filter">
       {year != null && setYear && yearOptions?.length > 0 && (
         <div className="clf-group">
-          <span className="clf-label">ปี</span>
+          <span className="clf-label">Year</span>
           <select
             className="clf-select"
             value={year}
@@ -963,7 +963,7 @@ function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries, ye
         </div>
       )}
       <div className="clf-group">
-        <span className="clf-label">ไตรมาส</span>
+        <span className="clf-label">Quarter</span>
         <div className="clf-chips">
           {ALL_QUARTERS.map((q) => (
             <button key={q} type="button" className={quarters.includes(q) ? 'active' : ''} onClick={() => toggleQ(q)}>{q}</button>
@@ -971,7 +971,7 @@ function ChartLocalFilter({ quarters, setQuarters, industries, setIndustries, ye
         </div>
       </div>
       <div className="clf-group">
-        <span className="clf-label">ประเภท</span>
+        <span className="clf-label">Type</span>
         <div className="clf-chips">
           {sectors.map((s) => (
             <button
@@ -1234,7 +1234,7 @@ function MiceNationalityIndustryMatrixWidget({ fixedProfile }) {
   const rowData = fixedProfile.nationalityIndustryMatrix || [];
   const industries = ['Meetings', 'Incentives', 'Conventions', 'Exhibitions'];
   const indOptions = [
-    { value: 'all', label: 'ทั้งหมด' },
+    { value: 'all', label: 'All' },
     ...industries.map(i => ({ value: i, label: i }))
   ];
   // When industry selected: keep only rows that have visitors in that industry
@@ -1251,7 +1251,7 @@ function MiceNationalityIndustryMatrixWidget({ fixedProfile }) {
     <div className="fixed-mice-table-shell">
       <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">Nationality by MICE Industry</div>
       <WidgetFilterBar
-        label="อุตสาหกรรม"
+        label="Industry"
         options={indOptions}
         value={selInd}
         onChange={setSelInd}
@@ -1354,7 +1354,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
         <div className="fixed-mice-chart-title fixed-mice-chart-title-matrix">
           Nationality by {isPeriod ? 'Period' : 'MICE Industry'}
         </div>
-        <span className="mice-matrix-toolbar-label" style={{ marginLeft: 'auto' }}>เลือกมุมมอง :</span>
+        <span className="mice-matrix-toolbar-label" style={{ marginLeft: 'auto' }}>View :</span>
         <div className="mice-matrix-toggle">
           {['industry', 'period'].map(mode => (
             <button
@@ -1377,7 +1377,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                 rowSpan={isPeriod ? 2 : 1}
                 onClick={() => requestSort('nationality')}
                 style={{ cursor: 'pointer', userSelect: 'none' }}
-                title="คลิกเพื่อเรียงลำดับ"
+                title="Click to sort"
               >
                 Nationality<span className="sort-arrow">{sortArrow('nationality')}</span>
               </th>
@@ -1387,7 +1387,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                   colSpan={isPeriod ? 2 : 1}
                   onClick={() => !isPeriod && requestSort(c)}
                   style={{ textAlign: 'center', cursor: isPeriod ? 'default' : 'pointer', userSelect: 'none' }}
-                  title={isPeriod ? '' : 'คลิกเพื่อเรียงลำดับ'}
+                  title={isPeriod ? '' : 'Click to sort'}
                 >
                   {c}{!isPeriod && <span className="sort-arrow">{sortArrow(c)}</span>}
                 </th>
@@ -1399,7 +1399,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                   className="col-total col-total-sortable"
                   onClick={() => requestSort('Total')}
                   style={{ cursor: 'pointer', userSelect: 'none', textAlign: 'right' }}
-                  title="คลิกเพื่อเรียงลำดับ"
+                  title="Click to sort"
                 >
                   Total<span className="sort-arrow">{sortArrow('Total')}</span>
                 </th>
@@ -1412,7 +1412,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                     key={`${c}-v`}
                     onClick={() => requestSort(c)}
                     style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                    title="คลิกเพื่อเรียงลำดับ"
+                    title="Click to sort"
                   >
                     #Visitors<span className="sort-arrow">{sortArrow(c)}</span>
                   </th>,
@@ -1420,7 +1420,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                     key={`${c}-g`}
                     onClick={() => requestSort(`${c}__yoy`)}
                     style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                    title="คลิกเพื่อเรียงลำดับ"
+                    title="Click to sort"
                   >
                     %Growth<span className="sort-arrow">{sortArrow(`${c}__yoy`)}</span>
                   </th>,
@@ -1429,7 +1429,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                   onClick={() => requestSort('Total')}
                   className="col-total"
                   style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  title="คลิกเพื่อเรียงลำดับ"
+                  title="Click to sort"
                 >
                   #Visitors<span className="sort-arrow">{sortArrow('Total')}</span>
                 </th>
@@ -1437,7 +1437,7 @@ function MiceNationalityMatrixView({ fixedProfile }) {
                   onClick={() => requestSort('TotalYoy')}
                   className="col-total"
                   style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  title="คลิกเพื่อเรียงลำดับ"
+                  title="Click to sort"
                 >
                   %Growth<span className="sort-arrow">{sortArrow('TotalYoy')}</span>
                 </th>
@@ -1929,12 +1929,12 @@ const fmtDec2  = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maxi
 function MiceStatPerfKpiCard({ fixedProfile, metric }) {
   const kpi = fixedProfile.statPerfKpi || {};
   const CONFIGS = {
-    visitors:          { value: kpi.visitors,          fmt: (v) => fmtInt.format(v),  label: 'จำนวนนักเดินทางไมซ์ (คน)',      yoy: kpi.yoyVisitors },
-    revenue:           { value: kpi.revenue,            fmt: (v) => fmtDec2.format(v), label: 'รายได้จากการจัดงาน (ล้านบาท)',  yoy: kpi.yoyRevenue },
-    events:            { value: kpi.events,             fmt: (v) => fmtInt.format(v),  label: 'จำนวนงานไมซ์ (งาน)',            yoy: kpi.yoyEvents },
-    revenuePerEvent:   { value: kpi.revenuePerEvent,    fmt: (v) => fmtDec2.format(v), label: 'รายได้เฉลี่ยต่อ 1 งาน (บาท)',   yoy: null },
-    revenuePerVisitor: { value: kpi.revenuePerVisitor,  fmt: (v) => fmtDec2.format(v), label: 'รายได้เฉลี่ยต่อ 1 คน (บาท)',    yoy: null },
-    visitorsPerEvent:  { value: kpi.visitorsPerEvent,   fmt: (v) => fmtDec2.format(v), label: 'นักเดินทางต่อ 1 งาน (คน)',      yoy: null },
+    visitors:          { value: kpi.visitors,          fmt: (v) => fmtInt.format(v),  label: 'MICE Travelers (persons)',         yoy: kpi.yoyVisitors },
+    revenue:           { value: kpi.revenue,            fmt: (v) => fmtDec2.format(v), label: 'Revenue Generated (MB)',           yoy: kpi.yoyRevenue },
+    events:            { value: kpi.events,             fmt: (v) => fmtInt.format(v),  label: 'MICE Events',                      yoy: kpi.yoyEvents },
+    revenuePerEvent:   { value: kpi.revenuePerEvent,    fmt: (v) => fmtDec2.format(v), label: 'Avg Revenue per Event (THB)',      yoy: null },
+    revenuePerVisitor: { value: kpi.revenuePerVisitor,  fmt: (v) => fmtDec2.format(v), label: 'Avg Revenue per Person (THB)',     yoy: null },
+    visitorsPerEvent:  { value: kpi.visitorsPerEvent,   fmt: (v) => fmtDec2.format(v), label: 'Travelers per Event (persons)',    yoy: null },
   };
   const cfg = CONFIGS[metric] || CONFIGS.visitors;
   const hasYoy = cfg.yoy != null && isFinite(cfg.yoy);
@@ -1958,9 +1958,9 @@ function MiceStatPerfKpiCard({ fixedProfile, metric }) {
 function MiceStatPerfSectorBar({ fixedProfile, metric }) {
   const rows = fixedProfile.statPerfSector || [];
   const METRIC_CFG = {
-    visitors: { key: 'no_of_visitors',    title: 'สัดส่วนนักเดินทางไมซ์' },
-    revenue:  { key: 'revenue_generated', title: 'สัดส่วนรายได้จากการจัดงานไมซ์' },
-    events:   { key: 'no_of_events',      title: 'สัดส่วนจำนวนงานไมซ์' },
+    visitors: { key: 'no_of_visitors',    title: 'MICE Travelers by Sector' },
+    revenue:  { key: 'revenue_generated', title: 'MICE Revenue by Sector' },
+    events:   { key: 'no_of_events',      title: 'MICE Events by Sector' },
   };
   const cfg    = METRIC_CFG[metric] || METRIC_CFG.visitors;
   const total  = rows.reduce((s, r) => s + (r[cfg.key] || 0), 0);
@@ -2061,7 +2061,7 @@ function MiceStatPerfHistoricalChart({ fixedProfile }) {
 
   return (
     <div className="stat-perf-historical">
-      <div className="stat-perf-historical-title">สัดส่วนรายได้จากการจัดงานไมซ์ตามอุตสาหกรรม</div>
+      <div className="stat-perf-historical-title">MICE Revenue Share by Industry</div>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 4, right: 8, bottom: 40, left: 8 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5eaf2" />
@@ -2069,7 +2069,7 @@ function MiceStatPerfHistoricalChart({ fixedProfile }) {
           <YAxis tickFormatter={(v) => `${Math.round(v)}%`} domain={[0, 100]} width={36} tick={{ fontSize: 10 }} />
           <Tooltip
             formatter={(value, name) => [`${value.toFixed(1)}%`, name]}
-            labelFormatter={(label) => `ปี ${label}`}
+            labelFormatter={(label) => `Year ${label}`}
           />
           <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
           {activeSectors.map((sec) => {
@@ -2099,9 +2099,9 @@ const fmtDec1 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maxim
 function MiceStatPerfFyKpiCard({ fixedProfile, metric }) {
   const kpi = fixedProfile.statPerfFyKpi || {};
   const CONFIGS = {
-    stayingPeriod:  { value: kpi.stayingPeriod,  fmt: (v) => fmtDec2.format(v), label: 'ประมาณระยะเวลาอยู่เฉลี่ย (วัน)',          yoy: kpi.yoyStaying   },
-    spendingPerDay: { value: kpi.spendingPerDay,  fmt: (v) => fmtDec2.format(v), label: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อวัน (บาท)',      yoy: kpi.yoySpendDay  },
-    spendingPerTrip:{ value: kpi.spendingPerTrip, fmt: (v) => fmtDec2.format(v), label: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อทริป (บาท)',     yoy: kpi.yoySpendTrip },
+    stayingPeriod:  { value: kpi.stayingPeriod,  fmt: (v) => fmtDec2.format(v), label: 'Avg Staying Period (days)',              yoy: kpi.yoyStaying   },
+    spendingPerDay: { value: kpi.spendingPerDay,  fmt: (v) => fmtDec2.format(v), label: 'Avg Spending per Head per Day (THB)',    yoy: kpi.yoySpendDay  },
+    spendingPerTrip:{ value: kpi.spendingPerTrip, fmt: (v) => fmtDec2.format(v), label: 'Avg Spending per Head per Trip (THB)',   yoy: kpi.yoySpendTrip },
   };
   const cfg = CONFIGS[metric] || CONFIGS.stayingPeriod;
   const hasYoy = cfg.yoy != null && isFinite(cfg.yoy);
@@ -2126,9 +2126,9 @@ function MiceStatPerfFySectorBar({ fixedProfile, metric }) {
     (a, b) => (b[metric] || 0) - (a[metric] || 0)
   );
   const METRIC_CFG = {
-    stayingPeriod:  { key: 'staying_period',              title: 'ระยะเวลาอยู่เฉลี่ยแยกตามอุตสาหกรรม (วัน)',    fmt: (v) => fmtDec1.format(v) },
-    spendingPerDay: { key: 'spending_per_head_per_day',   title: 'ค่าใช้จ่ายต่อหัวต่อวันแยกตามอุตสาหกรรม (บาท)', fmt: (v) => fmtInt.format(Math.round(v)) },
-    spendingPerTrip:{ key: 'spending_per_head_per_trip',  title: 'ค่าใช้จ่ายต่อหัวต่อทริปแยกตามอุตสาหกรรม (บาท)', fmt: (v) => fmtInt.format(Math.round(v)) },
+    stayingPeriod:  { key: 'staying_period',              title: 'Avg Staying Period by Industry (days)',        fmt: (v) => fmtDec1.format(v) },
+    spendingPerDay: { key: 'spending_per_head_per_day',   title: 'Spending per Head per Day by Industry (THB)',  fmt: (v) => fmtInt.format(Math.round(v)) },
+    spendingPerTrip:{ key: 'spending_per_head_per_trip',  title: 'Spending per Head per Trip by Industry (THB)', fmt: (v) => fmtInt.format(Math.round(v)) },
   };
   const cfg   = METRIC_CFG[metric] || METRIC_CFG.stayingPeriod;
   const max   = rows.reduce((m, r) => Math.max(m, r[cfg.key] || 0), 0);
@@ -2162,22 +2162,9 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
   const hasData = (dataset?.records && dataset.records.length > 0)
     || (dataset?.fixedProfile && Object.keys(dataset.fixedProfile).length > 0);
 
-  // 1) Loading state — show spinner while API is fetching and widget has no data yet
+  // 1) Loading state — show skeleton shimmer while API is fetching and widget has no data yet
   if (widget.type !== 'textbox' && isMiceBound && apiStatus === 'loading' && !hasData) {
-    return (
-      <div
-        style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          gap: 10, padding: 16, height: '100%', color: '#64748b',
-        }}
-      >
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-        </svg>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>กำลังโหลดข้อมูล...</span>
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
+    return <WidgetSkeleton type={widget.type} />;
   }
 
   // 2) Error state — API failed and no data to fall back on
@@ -2193,9 +2180,9 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
-        <strong>โหลดข้อมูลไม่สำเร็จ</strong>
+        <strong>Failed to load data</strong>
         <span style={{ fontSize: 12, color: '#7f1d1d', maxWidth: '90%', wordBreak: 'break-word' }}>
-          {apiError || 'ไม่สามารถดึงข้อมูลจาก API ได้'}
+          {apiError || 'Unable to fetch data from API'}
         </span>
       </div>
     );
@@ -2287,21 +2274,16 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     return <MiceStatPerfFySectorBar fixedProfile={fixedProfile} metric={widget.metric || 'stayingPeriod'} />;
   }
 
-  if (!dataset?.records?.length) {
+  // MICE widgets render from fixedProfile (not dataset.records) and dispatch by
+  // type below; their loading/error states are handled earlier. Only the generic
+  // record-based widgets need this "no data" guard.
+  if (!dataset?.records?.length && !isMiceBound) {
     if (apiStatus === 'loading') {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, height: '100%', color: '#64748b' }}>
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-          </svg>
-          <span style={{ fontSize: 13, fontWeight: 500 }}>กำลังโหลดข้อมูล...</span>
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-        </div>
-      );
+      return <WidgetSkeleton type={widget.type} />;
     }
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', padding: 16, color: '#64748b', fontSize: 13 }}>
-        ไม่พบข้อมูลสำหรับ filter ที่เลือก
+        No data found for the selected filters
       </div>
     );
   }
@@ -2332,7 +2314,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const actualSeries = annual.map((item, index) => ({
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return <FixedChartPanel widgetKey="miceEventsChart" title="จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)" color="#081f68" yLabel="MICE Events" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickThousands} valueKey="no_of_events" lyKey="no_of_events_ly" yoyKey="yoy_event" globalFilter={globalFilter} />;
+    return <FixedChartPanel widgetKey="miceEventsChart" title="MICE Events" color="#081f68" yLabel="MICE Events" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickThousands} valueKey="no_of_events" lyKey="no_of_events_ly" yoyKey="yoy_event" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceRevenueChart') {
@@ -2340,7 +2322,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const actualSeries = annual.map((item, index) => ({
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return <FixedChartPanel widgetKey="miceRevenueChart" title="รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)" color="#1d4fb3" yLabel="ล้านบาท" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="revenue_generated" lyKey="revenue_generated_ly" yoyKey="yoy_revenue" globalFilter={globalFilter} />;
+    return <FixedChartPanel widgetKey="miceRevenueChart" title="MICE Revenue Generated" color="#1d4fb3" yLabel="MB" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="revenue_generated" lyKey="revenue_generated_ly" yoyKey="yoy_revenue" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceVisitorsChart') {
@@ -2348,7 +2330,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const actualSeries = annual.map((item, index) => ({
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return <FixedChartPanel widgetKey="miceVisitorsChart" title="จำนวนนักเดินทางไมซ์ (MICE Visitors)" color="#4098b9" yLabel="MICE Visitors" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickMillions} valueKey="no_of_visitors" lyKey="no_of_visitors_ly" yoyKey="yoy_visitors" globalFilter={globalFilter} />;
+    return <FixedChartPanel widgetKey="miceVisitorsChart" title="MICE Visitors" color="#4098b9" yLabel="MICE Visitors" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickMillions} valueKey="no_of_visitors" lyKey="no_of_visitors_ly" yoyKey="yoy_visitors" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceStayingPeriodChart') {
@@ -2356,7 +2338,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const actualSeries = annual.map((item, index) => ({
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return <FixedChartPanel widgetKey="miceStayingPeriodChart" title="จำนวนวันพำนักเฉลี่ย (Average Staying Period)" color="#c08a2e" yLabel="วัน" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatAxisTickValue} valueKey="staying_period" lyKey="staying_period_ly" yoyKey="yoy_staying" globalFilter={globalFilter} />;
+    return <FixedChartPanel widgetKey="miceStayingPeriodChart" title="Average Staying Period" color="#c08a2e" yLabel="Days" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatAxisTickValue} valueKey="staying_period" lyKey="staying_period_ly" yoyKey="yoy_staying" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceSpendingPerDayChart') {
@@ -2364,7 +2346,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const actualSeries = annual.map((item, index) => ({
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return <FixedChartPanel widgetKey="miceSpendingPerDayChart" title="ค่าใช้จ่ายเฉลี่ยต่อคนต่อวัน (Spending per Head per Day)" color="#d29933" yLabel="บาท/คน/วัน" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="spending_per_head_per_day" lyKey="spending_per_head_per_day_ly" yoyKey="yoy_spend_day" globalFilter={globalFilter} />;
+    return <FixedChartPanel widgetKey="miceSpendingPerDayChart" title="Spending per Head per Day" color="#d29933" yLabel="THB/person/day" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="spending_per_head_per_day" lyKey="spending_per_head_per_day_ly" yoyKey="yoy_spend_day" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceSpendingPerTripChart') {
@@ -2372,7 +2354,7 @@ export default function WidgetRenderer({ widget, dataset, records: overrideRecor
     const actualSeries = annual.map((item, index) => ({
       year: item.year, value: item.value, yoy: item.yoy ?? (index > 0 ? computeYoY(item.value, annual[index - 1].value) : null)
     }));
-    return <FixedChartPanel widgetKey="miceSpendingPerTripChart" title="ค่าใช้จ่ายเฉลี่ยต่อคนต่อทริป (Spending per Head per Trip)" color="#d29933" yLabel="บาท/คน/ทริป" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="spending_per_head_per_trip" lyKey="spending_per_head_per_trip_ly" yoyKey="yoy_spend_trip" globalFilter={globalFilter} />;
+    return <FixedChartPanel widgetKey="miceSpendingPerTripChart" title="Spending per Head per Trip" color="#d29933" yLabel="THB/person/trip" actualSeries={actualSeries} forecastSeries={[]} yTickFormatter={formatYAxisTickFull} valueKey="spending_per_head_per_trip" lyKey="spending_per_head_per_trip_ly" yoyKey="yoy_spend_trip" globalFilter={globalFilter} />;
   }
 
   if (widget.type === 'miceEventsQuarterlyChart') {

@@ -2005,12 +2005,15 @@ export default function App() {
       gestureChangedRef.current = false;
     };
 
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    // Pointer events unify mouse + touch + pen so drags work on mobile too.
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
 
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
     };
   }, [action, cellWidth, readOnly, widgets]);
 
@@ -2053,6 +2056,19 @@ export default function App() {
 
     setWidgets((prev) => [...prev, createWidget(prev, template, droppedX, droppedY)]);
     setHoverGrid(null);
+  };
+
+  // Tap-to-add — touch fallback for the palette (HTML5 drag-and-drop doesn't
+  // work on touch). Adds the widget below existing content; also works as a
+  // click-to-add shortcut on desktop.
+  const addWidgetFromPalette = (paletteKey) => {
+    if (readOnly) return;
+    const template = widgetCatalog.find((item) => (item.paletteKey || item.type) === paletteKey);
+    if (!template) return;
+    setWidgets((prev) => [...prev, createWidget(prev, template, 0, maxOccupiedRow)]);
+    // On compact layouts the palette is a full-screen overlay — close it so the
+    // newly added widget is visible on the canvas.
+    if (window.innerWidth <= 960) setSidebarHidden(true);
   };
 
   const updateWidgetField = (id, field, value) => {
@@ -2333,6 +2349,18 @@ export default function App() {
     setToastMsg(message);
     clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastMsg(null), 3500);
+  };
+
+  const saveDashboard = () => {
+    try {
+      window.localStorage.setItem(
+        LOCAL_STORAGE_KEY,
+        JSON.stringify({ version: 1, dashboards, activeDashboardId })
+      );
+      showToast('Dashboard saved');
+    } catch {
+      showToast('Failed to save dashboard');
+    }
   };
 
   const activeIsEmpty = !activeDashboard || (activeDashboard.widgets || []).length === 0;
@@ -3183,20 +3211,19 @@ export default function App() {
 
         {/* ── Zone 1: Brand ── */}
         <div className="topbar-brand">
-          <div className="topbar-brand-logo" aria-hidden="true">
-            <svg viewBox="0 0 28 28" fill="none">
-              <rect x="2" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.9"/>
-              <rect x="16" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
-              <rect x="2" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
-              <rect x="16" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.3"/>
+          <button
+            type="button"
+            className="topbar-back-btn"
+            onClick={openDashboardList}
+            aria-label="Back to Dashboard List"
+            data-tooltip="Dashboard List"
+            data-tooltip-dir="down"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
             </svg>
-          </div>
-          <div className="topbar-brand-text">
-            <button type="button" className="topbar-back-link" onClick={openDashboardList}>
-              ← Dashboard List
-            </button>
-            <span className="topbar-brand-name">Data Hub Dashboard Builder</span>
-          </div>
+          </button>
+          <span className="topbar-brand-name">Dashboard Builder</span>
         </div>
 
         <div className="topbar-divider" />
@@ -3447,6 +3474,17 @@ export default function App() {
           </button>
           <button
             type="button"
+            className="topbar-save-btn"
+            onClick={saveDashboard}
+            aria-label="Save"
+            data-tooltip="Save dashboard"
+            data-tooltip-dir="down"
+          >
+            <ToolbarIcon name="save" />
+            <span>Save</span>
+          </button>
+          <button
+            type="button"
             className="wizard-help-btn"
             onClick={openWizard}
             aria-label="User Guide"
@@ -3517,6 +3555,8 @@ export default function App() {
                                 draggable={!readOnly}
                                 disabled={readOnly}
                                 onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
+                                onClick={() => addWidgetFromPalette(item.paletteKey || item.type)}
+                                title="Click or drag onto the canvas"
                               >
                                 <span className="palette-item-thumb" aria-hidden="true">
                                   <PaletteWidgetThumbnail type={item.type} />
@@ -3880,7 +3920,7 @@ export default function App() {
                         ? widget.heightPx ?? widget.h * GRID_ROW_HEIGHT
                         : widget.h * GRID_ROW_HEIGHT) - WIDGET_VISUAL_INSET * 2
                   }}
-                  onMouseDown={(event) => {
+                  onPointerDown={(event) => {
                     if (readOnly) return;
                     if (
                       isInteractiveTarget(event.target) ||
@@ -3909,7 +3949,7 @@ export default function App() {
                 {showWidgetHeader ? (
                   <div
                     className="widget-header drag-handle"
-                    onMouseDown={startWidgetMove}
+                    onPointerDown={startWidgetMove}
                     >
                     {readOnly ? (
                       <div className="widget-title-block">
@@ -3929,7 +3969,7 @@ export default function App() {
 
                 {isTextboxWidget && !readOnly ? (
                   <div className="textbox-edit-overlay" aria-hidden="true">
-                    <div className="textbox-drag-zone drag-handle" onMouseDown={startWidgetMove} />
+                    <div className="textbox-drag-zone drag-handle" onPointerDown={startWidgetMove} />
                     <div className="textbox-edit-controls">
                       <button
                         type="button"
@@ -3997,7 +4037,7 @@ export default function App() {
                     aria-label={`Resize widget ${dir}`}
                     className="resize-handle"
                     data-dir={dir}
-                    onMouseDown={(event) => {
+                    onPointerDown={(event) => {
                       event.preventDefault();
                       gestureSnapshotRef.current = cloneWorkspace(workspace);
                       gestureChangedRef.current = false;
@@ -4045,7 +4085,7 @@ export default function App() {
                 {!readOnly ? (
                   <div
                     className="filter-drag-handle drag-handle"
-                    onMouseDown={(event) => {
+                    onPointerDown={(event) => {
                       if (isInteractiveTarget(event.target)) return;
                       event.preventDefault();
                       event.stopPropagation();
@@ -4327,7 +4367,7 @@ export default function App() {
                     type="button"
                     aria-label="Resize filter panel width"
                     className="resize-handle filter-resize-e"
-                    onMouseDown={(event) => {
+                    onPointerDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       gestureSnapshotRef.current = cloneWorkspace(workspace);
@@ -4344,7 +4384,7 @@ export default function App() {
                     type="button"
                     aria-label="Resize filter panel height"
                     className="resize-handle filter-resize-s"
-                    onMouseDown={(event) => {
+                    onPointerDown={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
                       gestureSnapshotRef.current = cloneWorkspace(workspace);

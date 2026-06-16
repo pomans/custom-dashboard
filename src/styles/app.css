@@ -1499,7 +1499,7 @@ button {
 
 .palette-item {
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   text-align: left;
@@ -1510,8 +1510,8 @@ button {
 }
 
 .palette-item-thumb {
-  width: 66px;
-  height: 50px;
+  width: 44px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2373,6 +2373,8 @@ button {
 
 .drag-handle {
   cursor: move;
+  /* prevent the page from scrolling/zooming while dragging on touch devices */
+  touch-action: none;
 }
 
 .widget-title-block {
@@ -4558,6 +4560,7 @@ button.drill-node:focus .drill-bar-fill {
   z-index: 20;
   opacity: 0;
   transition: opacity 0.15s;
+  touch-action: none;
 }
 
 .widget-card:hover .resize-handle,
@@ -4565,6 +4568,14 @@ button.drill-node:focus .drill-bar-fill {
 .dashboard-filters.on-canvas.editable:hover .resize-handle,
 .dashboard-filters.on-canvas.editable .resize-handle:focus {
   opacity: 1;
+}
+
+/* Touch devices have no hover — keep edit handles visible so they're grabbable */
+@media (pointer: coarse) {
+  .dashboard-stage:not(.read-only) .resize-handle,
+  .dashboard-filters.on-canvas.editable .resize-handle {
+    opacity: 1;
+  }
 }
 
 /* Edge handles — thin transparent hit-zones with faint visual indicator */
@@ -5410,15 +5421,41 @@ th {
     z-index: 950;
   }
 
-  /* Semi-transparent scrim behind palette when open */
+  /* Very light scrim — just enough to separate palette from canvas,
+     without darkening the whole screen. Palette shadow does the lifting. */
   .palette:not(.hidden)::before {
     content: '';
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.25);
+    background: rgba(15, 23, 42, 0.06);
     z-index: -1;
     pointer-events: none;
   }
+
+  /* Compact palette cards so they're easier to scan and tap on a phone */
+  .palette-item {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 10px;
+    padding: 9px 11px;
+    border-radius: 12px;
+  }
+  .palette-item-thumb {
+    width: 36px;
+    height: 28px;
+  }
+  .palette-item strong {
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+  .palette-item small {
+    font-size: 0.72rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .palette-groups { gap: 8px; }
 
   /* Dashboard stage: scrollable horizontally for wide canvases */
   .dashboard-stage-wrap {
@@ -6032,3 +6069,142 @@ th {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ═══════════════════════════════════════════════════════
+   Gradient toolbar theme (coral → orange) — matches design ref
+═══════════════════════════════════════════════════════ */
+.topbar {
+  background: linear-gradient(90deg, #FB5560 0%, #FB6F4D 52%, #FFA23C 100%);
+  border: none;
+  border-radius: 18px;
+  box-shadow: 0 6px 20px rgba(214, 77, 60, 0.28);
+  backdrop-filter: none;
+}
+
+/* Brand zone — white text/logo on the gradient */
+.topbar .topbar-brand-name { color: #ffffff; }
+.topbar .topbar-back-link { color: rgba(255, 255, 255, 0.88); }
+.topbar .topbar-back-link:hover { color: #ffffff; }
+.topbar .topbar-brand-logo {
+  background: #ffffff;
+  color: #FB5560;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+/* White rounded back button (replaces the old logo) */
+.topbar-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  background: #ffffff;
+  color: #FB5560;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  transition: background 0.13s ease, transform 0.1s ease;
+}
+.topbar-back-btn svg { width: 18px; height: 18px; }
+.topbar-back-btn:hover { background: #fff5f5; transform: translateY(-1px); }
+
+/* Drop the vertical divider/separator lines — groups are spaced by gaps */
+.topbar .topbar-divider,
+.topbar .topbar-btn-sep { display: none; }
+.topbar .topbar-view-controls { border-left: none; }
+
+/* Hidden divider used to space brand from selector — restore the gap */
+.topbar .topbar-brand { margin-right: 16px; }
+.topbar .topbar-selector { margin-left: 0; }
+
+/* Dashboard selector + name field → white pills */
+.topbar .dashboard-switcher,
+.topbar .dashboard-name-input {
+  background: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #1f2937;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Button-group containers + zoom + standalone toggles → white rounded pills */
+.topbar .topbar-btn-group,
+.topbar .zoom-controls {
+  background: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.topbar .sidebar-toggle,
+.topbar .mode-toggle,
+.topbar .wizard-help-btn {
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #334155;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.topbar .sidebar-toggle:hover:not(:disabled),
+.topbar .mode-toggle:hover,
+.topbar .wizard-help-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+/* Icons inside the white pills read dark */
+.topbar .dashboard-action { color: #334155; }
+.topbar .dashboard-action:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.topbar .zoom-btn { color: #334155; }
+.topbar .zoom-btn:hover:not(:disabled) { background: #f1f5f9; color: #0f172a; }
+.topbar .zoom-level { color: #0f172a; }
+
+/* Keep the destructive action red */
+.topbar .dashboard-action.danger { color: #dc2626; }
+
+/* Edit-mode highlight for the mode toggle */
+.topbar .mode-toggle.active-edit {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+.topbar .mode-toggle.active-edit:hover { background: #1e293b; color: #ffffff; }
+
+/* Hamburger (mobile) → white pill */
+.topbar .topbar-hamburger {
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.topbar .topbar-hamburger span { background: #334155; }
+
+/* Black "Save" button — primary action */
+.topbar-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 12px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 0 0 auto;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.3);
+  transition: background 0.13s ease, transform 0.1s ease;
+}
+.topbar-save-btn:hover {
+  background: #1e293b;
+  transform: translateY(-1px);
+}
+.topbar-save-btn svg { width: 16px; height: 16px; }
