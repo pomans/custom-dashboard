@@ -5359,8 +5359,8 @@ th {
   /* free up width: hide dashboard switcher/name input + the "DASHBOARD LIST" link */
   .topbar-selector { display: none; }
   .topbar-back-link { display: none; }
-  /* drop layout tools + zoom (no pinch/precise control on phones); keep core toggles */
-  .topbar-view-controls .fit-screen-btn,
+  /* drop fit-to-screen + zoom on phones; keep auto-resize/arrange layout tools */
+  .topbar-view-controls .fit-screen-btn:not(.layout-tool-btn),
   .topbar-view-controls .zoom-controls { display: none; }
   .topbar-view-controls {
     padding-left: 8px;

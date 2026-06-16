@@ -3456,7 +3456,7 @@ export default function App() {
               {/* Auto Resize */}
               <button
                 type="button"
-                className="zoom-btn fit-screen-btn"
+                className="zoom-btn fit-screen-btn layout-tool-btn"
                 onClick={autoResize}
                 aria-label="Auto Resize"
                 data-tooltip="Auto Resize — fit widgets to screen width"
@@ -3474,7 +3474,7 @@ export default function App() {
               {/* Auto Arrange */}
               <button
                 type="button"
-                className="zoom-btn fit-screen-btn"
+                className="zoom-btn fit-screen-btn layout-tool-btn"
                 onClick={autoArrange}
                 aria-label="Auto Arrange"
                 data-tooltip="Auto Arrange — pack widgets without overlap"
