@@ -17,7 +17,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:lib": "vite build --mode lib",
+    "gen:scoped": "node scripts/gen-scoped-css.cjs",
+    "build:lib": "npm run gen:scoped && vite build --mode lib",
     "build:all": "npm run build && npm run build:lib",
     "preview": "vite preview --base /custom-dashboard/",
     "pack": "npm run build:lib && npm pack"
