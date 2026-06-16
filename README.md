@@ -306,28 +306,108 @@ npm run dev        # Vite dev server → http://localhost:5173/custom-dashboard/
 
 ## Build & Pack
 
+### Commands สรุป
+
+| Command | Output | ใช้เมื่อ |
+|---------|--------|---------|
+| `npm run build` | `dist-app/` | Deploy Standalone SPA |
+| `npm run build:lib` | `dist/` | สร้าง npm package |
+| `npm run build:all` | `dist-app/` + `dist/` | Build ทั้งสองแบบพร้อมกัน |
+| `npm run pack` | `dist/` + `.tgz` | สร้าง package พร้อมส่งให้ทีมอื่น |
+
+---
+
+### Step-by-step: สร้าง npm package (.tgz)
+
+**1. ติดตั้ง dependencies**
+
 ```bash
-npm run build       # Standalone SPA → dist-app/  (deploy ที่ /custom-dashboard/)
-npm run build:lib   # npm package    → dist/       (แชร์ให้ทีมอื่น)
-npm run build:all   # Build ทั้งสองแบบ
-npm run pack        # build:lib แล้วสร้าง .tgz พร้อมแชร์
+npm install
 ```
 
-ผลลัพธ์:
-- `dist/dashboard-builder.es.js` — ES module (Vite, modern bundlers)
-- `dist/dashboard-builder.cjs.js` — CommonJS (webpack/CRA)
-- `tceb-dashboard-builder-x.x.x.tgz` — ไฟล์สำหรับส่งให้ทีมอื่น
+**2. (ถ้าจะอัปเดต version) แก้ `package.json`**
 
-### อัปเดต Version
+```json
+{
+  "name": "tceb-dashboard-builder",
+  "version": "1.0.1"   ← แก้ตรงนี้
+}
+```
+
+**3. Build + Pack**
 
 ```bash
-# 1. แก้ "version" ใน package.json
-# 2. build + pack
 npm run pack
-
-# ทีมที่รับไฟล์:
-npm install ./tceb-dashboard-builder-x.x.x.tgz
 ```
+
+คำสั่งนี้รัน `build:lib` แล้วสร้างไฟล์ `.tgz` อัตโนมัติ
+
+**4. ตรวจสอบ output**
+
+```bash
+ls dist/
+# dashboard-builder.es.js    ← ES module
+# dashboard-builder.cjs.js   ← CommonJS (webpack/CRA)
+# style.css                  ← CSS (inject อัตโนมัติแล้ว แต่มีให้ fallback)
+
+ls *.tgz
+# tceb-dashboard-builder-1.0.1.tgz
+```
+
+**5. ติดตั้งใน host project**
+
+```bash
+# คัดลอก .tgz ไปยัง host project แล้วรัน:
+npm install ./tceb-dashboard-builder-1.0.1.tgz
+```
+
+---
+
+### Output ที่ได้
+
+**`npm run build:lib` → `dist/`** (npm package)
+
+```
+dist/
+├── dashboard-builder.es.js    # ES module — ใช้กับ Vite / modern bundlers
+├── dashboard-builder.cjs.js   # CommonJS  — ใช้กับ webpack / CRA
+└── style.css                  # CSS (inject ผ่าน JS อัตโนมัติแล้ว)
+```
+
+Dependencies ที่ **bundled** เข้าไปแล้ว (host app ไม่ต้องติดตั้งเอง):
+- `recharts`
+- `jspdf`
+- `html2canvas`
+
+Dependencies ที่เป็น **peer** (host app ต้องมีอยู่แล้ว):
+- `react >= 18`
+- `react-dom >= 18`
+
+---
+
+**`npm run build` → `dist-app/`** (Standalone SPA)
+
+```
+dist-app/
+├── index.html
+├── assets/
+│   ├── index-[hash].js
+│   └── index-[hash].css
+└── ...
+```
+
+Deploy ที่ base path `/custom-dashboard/` — ตั้งค่าใน `vite.config.js` (`base: '/custom-dashboard/'`)
+
+---
+
+### Troubleshooting
+
+| ปัญหา | วิธีแก้ |
+|-------|---------|
+| `vite: command not found` | รัน `npm install` ก่อน |
+| `.tgz` ไม่ถูกสร้าง | ตรวจสอบ `"name"` และ `"version"` ใน `package.json` ต้องไม่ว่าง |
+| Host app import แล้ว CSS ไม่โหลด | CSS inject ผ่าน JS อัตโนมัติ — ตรวจว่า bundle ไม่ถูก tree-shake ทิ้ง |
+| TypeScript error ใน host app | เพิ่ม `declare module 'tceb-dashboard-builder'` ใน `*.d.ts` |
 
 ---
 
