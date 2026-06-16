@@ -1087,6 +1087,7 @@ export const widgetCatalog = [
   },
   {
     type: 'miceStatPerfFyKpiCard',
+    paletteKey: 'miceStatPerfFyKpiCard:stayingPeriod',
     group: 'ready',
     fixed: true,
     defaultW: 3,
@@ -1099,6 +1100,7 @@ export const widgetCatalog = [
   },
   {
     type: 'miceStatPerfFyKpiCard',
+    paletteKey: 'miceStatPerfFyKpiCard:spendingPerDay',
     group: 'ready',
     fixed: true,
     defaultW: 3,
@@ -1111,6 +1113,7 @@ export const widgetCatalog = [
   },
   {
     type: 'miceStatPerfFyKpiCard',
+    paletteKey: 'miceStatPerfFyKpiCard:spendingPerTrip',
     group: 'ready',
     fixed: true,
     defaultW: 3,
@@ -1123,6 +1126,7 @@ export const widgetCatalog = [
   },
   {
     type: 'miceStatPerfFySectorBar',
+    paletteKey: 'miceStatPerfFySectorBar:stayingPeriod',
     group: 'ready',
     fixed: true,
     defaultW: 4,
@@ -1135,6 +1139,7 @@ export const widgetCatalog = [
   },
   {
     type: 'miceStatPerfFySectorBar',
+    paletteKey: 'miceStatPerfFySectorBar:spendingPerDay',
     group: 'ready',
     fixed: true,
     defaultW: 4,
@@ -1147,6 +1152,7 @@ export const widgetCatalog = [
   },
   {
     type: 'miceStatPerfFySectorBar',
+    paletteKey: 'miceStatPerfFySectorBar:spendingPerTrip',
     group: 'ready',
     fixed: true,
     defaultW: 4,

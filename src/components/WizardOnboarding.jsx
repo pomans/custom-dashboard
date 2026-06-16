@@ -5,271 +5,448 @@ const STORAGE_KEY = 'bi-dashboard.wizard-done.v1';
 const STEPS = [
   {
     id: 'welcome',
-    icon: '👋',
-    titleTh: 'ยินดีต้อนรับ!',
-    subtitleEn: 'Welcome to Dashboard Builder',
-    descTh: 'Dashboard Builder ช่วยให้คุณสร้างหน้าจอแสดงข้อมูลได้เองแบบง่ายๆ ลากวาง ไม่ต้องเขียนโค้ด',
+    topic: 'Overview',
+    title: 'Dashboard Builder',
+    subtitle: 'Build your own MICE data dashboard — no coding needed',
+    bullets: [
+      'Drag widgets from the palette onto the canvas',
+      'Resize and rearrange freely',
+      'Filter all widgets at once with the global filter panel',
+    ],
     illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="20" y="30" width="200" height="110" rx="12" fill="#eff6ff" stroke="#bfdbfe" strokeWidth="1.5"/>
-        <rect x="34" y="44" width="80" height="50" rx="8" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="126" y="44" width="80" height="50" rx="8" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="34" y="104" width="172" height="26" rx="8" fill="#bfdbfe" stroke="#93c5fd" strokeWidth="1"/>
-        {/* chart lines */}
-        <polyline points="42,82 55,66 68,74 81,58 94,70 107,54" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        <circle cx="55" cy="66" r="3" fill="#2563eb"/>
-        <circle cx="81" cy="58" r="3" fill="#2563eb"/>
-        <circle cx="107" cy="54" r="3" fill="#2563eb"/>
-        {/* bar chart */}
-        <rect x="136" y="72" width="10" height="18" rx="2" fill="#3b82f6" opacity="0.7"/>
-        <rect x="150" y="62" width="10" height="28" rx="2" fill="#1d4ed8"/>
-        <rect x="164" y="68" width="10" height="22" rx="2" fill="#3b82f6" opacity="0.7"/>
-        <rect x="178" y="58" width="10" height="32" rx="2" fill="#1d4ed8"/>
-        {/* table rows */}
-        <rect x="42" y="110" width="60" height="5" rx="2" fill="#93c5fd"/>
-        <rect x="110" y="110" width="40" height="5" rx="2" fill="#bfdbfe"/>
-        <rect x="158" y="110" width="36" height="5" rx="2" fill="#bfdbfe"/>
-        {/* stars */}
-        <text x="195" y="28" fontSize="16">✨</text>
-        <text x="14" y="28" fontSize="14">📊</text>
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* canvas background */}
+        <rect x="60" y="18" width="182" height="128" rx="12" fill="#f8fafd" stroke="#dbe7f5" strokeWidth="1.5"/>
+        {/* grid dots */}
+        {[80,110,140,170,200,230].map(x => [30,55,80,105,130].map(y => (
+          <circle key={`${x}-${y}`} cx={x} cy={y} r="1.2" fill="#c8d9ee" opacity="0.7"/>
+        )))}
+        {/* filter panel */}
+        <rect x="68" y="24" width="166" height="22" rx="6" fill="#e8f0fa" stroke="#b8d0ee" strokeWidth="1"/>
+        <rect x="76" y="30" width="36" height="10" rx="5" fill="#1d4fb3"/>
+        <text x="79" y="38" fontSize="6" fill="white" fontWeight="bold">International</text>
+        <rect x="116" y="30" width="22" height="10" rx="5" fill="#1d4fb3"/>
+        <text x="120" y="38" fontSize="6" fill="white" fontWeight="bold">2024</text>
+        <rect x="142" y="30" width="18" height="10" rx="5" fill="white" stroke="#c8d9ee" strokeWidth="1"/>
+        <text x="146" y="38" fontSize="6" fill="#64748b">Q1–Q4</text>
+        {/* widget 1 — KPI */}
+        <rect x="68" y="52" width="50" height="44" rx="7" fill="white" stroke="#b8d0ee" strokeWidth="1"/>
+        <text x="76" y="70" fontSize="16" fill="#1d4fb3" fontWeight="800">84K</text>
+        <text x="76" y="80" fontSize="6" fill="#64748b">MICE Visitors</text>
+        <text x="76" y="90" fontSize="7" fill="#16a34a">▲ 12.3%</text>
+        {/* widget 2 — bar */}
+        <rect x="124" y="52" width="56" height="44" rx="7" fill="white" stroke="#b8d0ee" strokeWidth="1"/>
+        <rect x="132" y="82" width="8" height="10" rx="2" fill="#4a82b8" opacity="0.7"/>
+        <rect x="144" y="74" width="8" height="18" rx="2" fill="#1d4fb3"/>
+        <rect x="156" y="78" width="8" height="14" rx="2" fill="#4a82b8" opacity="0.7"/>
+        <rect x="168" y="68" width="8" height="24" rx="2" fill="#1d4fb3"/>
+        {/* widget 3 — line */}
+        <rect x="186" y="52" width="56" height="44" rx="7" fill="white" stroke="#b8d0ee" strokeWidth="1"/>
+        <polyline points="194,88 202,74 212,80 222,66 232,72" stroke="#1d4fb3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        {/* widget 4 — table */}
+        <rect x="68" y="102" width="174" height="36" rx="7" fill="white" stroke="#b8d0ee" strokeWidth="1"/>
+        <rect x="68" y="102" width="174" height="11" rx="7" fill="#e8f0fa"/>
+        <rect x="68" y="107" width="174" height="6" rx="0" fill="#e8f0fa"/>
+        <text x="76" y="111" fontSize="6" fill="#1d4fb3" fontWeight="bold">Nationality</text>
+        <text x="130" y="111" fontSize="6" fill="#1d4fb3" fontWeight="bold">Visitors</text>
+        <text x="180" y="111" fontSize="6" fill="#1d4fb3" fontWeight="bold">%Growth</text>
+        <rect x="76" y="118" width="40" height="4" rx="2" fill="#e2ebf7"/>
+        <rect x="130" y="118" width="24" height="4" rx="2" fill="#e2ebf7"/>
+        <rect x="180" y="118" width="20" height="4" rx="2" fill="#c6f0d8"/>
+        <rect x="76" y="126" width="32" height="4" rx="2" fill="#e2ebf7"/>
+        <rect x="130" y="126" width="18" height="4" rx="2" fill="#e2ebf7"/>
+        <rect x="180" y="126" width="14" height="4" rx="2" fill="#c6f0d8"/>
+        {/* palette sidebar hint */}
+        <rect x="14" y="18" width="40" height="128" rx="10" fill="#f0f6ff" stroke="#bdd4f0" strokeWidth="1.5"/>
+        <rect x="20" y="28" width="28" height="18" rx="5" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
+        <rect x="20" y="50" width="28" height="18" rx="5" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
+        <rect x="20" y="72" width="28" height="18" rx="5" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
+        <text x="25" y="40" fontSize="9">📊</text>
+        <text x="25" y="62" fontSize="9">📋</text>
+        <text x="25" y="84" fontSize="9">🔢</text>
       </svg>
-    )
+    ),
   },
   {
     id: 'palette',
-    icon: '🧩',
-    titleTh: 'เพิ่ม Widget',
-    subtitleEn: 'Add Widgets from the Palette',
-    descTh: 'แผงด้านซ้ายมี Widget หลายประเภท ลากมาวางบน Canvas เพื่อเริ่มสร้าง Dashboard ของคุณ',
-    highlight: 'palette',
+    topic: 'Step 1 — Widget Palette',
+    title: 'Find a Widget',
+    subtitle: 'The left panel organises widgets into groups',
+    bullets: [
+      'Click a folder to expand it and see available widgets',
+      'Ready-to-use widgets (MICE data) are pre-configured',
+      'Configurable widgets let you choose your own fields',
+    ],
     illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="cp-palette-panel">
+            <rect x="20" y="14" width="112" height="138" rx="10"/>
+          </clipPath>
+          <clipPath id="cp-folder1-header">
+            <rect x="26" y="36" width="82" height="22"/>
+          </clipPath>
+          <clipPath id="cp-folder1-body">
+            <rect x="26" y="58" width="88" height="54"/>
+          </clipPath>
+          <marker id="aw1p" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+            <path d="M0,0 L0,5 L5,2.5 z" fill="#f59e0b"/>
+          </marker>
+        </defs>
         {/* palette panel */}
-        <rect x="10" y="20" width="72" height="120" rx="10" fill="#f0f9ff" stroke="#7dd3fc" strokeWidth="1.5"/>
-        <rect x="18" y="32" width="56" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="18" y="66" width="56" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="18" y="100" width="56" height="28" rx="6" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
-        <text x="30" y="50" fontSize="14">📈</text>
-        <text x="30" y="84" fontSize="14">📋</text>
-        <text x="30" y="118" fontSize="14">🔢</text>
-        <text x="48" y="50" fontSize="8" fill="#1d4ed8" fontWeight="bold">Chart</text>
-        <text x="48" y="84" fontSize="8" fill="#1d4ed8" fontWeight="bold">Table</text>
-        <text x="48" y="118" fontSize="8" fill="#1d4ed8" fontWeight="bold">KPI</text>
-        {/* arrow */}
-        <path d="M92 80 Q110 70 130 75" stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="5,3" fill="none" markerEnd="url(#arrow)"/>
+        <rect x="20" y="14" width="112" height="138" rx="10" fill="#f0f6ff" stroke="#bdd4f0" strokeWidth="1.5"/>
+        {/* title */}
+        <text x="30" y="30" fontSize="8" fill="#1d4fb3" fontWeight="bold">Widget Palette</text>
+        {/* folder 1 — open */}
+        <rect x="26" y="36" width="100" height="76" rx="7" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        {/* folder header — clipped */}
+        <rect x="26" y="36" width="100" height="22" rx="7" fill="#e4eef8"/>
+        <rect x="26" y="47" width="100" height="11" rx="0" fill="#e4eef8"/>
+        <g clipPath="url(#cp-folder1-header)">
+          <text x="33" y="51" fontSize="7">📁</text>
+          <text x="43" y="51" fontSize="6.5" fill="#1d4fb3" fontWeight="bold">Stat Performance</text>
+        </g>
+        <text x="117" y="51" fontSize="8" fill="#4a82b8">∨</text>
+        {/* items inside — clipped */}
+        <g clipPath="url(#cp-folder1-body)">
+          <rect x="32" y="62" width="88" height="13" rx="4" fill="#f5f9ff" stroke="#d0e3f5" strokeWidth="0.8"/>
+          <text x="38" y="72" fontSize="6.5" fill="#334155">■ Visitors KPI Card</text>
+          <rect x="32" y="78" width="88" height="13" rx="4" fill="#f5f9ff" stroke="#d0e3f5" strokeWidth="0.8"/>
+          <text x="38" y="88" fontSize="6.5" fill="#334155">■ Revenue KPI Card</text>
+          <rect x="32" y="94" width="88" height="13" rx="4" fill="#f5f9ff" stroke="#d0e3f5" strokeWidth="0.8"/>
+          <text x="38" y="104" fontSize="6.5" fill="#334155">■ Events KPI Card</text>
+        </g>
+        {/* folder 2 — closed */}
+        <rect x="26" y="118" width="100" height="20" rx="7" fill="#e4eef8" stroke="#bdd4f0" strokeWidth="1"/>
+        <text x="33" y="131" fontSize="7">📁</text>
+        <text x="43" y="131" fontSize="6.5" fill="#64748b" fontWeight="bold">Trends</text>
+        <text x="117" y="131" fontSize="8" fill="#94a3b8">›</text>
+        {/* folder 3 — closed */}
+        <rect x="26" y="142" width="100" height="8" rx="4" fill="#e4eef8" stroke="#bdd4f0" strokeWidth="0.8"/>
+        <text x="43" y="149" fontSize="5.5" fill="#94a3b8">Configurable</text>
+        {/* annotation 1 */}
+        <rect x="144" y="38" width="104" height="50" rx="8" fill="#fffbeb" stroke="#fcd34d" strokeWidth="1.2"/>
+        <text x="154" y="56" fontSize="8" fill="#92400e" fontWeight="bold">💡 Folders</text>
+        <text x="154" y="69" fontSize="6.5" fill="#78350f">Click the folder header</text>
+        <text x="154" y="80" fontSize="6.5" fill="#78350f">to expand / collapse.</text>
+        <path d="M128 51 L142 51" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="3,2" markerEnd="url(#aw1p)"/>
+        {/* annotation 2 */}
+        <rect x="144" y="98" width="104" height="44" rx="8" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.2"/>
+        <text x="154" y="115" fontSize="8" fill="#166534" fontWeight="bold">✓ Ready-to-use</text>
+        <text x="154" y="128" fontSize="6.5" fill="#166534">No setup required.</text>
+        <text x="154" y="138" fontSize="6.5" fill="#166534">Connects to MICE data.</text>
+      </svg>
+    ),
+  },
+  {
+    id: 'drag',
+    topic: 'Step 2 — Drag to Canvas',
+    title: 'Drag & Drop',
+    subtitle: 'Place a widget anywhere on the canvas',
+    bullets: [
+      'Click and hold on any widget in the palette',
+      'Drag it over the canvas — a blue ghost shows where it will land',
+      'Release the mouse to drop the widget',
+    ],
+    illustration: (
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L8,3 z" fill="#f59e0b"/>
+          <clipPath id="cp-pal-item">
+            <rect x="18" y="20" width="52" height="120"/>
+          </clipPath>
+          <marker id="aw2" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+            <path d="M0,0 L0,5 L5,2.5 z" fill="#1d4fb3"/>
           </marker>
         </defs>
+        {/* palette */}
+        <rect x="10" y="20" width="68" height="120" rx="10" fill="#f0f6ff" stroke="#bdd4f0" strokeWidth="1.5"/>
+        <rect x="18" y="30" width="52" height="22" rx="6" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
+        <rect x="18" y="56" width="52" height="22" rx="6" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
+        {/* highlighted source widget */}
+        <rect x="18" y="82" width="52" height="22" rx="6" fill="#1d4fb3" stroke="#1d4fb3" strokeWidth="1.5"/>
+        <g clipPath="url(#cp-pal-item)">
+          <text x="24" y="95" fontSize="7" fill="white" fontWeight="bold">Events Bar</text>
+        </g>
+        <rect x="18" y="108" width="52" height="22" rx="6" fill="#dbeafe" stroke="#93c5fd" strokeWidth="1"/>
+        {/* step badge 1 */}
+        <rect x="6" y="79" width="14" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="10" y="89" fontSize="8" fill="white" fontWeight="bold">1</text>
         {/* canvas */}
-        <rect x="100" y="20" width="130" height="120" rx="10" fill="#f8fafc" stroke="#d1d5db" strokeWidth="1.5" strokeDasharray="5,4"/>
-        {/* dragged widget */}
-        <rect x="118" y="60" width="90" height="50" rx="8" fill="white" stroke="#2563eb" strokeWidth="2" opacity="0.95"/>
-        <polyline points="126,96 136,80 148,88 162,72 176,84 196,68" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        {/* drag cursor */}
-        <text x="148" y="58" fontSize="16">✋</text>
+        <rect x="92" y="20" width="160" height="120" rx="10" fill="#f8fafd" stroke="#dbe7f5" strokeWidth="1.5" strokeDasharray="6,4"/>
+        <text x="148" y="136" fontSize="7" fill="#94a3b8">Canvas</text>
+        {/* ghost drop target */}
+        <rect x="104" y="52" width="90" height="56" rx="8" fill="#dbeafe" stroke="#2563eb" strokeWidth="2" strokeDasharray="5,3" opacity="0.8"/>
+        <text x="124" y="82" fontSize="7.5" fill="#2563eb" fontWeight="bold">Drop here ↓</text>
+        {/* step badge 3 */}
+        <rect x="196" y="86" width="14" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="200" y="96" fontSize="8" fill="white" fontWeight="bold">3</text>
+        {/* cursor + dragged widget ghost */}
+        <rect x="108" y="30" width="64" height="36" rx="7" fill="white" stroke="#1d4fb3" strokeWidth="2" opacity="0.9"/>
+        <rect x="114" y="36" width="8" height="16" rx="2" fill="#4a82b8" opacity="0.7"/>
+        <rect x="126" y="40" width="8" height="12" rx="2" fill="#1d4fb3"/>
+        <rect x="138" y="38" width="8" height="14" rx="2" fill="#4a82b8" opacity="0.7"/>
+        <rect x="150" y="34" width="8" height="18" rx="2" fill="#1d4fb3"/>
+        <text x="137" y="73" fontSize="15">🤚</text>
+        {/* step badge 2 */}
+        <rect x="130" y="26" width="14" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="134" y="36" fontSize="8" fill="white" fontWeight="bold">2</text>
+        {/* dashed trail */}
+        <path d="M46 93 Q80 88 108 56" stroke="#1d4fb3" strokeWidth="1.5" strokeDasharray="4,3" fill="none" opacity="0.6"/>
       </svg>
-    )
+    ),
   },
   {
-    id: 'configure',
-    icon: '⚙️',
-    titleTh: 'ตั้งค่า Widget',
-    subtitleEn: 'Configure Your Widget',
-    descTh: 'วาง mouse บน Widget แล้วคลิกปุ่ม ⚙ เพื่อเลือกข้อมูลที่ต้องการแสดง ทั้ง field mapping และ chart type',
-    highlight: 'widget-controls',
+    id: 'resize',
+    topic: 'Step 3 — Resize & Move',
+    title: 'Arrange Your Canvas',
+    subtitle: 'Widgets snap to a grid — resize and reposition freely',
+    bullets: [
+      'Drag the widget header to move it to a new position',
+      'Drag the ↔ handle at the bottom-right corner to resize',
+      'Use Auto Arrange (toolbar) to pack widgets without gaps',
+    ],
     illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* widget card */}
-        <rect x="30" y="20" width="150" height="100" rx="10" fill="white" stroke="#2563eb" strokeWidth="2"/>
-        {/* widget header */}
-        <rect x="30" y="20" width="150" height="28" rx="10" fill="#eff6ff"/>
-        <rect x="30" y="34" width="150" height="14" rx="0" fill="#eff6ff"/>
-        <text x="42" y="38" fontSize="9" fill="#1d4ed8" fontWeight="bold">MICE Revenue Chart</text>
-        {/* config button highlight */}
-        <circle cx="162" cy="33" r="11" fill="#1d4ed8"/>
-        <text x="157" y="37" fontSize="11" fill="white">⚙</text>
-        {/* pulse ring */}
-        <circle cx="162" cy="33" r="16" stroke="#3b82f6" strokeWidth="2" opacity="0.4" strokeDasharray="3,3"/>
-        {/* chart inside */}
-        <polyline points="50,106 68,82 88,92 110,68 132,80 160,58 178,72" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.6"/>
-        {/* config panel */}
-        <rect x="190" y="30" width="44" height="110" rx="8" fill="#f0f9ff" stroke="#7dd3fc" strokeWidth="1.5"/>
-        <rect x="196" y="38" width="32" height="8" rx="3" fill="#bfdbfe"/>
-        <rect x="196" y="50" width="32" height="8" rx="3" fill="#93c5fd"/>
-        <rect x="196" y="62" width="32" height="8" rx="3" fill="#bfdbfe"/>
-        <rect x="196" y="78" width="32" height="12" rx="4" fill="#1d4ed8"/>
-        <text x="200" y="88" fontSize="7" fill="white" fontWeight="bold">Apply</text>
-        {/* arrow */}
-        <path d="M175 33 L187 33" stroke="#f59e0b" strokeWidth="2" fill="none" markerEnd="url(#arrow2)"/>
-        <defs>
-          <marker id="arrow2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="#f59e0b"/>
-          </marker>
-        </defs>
-      </svg>
-    )
-  },
-  {
-    id: 'preview',
-    icon: '👁️',
-    titleTh: 'ดูตัวอย่าง & แก้ไข',
-    subtitleEn: 'Preview & Edit Mode',
-    descTh: 'คลิกปุ่ม ◐ (Preview) เพื่อดูหน้าตาจริง หรือปุ่ม ✎ (Edit) เพื่อกลับมาแก้ไข จัดวางใหม่ได้ตลอด',
-    illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* two mode cards */}
-        {/* edit mode */}
-        <rect x="10" y="30" width="100" height="110" rx="10" fill="#f8fafc" stroke="#d1d5db" strokeWidth="1.5" strokeDasharray="4,3"/>
-        <text x="22" y="52" fontSize="8" fill="#64748b" fontWeight="bold">EDIT MODE</text>
-        <rect x="18" y="58" width="80" height="35" rx="6" fill="white" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="18" y="98" width="38" height="35" rx="6" fill="white" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="60" y="98" width="38" height="35" rx="6" fill="white" stroke="#93c5fd" strokeWidth="1"/>
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* canvas */}
+        <rect x="14" y="14" width="232" height="138" rx="12" fill="#f8fafd" stroke="#dbe7f5" strokeWidth="1.5"/>
         {/* grid dots */}
-        <circle cx="22" cy="62" r="1.5" fill="#cbd5e1"/>
-        <circle cx="94" cy="62" r="1.5" fill="#cbd5e1"/>
-        <circle cx="22" cy="128" r="1.5" fill="#cbd5e1"/>
-        {/* preview mode */}
-        <rect x="128" y="30" width="102" height="110" rx="10" fill="white" stroke="#2563eb" strokeWidth="2"/>
-        <text x="140" y="52" fontSize="8" fill="#1d4ed8" fontWeight="bold">PREVIEW MODE</text>
-        <rect x="136" y="58" width="86" height="35" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="136" y="98" width="40" height="35" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="180" y="98" width="42" height="35" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1"/>
-        <polyline points="144,82 156,68 170,76 184,62 198,70 212,58" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        {/* toggle button */}
-        <rect x="96" y="20" width="48" height="24" rx="12" fill="#0f172a"/>
-        <circle cx="108" cy="32" r="8" fill="white" opacity="0.3"/>
-        <circle cx="132" cy="32" r="8" fill="white"/>
-        <text x="100" y="37" fontSize="10" fill="white">✎  ◐</text>
+        {[32,58,84,110,136,162,188,214,234].map(x => [28,48,68,88,108,128,148].map(y => (
+          <circle key={`g${x}-${y}`} cx={x} cy={y} r="1" fill="#dbe7f5"/>
+        )))}
+        {/* widget being moved — with cursor */}
+        <rect x="24" y="24" width="100" height="58" rx="7" fill="white" stroke="#1d4fb3" strokeWidth="2"/>
+        <rect x="24" y="24" width="100" height="14" rx="7" fill="#e8f0fa"/>
+        <rect x="24" y="31" width="100" height="7" rx="0" fill="#e8f0fa"/>
+        <text x="30" y="34" fontSize="7" fill="#1d4fb3" fontWeight="bold">Revenue Chart</text>
+        <polyline points="34,70 48,52 62,60 78,44 94,54 108,40 118,48" stroke="#1d4fb3" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        {/* move cursor on header */}
+        <text x="95" y="33" fontSize="10">✋</text>
+        {/* move annotation */}
+        <rect x="22" y="87" width="82" height="26" rx="6" fill="#fffbeb" stroke="#fcd34d" strokeWidth="1"/>
+        <text x="30" y="100" fontSize="7" fill="#92400e" fontWeight="bold">Drag header to move</text>
+        <path d="M55" y="88" />
+        {/* resize widget */}
+        <rect x="136" y="24" width="100" height="100" rx="7" fill="white" stroke="#94a3b8" strokeWidth="1.5"/>
+        <rect x="136" y="24" width="100" height="14" rx="7" fill="#e8f0fa"/>
+        <rect x="136" y="31" width="100" height="7" rx="0" fill="#e8f0fa"/>
+        <text x="142" y="34" fontSize="7" fill="#1d4fb3" fontWeight="bold">Visitors Bar</text>
+        <rect x="144" y="44" width="12" height="60" rx="3" fill="#4a82b8" opacity="0.7"/>
+        <rect x="162" y="56" width="12" height="48" rx="3" fill="#1d4fb3"/>
+        <rect x="180" y="50" width="12" height="54" rx="3" fill="#4a82b8" opacity="0.7"/>
+        <rect x="198" y="38" width="12" height="66" rx="3" fill="#1d4fb3"/>
+        {/* resize handle */}
+        <rect x="225" y="113" width="14" height="10" rx="3" fill="#1d4fb3"/>
+        <text x="228" y="121" fontSize="8" fill="white">↔</text>
+        <text x="224" y="137" fontSize="10">↙</text>
+        {/* resize annotation */}
+        <rect x="148" y="128" width="88" height="22" rx="6" fill="#f0fdf4" stroke="#86efac" strokeWidth="1"/>
+        <text x="154" y="143" fontSize="7" fill="#166534" fontWeight="bold">Drag corner to resize</text>
       </svg>
-    )
+    ),
   },
   {
     id: 'filters',
-    icon: '🔍',
-    titleTh: 'กรองข้อมูล',
-    subtitleEn: 'Use Filters',
-    descTh: 'ใช้แผง Filters เพื่อเลือกปี, ตลาด, อุตสาหกรรม และประเทศ Widget ทุกอันจะอัปเดตอัตโนมัติ',
+    topic: 'Step 4 — Global Filters',
+    title: 'Filter All Widgets at Once',
+    subtitle: 'The Filter Panel at the top controls every widget simultaneously',
+    bullets: [
+      'Select Market (International / Domestic / All)',
+      'Choose Year, Quarter(s), and Industry',
+      'All widgets refresh instantly when you change a filter',
+    ],
     illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* filter panel */}
-        <rect x="15" y="20" width="210" height="60" rx="10" fill="#f0f9ff" stroke="#7dd3fc" strokeWidth="1.5"/>
-        <text x="26" y="38" fontSize="8" fill="#0369a1" fontWeight="bold">FILTERS</text>
-        {/* filter chips */}
-        <rect x="26" y="44" width="44" height="18" rx="9" fill="#0f172a"/>
-        <text x="30" y="57" fontSize="7" fill="white" fontWeight="bold">International</text>
-        <rect x="76" y="44" width="36" height="18" rx="9" fill="white" stroke="#d1d5db" strokeWidth="1"/>
-        <text x="83" y="57" fontSize="7" fill="#64748b">Domestic</text>
-        <rect x="122" y="44" width="32" height="18" rx="9" fill="#1d4ed8"/>
-        <text x="127" y="57" fontSize="7" fill="white" fontWeight="bold">2024</text>
-        <rect x="162" y="44" width="26" height="18" rx="9" fill="white" stroke="#d1d5db" strokeWidth="1"/>
-        <text x="167" y="57" fontSize="7" fill="#64748b">2023</text>
-        {/* update arrows */}
-        <path d="M60 88 L60 100" stroke="#f59e0b" strokeWidth="1.5" markerEnd="url(#arrowDown1)" strokeDasharray="3,2"/>
-        <path d="M120 88 L120 100" stroke="#f59e0b" strokeWidth="1.5" markerEnd="url(#arrowDown2)" strokeDasharray="3,2"/>
-        <path d="M180 88 L180 100" stroke="#f59e0b" strokeWidth="1.5" markerEnd="url(#arrowDown3)" strokeDasharray="3,2"/>
+        <rect x="14" y="14" width="232" height="44" rx="8" fill="#e8f0fa" stroke="#bdd4f0" strokeWidth="1.5"/>
+        <text x="22" y="28" fontSize="7" fill="#1d4fb3" fontWeight="bold">FILTER PANEL</text>
+        {/* market chips */}
+        <rect x="22" y="32" width="52" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="28" y="42" fontSize="6.5" fill="white" fontWeight="bold">International</text>
+        <rect x="78" y="32" width="36" height="14" rx="7" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        <text x="84" y="42" fontSize="6.5" fill="#64748b">Domestic</text>
+        {/* year chip */}
+        <rect x="122" y="32" width="26" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="127" y="42" fontSize="6.5" fill="white" fontWeight="bold">2024</text>
+        {/* quarter chips */}
+        <rect x="154" y="32" width="16" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="158" y="42" fontSize="6.5" fill="white" fontWeight="bold">Q1</text>
+        <rect x="174" y="32" width="16" height="14" rx="7" fill="#1d4fb3"/>
+        <text x="178" y="42" fontSize="6.5" fill="white" fontWeight="bold">Q2</text>
+        <rect x="194" y="32" width="16" height="14" rx="7" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        <text x="198" y="42" fontSize="6.5" fill="#64748b">Q3</text>
+        <rect x="214" y="32" width="16" height="14" rx="7" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        <text x="218" y="42" fontSize="6.5" fill="#64748b">Q4</text>
+        {/* arrows down */}
+        <path d="M60 60 L60 72" stroke="#f59e0b" strokeWidth="1.5" markerEnd="url(#awd1)" strokeDasharray="3,2"/>
+        <path d="M130 60 L130 72" stroke="#f59e0b" strokeWidth="1.5" markerEnd="url(#awd2)" strokeDasharray="3,2"/>
+        <path d="M200 60 L200 72" stroke="#f59e0b" strokeWidth="1.5" markerEnd="url(#awd3)" strokeDasharray="3,2"/>
         <defs>
-          <marker id="arrowDown1" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto">
-            <path d="M0,0 L6,0 L3,6 z" fill="#f59e0b"/>
+          <marker id="awd1" markerWidth="5" markerHeight="5" refX="2.5" refY="4.5" orient="auto">
+            <path d="M0,0 L5,0 L2.5,5 z" fill="#f59e0b"/>
           </marker>
-          <marker id="arrowDown2" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto">
-            <path d="M0,0 L6,0 L3,6 z" fill="#f59e0b"/>
+          <marker id="awd2" markerWidth="5" markerHeight="5" refX="2.5" refY="4.5" orient="auto">
+            <path d="M0,0 L5,0 L2.5,5 z" fill="#f59e0b"/>
           </marker>
-          <marker id="arrowDown3" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto">
-            <path d="M0,0 L6,0 L3,6 z" fill="#f59e0b"/>
+          <marker id="awd3" markerWidth="5" markerHeight="5" refX="2.5" refY="4.5" orient="auto">
+            <path d="M0,0 L5,0 L2.5,5 z" fill="#f59e0b"/>
           </marker>
         </defs>
         {/* widgets updating */}
-        <rect x="20" y="100" width="72" height="48" rx="8" fill="white" stroke="#93c5fd" strokeWidth="1"/>
-        <polyline points="28,136 38,120 50,128 62,112 74,122 84,108" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        <rect x="100" y="100" width="60" height="48" rx="8" fill="white" stroke="#93c5fd" strokeWidth="1"/>
-        <rect x="108" y="110" width="10" height="30" rx="2" fill="#3b82f6" opacity="0.6"/>
-        <rect x="122" y="118" width="10" height="22" rx="2" fill="#1d4ed8"/>
-        <rect x="136" y="114" width="10" height="26" rx="2" fill="#3b82f6" opacity="0.6"/>
-        <rect x="168" y="100" width="58" height="48" rx="8" fill="white" stroke="#93c5fd" strokeWidth="1"/>
-        <text x="178" y="122" fontSize="18" fill="#1d4ed8" fontWeight="800">17.8K</text>
-        <text x="178" y="138" fontSize="7" fill="#6b8ccc" fontWeight="700">MICE EVENTS</text>
-        {/* sync icon */}
-        <text x="108" y="92" fontSize="12">🔄</text>
-        <text x="164" y="92" fontSize="12">🔄</text>
+        <rect x="14" y="74" width="68" height="48" rx="7" fill="white" stroke="#93c5fd" strokeWidth="1"/>
+        <polyline points="22,110 32,94 44,102 58,86 70,96 78,82" stroke="#1d4fb3" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        <rect x="88" y="74" width="68" height="48" rx="7" fill="white" stroke="#93c5fd" strokeWidth="1"/>
+        <rect x="96" y="96" width="10" height="18" rx="2" fill="#4a82b8" opacity="0.7"/>
+        <rect x="110" y="90" width="10" height="24" rx="2" fill="#1d4fb3"/>
+        <rect x="124" y="94" width="10" height="20" rx="2" fill="#4a82b8" opacity="0.7"/>
+        <rect x="138" y="84" width="10" height="30" rx="2" fill="#1d4fb3"/>
+        <rect x="162" y="74" width="68" height="48" rx="7" fill="white" stroke="#93c5fd" strokeWidth="1"/>
+        <text x="170" y="100" fontSize="20" fill="#1d4fb3" fontWeight="800">84K</text>
+        <text x="170" y="114" fontSize="6" fill="#64748b" fontWeight="bold">MICE VISITORS</text>
+        {/* sync badges */}
+        <rect x="24" y="118" width="50" height="10" rx="5" fill="#16a34a" opacity="0.9"/>
+        <text x="32" y="126" fontSize="6" fill="white" fontWeight="bold">🔄 Updated</text>
+        <rect x="98" y="118" width="50" height="10" rx="5" fill="#16a34a" opacity="0.9"/>
+        <text x="106" y="126" fontSize="6" fill="white" fontWeight="bold">🔄 Updated</text>
+        <rect x="172" y="118" width="50" height="10" rx="5" fill="#16a34a" opacity="0.9"/>
+        <text x="180" y="126" fontSize="6" fill="white" fontWeight="bold">🔄 Updated</text>
+        {/* bottom label */}
+        <rect x="58" y="128" width="144" height="16" rx="8" fill="#1d4fb3"/>
+        <text x="76" y="139" fontSize="7" fill="white" fontWeight="bold">All widgets update together</text>
       </svg>
-    )
+    ),
   },
   {
-    id: 'save',
-    icon: '💾',
-    titleTh: 'บันทึกอัตโนมัติ',
-    subtitleEn: 'Auto-Save & Export',
-    descTh: 'ข้อมูลทุกอย่างถูกบันทึกอัตโนมัติในเบราว์เซอร์ สามารถ Export เป็น PDF หรือ Import/Export JSON ได้',
+    id: 'configure',
+    topic: 'Step 5 — Widget Settings',
+    title: 'Configure a Widget',
+    subtitle: 'Hover over any widget, then click ⚙ to open its settings',
+    bullets: [
+      'Set the chart type (bar, line, pie…) and axis fields',
+      'For configurable widgets: map your dataset fields',
+      'Ready-to-use MICE widgets have built-in settings (metric variant)',
+    ],
     illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* browser storage */}
-        <rect x="20" y="50" width="70" height="80" rx="10" fill="#f0fdf4" stroke="#86efac" strokeWidth="1.5"/>
-        <text x="30" y="75" fontSize="11">🌐</text>
-        <text x="28" y="92" fontSize="7" fill="#166534" fontWeight="bold">Browser</text>
-        <text x="28" y="104" fontSize="7" fill="#166534" fontWeight="bold">Storage</text>
-        <rect x="28" y="110" width="54" height="6" rx="3" fill="#86efac"/>
-        <rect x="28" y="120" width="40" height="6" rx="3" fill="#bbf7d0"/>
-        {/* auto-save badge */}
-        <rect x="32" y="50" width="46" height="16" rx="8" fill="#16a34a"/>
-        <text x="36" y="62" fontSize="7" fill="white" fontWeight="bold">✓ Auto-saved</text>
-        {/* arrows */}
-        <path d="M96 90 L118 90" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4,3" fill="none"/>
-        <path d="M118 90 L96 90" stroke="#94a3b8" strokeWidth="2" strokeDasharray="4,3" fill="none" opacity="0"/>
-        {/* dashboard box */}
-        <rect x="90" y="50" width="60" height="80" rx="10" fill="white" stroke="#93c5fd" strokeWidth="1.5"/>
-        <rect x="98" y="60" width="44" height="26" rx="5" fill="#dbeafe"/>
-        <polyline points="102,80 112,68 122,74 132,62" stroke="#2563eb" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-        <rect x="98" y="92" width="44" height="12" rx="4" fill="#eff6ff"/>
-        <rect x="98" y="108" width="44" height="12" rx="4" fill="#eff6ff"/>
-        {/* export */}
-        <path d="M156 90 L178 80" stroke="#f59e0b" strokeWidth="2" fill="none" markerEnd="url(#arrowEx)"/>
-        <path d="M156 90 L178 100" stroke="#f59e0b" strokeWidth="2" fill="none" markerEnd="url(#arrowEx2)"/>
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* widget */}
+        <rect x="14" y="20" width="148" height="126" rx="10" fill="white" stroke="#1d4fb3" strokeWidth="2"/>
+        <rect x="14" y="20" width="148" height="24" rx="10" fill="#e8f0fa"/>
+        <rect x="14" y="33" width="148" height="11" rx="0" fill="#e8f0fa"/>
+        <text x="24" y="36" fontSize="8" fill="#1d4fb3" fontWeight="bold">MICE Events Chart</text>
+        {/* gear button highlighted */}
+        <circle cx="144" cy="32" r="12" fill="#1d4fb3"/>
+        <text x="139" y="36" fontSize="11" fill="white">⚙</text>
+        <circle cx="144" cy="32" r="18" stroke="#1d4fb3" strokeWidth="1.5" opacity="0.3" strokeDasharray="3,3"/>
+        {/* chart */}
+        <polyline points="28,126 42,100 58,110 76,82 94,96 114,68 132,80 152,60" stroke="#1d4fb3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.7"/>
+        {/* hover label */}
+        <rect x="26" y="56" width="82" height="16" rx="8" fill="#1d4fb3" opacity="0.9"/>
+        <text x="34" y="67" fontSize="7" fill="white" fontWeight="bold">Hover → click ⚙</text>
+        {/* config panel */}
+        <rect x="174" y="14" width="78" height="136" rx="10" fill="#f0f6ff" stroke="#bdd4f0" strokeWidth="1.5"/>
         <defs>
-          <marker id="arrowEx" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="#f59e0b"/>
-          </marker>
-          <marker id="arrowEx2" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L6,3 z" fill="#f59e0b"/>
+          <clipPath id="cp-cfg-panel">
+            <rect x="176" y="14" width="74" height="136"/>
+          </clipPath>
+        </defs>
+        <g clipPath="url(#cp-cfg-panel)">
+          <text x="182" y="30" fontSize="7" fill="#1d4fb3" fontWeight="bold">⚙ Settings</text>
+          {/* fields */}
+          <text x="182" y="46" fontSize="6" fill="#64748b">Chart Type</text>
+          <rect x="182" y="50" width="62" height="12" rx="4" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+          <text x="187" y="59" fontSize="6.5" fill="#334155">Bar Chart  ∨</text>
+          <text x="182" y="74" fontSize="6" fill="#64748b">X-Axis</text>
+          <rect x="182" y="78" width="62" height="12" rx="4" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+          <text x="187" y="87" fontSize="6.5" fill="#334155">year  ∨</text>
+          <text x="182" y="102" fontSize="6" fill="#64748b">Y-Axis</text>
+          <rect x="182" y="106" width="62" height="12" rx="4" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+          <text x="187" y="115" fontSize="6.5" fill="#334155">no_of_events  ∨</text>
+          <rect x="182" y="124" width="62" height="18" rx="6" fill="#1d4fb3"/>
+          <text x="198" y="136" fontSize="8" fill="white" fontWeight="bold">Apply</text>
+        </g>
+        {/* arrow connector */}
+        <path d="M160 32 L172 32" stroke="#f59e0b" strokeWidth="2" fill="none" markerEnd="url(#aw3)"/>
+        <defs>
+          <marker id="aw3" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto">
+            <path d="M0,0 L0,5 L5,2.5 z" fill="#f59e0b"/>
           </marker>
         </defs>
-        <rect x="180" y="56" width="46" height="22" rx="8" fill="#fef3c7" stroke="#fcd34d" strokeWidth="1"/>
-        <text x="188" y="71" fontSize="10">📄 PDF</text>
-        <rect x="180" y="84" width="46" height="22" rx="8" fill="#f0fdf4" stroke="#86efac" strokeWidth="1"/>
-        <text x="186" y="99" fontSize="10">📦 JSON</text>
       </svg>
-    )
+    ),
+  },
+  {
+    id: 'preview',
+    topic: 'Step 6 — Preview & Export',
+    title: 'Preview, Save & Export',
+    subtitle: 'Switch between Edit and Preview mode at any time',
+    bullets: [
+      'Click ◐ (top-right) to enter Preview — hides edit controls',
+      'Click ✎ to return to Edit mode and keep arranging',
+      'Export as PDF or JSON using the toolbar buttons',
+    ],
+    illustration: (
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* toolbar strip */}
+        <rect x="14" y="14" width="232" height="28" rx="8" fill="#1d4fb3"/>
+        <text x="22" y="32" fontSize="8" fill="white">Data Hub Dashboard Builder</text>
+        {/* toolbar buttons right */}
+        <rect x="190" y="19" width="20" height="18" rx="5" fill="white" opacity="0.15"/>
+        <text x="194" y="31" fontSize="10" fill="white">📄</text>
+        <rect x="214" y="19" width="20" height="18" rx="5" fill="white" opacity="0.3"/>
+        <text x="218" y="31" fontSize="10" fill="white">◐</text>
+        {/* edit mode left panel */}
+        <rect x="14" y="48" width="118" height="104" rx="8" fill="#f8fafd" stroke="#dbe7f5" strokeWidth="1.5" strokeDasharray="5,3"/>
+        <text x="26" y="64" fontSize="7" fill="#64748b" fontWeight="bold">EDIT MODE</text>
+        <rect x="22" y="70" width="96" height="36" rx="6" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        <rect x="22" y="112" width="44" height="32" rx="6" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        <rect x="70" y="112" width="48" height="32" rx="6" fill="white" stroke="#bdd4f0" strokeWidth="1"/>
+        {/* grid corners visible in edit */}
+        <circle cx="26" cy="74" r="2" fill="#c8d9ee"/>
+        <circle cx="114" cy="74" r="2" fill="#c8d9ee"/>
+        {/* preview mode right panel */}
+        <rect x="140" y="48" width="106" height="104" rx="8" fill="white" stroke="#1d4fb3" strokeWidth="2"/>
+        <text x="152" y="64" fontSize="7" fill="#1d4fb3" fontWeight="bold">PREVIEW MODE</text>
+        <rect x="148" y="70" width="90" height="36" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1"/>
+        <polyline points="156,96 168,82 182,88 196,72 210,80 226,66" stroke="#1d4fb3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        <rect x="148" y="112" width="42" height="32" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1"/>
+        <text x="154" y="128" fontSize="18" fill="#1d4fb3" fontWeight="800">84K</text>
+        <rect x="196" y="112" width="42" height="32" rx="6" fill="#eff6ff" stroke="#93c5fd" strokeWidth="1"/>
+        {/* export badges */}
+        <rect x="14" y="148" width="54" height="12" rx="6" fill="#f59e0b" opacity="0.9"/>
+        <text x="20" y="157" fontSize="6.5" fill="white" fontWeight="bold">📄 Export PDF</text>
+        <rect x="72" y="148" width="58" height="12" rx="6" fill="#16a34a" opacity="0.9"/>
+        <text x="78" y="157" fontSize="6.5" fill="white" fontWeight="bold">📦 Export JSON</text>
+      </svg>
+    ),
   },
   {
     id: 'ready',
-    icon: '🚀',
-    titleTh: 'พร้อมแล้ว!',
-    subtitleEn: "You're all set!",
-    descTh: 'คุณรู้จัก Dashboard Builder แล้ว ลองสร้าง Dashboard แรกของคุณได้เลย! กดปุ่ม ✎ ที่มุมบนขวาเพื่อเริ่ม',
+    topic: 'Ready',
+    title: "You're all set!",
+    subtitle: 'Start building your first dashboard now',
+    bullets: [
+      'Click ✎ (top-right) to enter Edit mode',
+      'Open the palette, pick a widget, and drag it on',
+      'Questions? Click the ? button anytime to reopen this guide',
+    ],
     illustration: (
-      <svg viewBox="0 0 240 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* rocket */}
-        <text x="95" y="90" fontSize="52">🚀</text>
-        {/* stars */}
-        <text x="30" y="50" fontSize="18">⭐</text>
-        <text x="185" y="45" fontSize="14">✨</text>
-        <text x="50" y="130" fontSize="12">✨</text>
-        <text x="170" y="130" fontSize="18">⭐</text>
-        <text x="140" y="35" fontSize="10">🌟</text>
-        {/* confetti dots */}
-        <circle cx="60" cy="70" r="4" fill="#f59e0b" opacity="0.7"/>
-        <circle cx="180" cy="80" r="3" fill="#ef4444" opacity="0.7"/>
-        <circle cx="45" cy="110" r="3" fill="#8b5cf6" opacity="0.7"/>
-        <circle cx="195" cy="110" r="4" fill="#10b981" opacity="0.7"/>
-        <circle cx="75" cy="40" r="3" fill="#3b82f6" opacity="0.7"/>
-        <circle cx="165" cy="60" r="3" fill="#f97316" opacity="0.7"/>
-        {/* message */}
-        <rect x="50" y="125" width="140" height="26" rx="13" fill="#1d4ed8"/>
-        <text x="77" y="143" fontSize="11" fill="white" fontWeight="bold">เริ่มสร้าง Dashboard!</text>
+      <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <text x="95" y="95" fontSize="56">🚀</text>
+        <text x="30" y="52" fontSize="20">⭐</text>
+        <text x="200" y="46" fontSize="14">✨</text>
+        <text x="50" y="134" fontSize="12">✨</text>
+        <text x="182" y="134" fontSize="18">⭐</text>
+        <text x="148" y="36" fontSize="10">🌟</text>
+        <circle cx="62" cy="72" r="4" fill="#f59e0b" opacity="0.7"/>
+        <circle cx="190" cy="82" r="3" fill="#ef4444" opacity="0.7"/>
+        <circle cx="46" cy="112" r="3" fill="#8b5cf6" opacity="0.7"/>
+        <circle cx="204" cy="112" r="4" fill="#10b981" opacity="0.7"/>
+        <circle cx="78" cy="42" r="3" fill="#3b82f6" opacity="0.7"/>
+        <circle cx="172" cy="62" r="3" fill="#f97316" opacity="0.7"/>
+        <rect x="50" y="126" width="160" height="26" rx="13" fill="#1d4fb3"/>
+        <text x="76" y="144" fontSize="11" fill="white" fontWeight="bold">Start Building →</text>
       </svg>
-    )
-  }
+    ),
+  },
 ];
 
 export default function WizardOnboarding({ onClose }) {
@@ -318,6 +495,9 @@ export default function WizardOnboarding({ onClose }) {
         className={`wizard-card ${exiting ? (direction === 'next' ? 'exit-left' : 'exit-right') : 'enter'}`}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Topic badge */}
+        <div className="wizard-topic-badge">{current.topic}</div>
+
         {/* Progress dots */}
         <div className="wizard-dots">
           {STEPS.map((s, i) => (
@@ -325,7 +505,7 @@ export default function WizardOnboarding({ onClose }) {
               key={s.id}
               className={`wizard-dot ${i === step ? 'active' : i < step ? 'done' : ''}`}
               onClick={() => goTo(i, i > step ? 'next' : 'back')}
-              aria-label={`ไปขั้นตอน ${i + 1}`}
+              aria-label={`Go to step ${i + 1}`}
             />
           ))}
         </div>
@@ -340,7 +520,7 @@ export default function WizardOnboarding({ onClose }) {
 
         {/* Step counter */}
         <div className="wizard-step-label">
-          ขั้นตอน {step + 1} / {total}
+          {step + 1} / {total}
         </div>
 
         {/* Illustration */}
@@ -348,28 +528,30 @@ export default function WizardOnboarding({ onClose }) {
           {current.illustration}
         </div>
 
-        {/* Icon + Title */}
-        <div className="wizard-icon">{current.icon}</div>
-        <h2 className="wizard-title">{current.titleTh}</h2>
-        <p className="wizard-subtitle">{current.subtitleEn}</p>
-        <p className="wizard-desc">{current.descTh}</p>
+        {/* Title */}
+        <h2 className="wizard-title">{current.title}</h2>
+        <p className="wizard-subtitle">{current.subtitle}</p>
+
+        {/* Bullet list */}
+        <ul className="wizard-bullets">
+          {current.bullets.map((b, i) => (
+            <li key={i}>{b}</li>
+          ))}
+        </ul>
 
         {/* Navigation */}
         <div className="wizard-nav">
-          <button
-            className="wizard-btn-skip"
-            onClick={handleSkip}
-          >
-            ข้ามทั้งหมด
+          <button className="wizard-btn-skip" onClick={handleSkip}>
+            Skip
           </button>
           <div className="wizard-nav-right">
             {step > 0 && (
               <button className="wizard-btn-back" onClick={handleBack}>
-                ← ย้อนกลับ
+                ← Back
               </button>
             )}
             <button className="wizard-btn-next" onClick={handleNext}>
-              {isLast ? '🚀 เริ่มใช้งาน!' : 'ถัดไป →'}
+              {isLast ? '🚀 Get Started!' : 'Next →'}
             </button>
           </div>
         </div>
@@ -384,7 +566,6 @@ export function useWizard() {
   useEffect(() => {
     const done = localStorage.getItem(STORAGE_KEY);
     if (!done) {
-      // Small delay so page renders first
       const t = setTimeout(() => setOpen(true), 600);
       return () => clearTimeout(t);
     }

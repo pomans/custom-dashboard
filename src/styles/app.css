@@ -1501,7 +1501,7 @@ button {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
   gap: 10px;
-  align-items: center;
+  align-items: start;
   text-align: left;
   padding: 12px 12px 13px;
   border-radius: 14px;
@@ -1513,9 +1513,11 @@ button {
   width: 44px;
   height: 34px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   flex: 0 0 auto;
+  /* nudge to align the thumbnail's top with the title's cap height */
+  margin-top: 2px;
 }
 
 .palette-thumb {
@@ -6208,3 +6210,43 @@ th {
   transform: translateY(-1px);
 }
 .topbar-save-btn svg { width: 16px; height: 16px; }
+
+/* ═══════════════════════════════════════════════════════
+   Widget Palette — neutral white/gray theme (match design ref)
+   Replaces the previous blue-tinted palette colors.
+═══════════════════════════════════════════════════════ */
+.palette {
+  background: #ffffff;
+  border-color: #E5E7EB;
+}
+.palette-folder { border-color: #ECEEF1; }
+.palette-folder-header {
+  background: #F3F4F6;
+  color: #1f2937;
+}
+.palette-folder-header:hover { background: #E9EBEF; }
+.palette-folder.open .palette-folder-header { background: #F3F4F6; }
+.palette-folder-icon { color: #9ca3af; }
+.palette-folder-count {
+  background: #E5E7EB;
+  color: #6b7280;
+}
+.palette-folder-chevron { color: #9ca3af; }
+.palette-folder-body {
+  background: #FAFBFC;
+  border-top-color: #ECEEF1;
+}
+.palette-item,
+.palette-item-ready {
+  background: #F6F7F9;
+  border-color: #ECEEF1;
+}
+.palette-item:hover,
+.palette-item-ready:hover {
+  background: #F1F3F5;
+  border-color: #DDE1E6;
+}
+.palette-thumb {
+  background: #ffffff;
+  border-color: #E5E7EB;
+}

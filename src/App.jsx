@@ -359,11 +359,12 @@ const DashboardMiniMap = () => (
 );
 
 const PaletteWidgetThumbnail = ({ type }) => {
-  const B = '#2457cf';   // brand blue
-  const LB = '#93c5fd';  // light blue
-  const BG = '#eef2f8';  // background
-  const LG = '#dde3ee';  // light gray
-  const GY = '#94a3b8';  // gray text
+  // Neutral grayscale tones to match the white/gray widget palette
+  const B = '#475569';   // primary (slate-600)
+  const LB = '#cbd5e1';  // secondary (slate-300)
+  const BG = '#F1F5F9';  // thumbnail background (slate-100)
+  const LG = '#E2E8F0';  // light gray (slate-200)
+  const GY = '#94a3b8';  // gray text (slate-400)
 
   const Wrap = ({ children }) => (
     <svg viewBox="0 0 80 54" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
@@ -374,7 +375,8 @@ const PaletteWidgetThumbnail = ({ type }) => {
   );
 
   /* ── KPI / Stat card ─────────────────────────── */
-  if (type === 'miceStatCard' || type === 'kpiCard' || type === 'summaryCard') {
+  if (type === 'miceStatCard' || type === 'kpiCard' || type === 'summaryCard'
+      || type === 'miceStatPerfKpiCard' || type === 'miceStatPerfFyKpiCard') {
     return (
       <Wrap>
         <rect x="0" y="0" width="80" height="3" rx="1.5" fill={B} />
@@ -434,7 +436,8 @@ const PaletteWidgetThumbnail = ({ type }) => {
   }
 
   /* ── Table / Performance table ───────────────── */
-  if (type === 'table' || type === 'miceNationalityPerformance') {
+  if (type === 'table' || type === 'miceNationalityPerformance'
+      || type === 'miceStatPerfSectorTable' || type === 'miceDataTable') {
     return (
       <Wrap>
         <rect x="6" y="7" width="68" height="7" rx="2" fill={B} opacity="0.85" />
@@ -552,6 +555,43 @@ const PaletteWidgetThumbnail = ({ type }) => {
         <rect x="8" y="23" width="64" height="4" rx="2" fill={LG} />
         <rect x="8" y="31" width="56" height="4" rx="2" fill={LG} />
         <rect x="8" y="39" width="44" height="4" rx="2" fill={LG} />
+      </Wrap>
+    );
+  }
+
+  /* ── Horizontal sector / breakdown bars ──────── */
+  if (type === 'miceStatPerfSectorBar' || type === 'miceStatPerfFySectorBar' || type === 'miceVisitorsBreakdown') {
+    const rows = [{y:8,w:62},{y:18,w:46},{y:28,w:34},{y:38,w:22}];
+    return (
+      <Wrap>
+        {rows.map((r,i) => (
+          <React.Fragment key={i}>
+            <rect x="6" y={r.y} width="8" height="6" rx="1.5" fill={LG} />
+            <rect x="16" y={r.y} width={r.w} height="6" rx="1.5" fill={i===0 ? B : LB} opacity={1 - i*0.12} />
+          </React.Fragment>
+        ))}
+      </Wrap>
+    );
+  }
+
+  /* ── Stacked bars over time (historical share) ─ */
+  if (type === 'miceStatPerfHistoricalChart') {
+    const segs = [[20,10,8],[16,12,9],[22,8,11],[14,14,10],[19,11,9],[17,13,8]];
+    return (
+      <Wrap>
+        <line x1="8" y1="45" x2="74" y2="45" stroke={LG} strokeWidth="1" />
+        {segs.map((s,i) => {
+          const x = 11 + i*10;
+          const total = s[0]+s[1]+s[2];
+          let y = 45 - total;
+          return (
+            <React.Fragment key={i}>
+              <rect x={x} y={y} width="7" height={s[0]} fill={B} opacity="0.9" />
+              <rect x={x} y={y+s[0]} width="7" height={s[1]} fill={LB} />
+              <rect x={x} y={y+s[0]+s[1]} width="7" height={s[2]} fill="#bfdbfe" />
+            </React.Fragment>
+          );
+        })}
       </Wrap>
     );
   }
