@@ -714,6 +714,79 @@ button {
   padding: 16px;
 }
 
+/* ── Empty state (ไม่มี dashboard) ── */
+.dl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 72px 24px 88px;
+}
+
+/* ── Loading (เรียก list API) ── */
+.dl-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 96px 24px;
+  gap: 18px;
+}
+
+.dl-loading-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid #e2e8f0;
+  border-top-color: #1B61AA;
+  border-radius: 50%;
+  animation: dl-spin 0.7s linear infinite;
+}
+
+@keyframes dl-spin {
+  to { transform: rotate(360deg); }
+}
+
+.dl-loading-text {
+  margin: 0;
+  font-size: 0.92rem;
+  color: #64748b;
+}
+
+.dl-empty-art {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 24px;
+}
+
+.dl-empty-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.dl-empty-title {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.dl-empty-subtitle {
+  margin: 0 0 24px;
+  font-size: 0.92rem;
+  color: #64748b;
+  max-width: 420px;
+  line-height: 1.55;
+}
+
+.dl-empty-cta {
+  border-radius: 50px;
+  padding: 12px 28px;
+  font-size: 0.95rem;
+}
+
 /* ── Card ── */
 .dl-card {
   display: flex;
@@ -776,6 +849,35 @@ button {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.dl-card-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dl-card-name-row .dl-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dl-card-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 50px;
+  white-space: nowrap;
+}
+
+.dl-card-badge.shared {
+  background: #DBE7F5;
+  color: #1B61AA;
 }
 
 .dl-card-meta {
@@ -1123,6 +1225,56 @@ button {
   margin-top: 4px;
 }
 
+/* ── Confirm Save Dialog ── */
+.confirm-save-dialog {
+  background: #ffffff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  animation: dialog-in 0.18s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 28px 24px;
+  gap: 16px;
+  text-align: center;
+}
+
+.confirm-save-icon {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+.confirm-save-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.confirm-save-body h3 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.confirm-save-body p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.confirm-save-footer {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+}
+
 /* ── Dashboard List: New Card ── */
 .dashboard-list-card.new-card {
   display: flex;
@@ -1180,14 +1332,15 @@ button {
 
 /* ── Dashboard List: Primary button ── */
 .dashboard-action.primary {
-  background: #1B61AA;
+  background: #0f172a;
   color: #fff;
   border: none;
   font-weight: 700;
 }
 
 .dashboard-action.primary:hover {
-  background: #164E88;
+  background: #1e293b;
+  color: #fff;
 }
 
 .dashboard-action.primary:disabled {
@@ -1210,9 +1363,9 @@ button {
 
 .new-dashboard-dialog {
   background: #ffffff;
-  border-radius: 20px;
+  border-radius: 16px;
   width: 100%;
-  max-width: 440px;
+  max-width: 500px;
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
   overflow: hidden;
   animation: dialog-in 0.18s ease;
@@ -1225,47 +1378,36 @@ button {
 
 .new-dashboard-dialog-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
-  padding: 22px 24px 18px;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.new-dashboard-dialog-icon {
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  color: #1B61AA;
-}
-
-.new-dashboard-dialog-icon svg {
-  width: 100%;
-  height: 100%;
+  padding: 28px 28px 20px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .new-dashboard-dialog-header h2 {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: 1.55rem;
+  font-weight: 800;
   color: #0f172a;
+  line-height: 1.2;
 }
 
 .new-dashboard-dialog-header p {
-  margin: 2px 0 0;
-  font-size: 0.82rem;
+  margin: 4px 0 0;
+  font-size: 0.88rem;
   color: #64748b;
 }
 
 .new-dashboard-dialog-close {
   margin-left: auto;
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   border: none;
   background: transparent;
   color: #94a3b8;
-  font-size: 1rem;
+  font-size: 1.1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1279,7 +1421,7 @@ button {
 }
 
 .new-dashboard-dialog-body {
-  padding: 22px 24px;
+  padding: 24px 28px;
 }
 
 .new-dashboard-name-label {
@@ -1288,36 +1430,142 @@ button {
   gap: 8px;
 }
 
-.new-dashboard-name-label span {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #475569;
+.new-dashboard-name-label > span {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.new-dashboard-required {
+  color: #ef4444;
+  margin-left: 2px;
 }
 
 .new-dashboard-name-input {
   width: 100%;
-  padding: 10px 14px;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  font-size: 1rem;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 50px;
+  font-size: 0.95rem;
   color: #0f172a;
+  background: #f1f5f9;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
 
 .new-dashboard-name-input:focus {
-  border-color: #467FBB;
-  box-shadow: 0 0 0 3px rgba(70, 127, 187, 0.12);
+  background: #e8eef6;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.08);
+}
+
+.new-dashboard-name-input.has-error {
+  background: #fef2f2;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25);
+}
+
+.new-dashboard-name-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #dc2626;
+  font-weight: 500;
 }
 
 .new-dashboard-dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px 20px;
-  border-top: 1px solid #f1f5f9;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 28px 24px;
 }
+
+.new-dashboard-dialog-footer .dashboard-action:not(.primary) {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 10px 16px;
+  color: #475569;
+}
+
+.new-dashboard-dialog-footer .dashboard-action.primary {
+  border-radius: 50px;
+  padding: 11px 28px;
+  font-size: 0.95rem;
+}
+
+/* ── Share Dialog ── */
+.share-dialog {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+  animation: dialog-in 0.18s ease;
+}
+
+.share-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 24px 28px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.share-dialog-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.share-dialog-header p {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.share-dialog-body {
+  padding: 22px 28px 26px;
+}
+
+.share-link-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.share-link-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 50px;
+  font-size: 0.9rem;
+  color: #0f172a;
+  background: #f1f5f9;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.share-copy-btn {
+  flex: 0 0 auto;
+  border-radius: 50px;
+  padding: 11px 22px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.share-loading,
+.share-error {
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.share-loading { color: #64748b; }
+.share-error { color: #dc2626; }
 
 .builder-layout.read-only-preview {
   justify-content: center;
@@ -4703,6 +4951,23 @@ th {
   transform: translateX(-50%) translateY(0);
 }
 
+/* Align bubble to the button's left edge (for left-most items — กัน tooltip ล้นขอบซ้ายจอ) */
+[data-tooltip-align='start']::after {
+  left: 0;
+  transform: translateX(0) translateY(4px);
+}
+[data-tooltip-align='start']:hover::after,
+[data-tooltip-align='start']:focus-visible::after {
+  transform: translateX(0) translateY(0);
+}
+[data-tooltip-dir='down'][data-tooltip-align='start']::after {
+  transform: translateX(0) translateY(-4px);
+}
+[data-tooltip-dir='down'][data-tooltip-align='start']:hover::after,
+[data-tooltip-dir='down'][data-tooltip-align='start']:focus-visible::after {
+  transform: translateX(0) translateY(0);
+}
+
 /* Disabled buttons should not show tooltip */
 [data-tooltip]:disabled::after,
 [data-tooltip]:disabled::before {
@@ -5096,6 +5361,31 @@ th {
   cursor: pointer;
   transition: background 0.15s ease, box-shadow 0.15s ease;
   flex-shrink: 0;
+}
+
+/* ── Language toggle (TH ↔ EN) ── */
+.lang-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111111;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.lang-toggle-btn:hover {
+  background: #f1f5f9;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
 }
 
 .wizard-help-btn svg {

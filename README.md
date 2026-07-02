@@ -7,11 +7,10 @@ MICE Data Hub Dashboard Builder — React component สำหรับสร้�
 
 ## สารบัญ
 
-- [ติดตั้ง](#ติดตั้ง)
-- [การใช้งานเบื้องต้น](#การใช้งานเบื้องต้น)
+- [ติดตั้งใน Host App](#ติดตั้งใน-host-app)
 - [Props](#props)
 - [การตั้งค่า API URL](#การตั้งค่า-api-url)
-- [การตั้งค่า CSS](#การตั้งค่า-css)
+- [การตั้งค่า CSS และ Layout Offset](#การตั้งค่า-css-และ-layout-offset)
 - [Z-index Reference](#z-index-reference)
 - [Local Development](#local-development)
 - [Build & Pack](#build--pack)
@@ -19,42 +18,176 @@ MICE Data Hub Dashboard Builder — React component สำหรับสร้�
 
 ---
 
-## ติดตั้ง
+## ติดตั้งใน Host App
+
+### 1. รับไฟล์ .tgz
+
+ขอไฟล์ `tceb-dashboard-builder-x.x.x.tgz` จากทีม custom-dashboard แล้วนำไปวางใน root ของ host project
+
+### 2. ติดตั้ง package
 
 ```bash
-# จาก .tgz file ที่ได้รับมา (เปลี่ยน x.x.x เป็น version ล่าสุด)
+# ลบ cache เก่าก่อน (สำคัญเมื่ออัปเดต version)
+rm -rf node_modules/tceb-dashboard-builder
+
 npm install ./tceb-dashboard-builder-1.0.2.tgz
 ```
 
-### Peer Dependencies (ต้องมีใน host app)
+**Peer dependencies** ที่ host app ต้องมีอยู่แล้ว:
 
 ```json
 { "react": ">=18", "react-dom": ">=18" }
 ```
 
-`recharts`, `jspdf`, `html2canvas` — **bundled แล้วใน package** ไม่ต้องติดตั้งแยก
+> `recharts`, `jspdf`, `html2canvas` — bundled มาพร้อม package แล้ว ไม่ต้องติดตั้งแยก
 
----
+### 3. ตั้งค่า API URL ใน .env
 
-## การใช้งานเบื้องต้น
+```env
+# .env.development
+REACT_APP_CUSTOM_DASHBOARD_API_URL=https://localhost:7139
+
+# .env.production
+REACT_APP_CUSTOM_DASHBOARD_API_URL=https://your-api.example.com
+```
+
+### 4. สร้าง Page component
+
+สร้างไฟล์ `CustomDashboardPage.js` และ `CustomDashboardPage.css`:
+
+**`CustomDashboardPage.js`**
 
 ```jsx
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
+import './CustomDashboardPage.css';
 
 const DashboardBuilder = lazy(() => import('tceb-dashboard-builder'));
 
-function MyPage() {
+const API_BASE_URL = process.env.REACT_APP_CUSTOM_DASHBOARD_API_URL;
+
+// ──────────────────────────────────────────────────────────────
+// Hook: ติดตาม nav bottom แบบ real-time ผ่าน CSS variables
+// ปรับ selector ให้ตรงกับ nav จริงของ host app
+// ──────────────────────────────────────────────────────────────
+const NAV_SELECTOR    = '.main-header';    // ← ปรับตาม host app
+const FOOTER_SELECTOR = '.footer-contact'; // ← ปรับตาม host app (หรือ null)
+
+function useDashboardOffset() {
+  useEffect(() => {
+    let rafId = null;
+    const update = () => {
+      const nav    = document.querySelector(NAV_SELECTOR);
+      const footer = document.querySelector(FOOTER_SELECTOR);
+      const root   = document.documentElement;
+      const navBottom    = nav    ? Math.max(0, nav.getBoundingClientRect().bottom)    : 0;
+      const footerTop    = footer ? footer.getBoundingClientRect().top                  : window.innerHeight;
+      const paletteTop   = navBottom + 88;
+      const paletteMaxH  = Math.max(120, Math.min(window.innerHeight - 16, footerTop - 16) - paletteTop);
+      root.style.setProperty('--cd-topbar-top',   `${navBottom + 12}px`);
+      root.style.setProperty('--cd-palette-top',  `${paletteTop}px`);
+      root.style.setProperty('--cd-palette-maxh', `${paletteMaxH}px`);
+    };
+    const onScroll = () => { if (rafId) cancelAnimationFrame(rafId); rafId = requestAnimationFrame(update); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    update();
+    return () => { window.removeEventListener('scroll', onScroll); if (rafId) cancelAnimationFrame(rafId); };
+  }, []);
+}
+
+export default function CustomDashboardPage() {
+  useDashboardOffset();
   return (
-    <div className="my-dashboard-page">
-      <Suspense fallback={<div>กำลังโหลด...</div>}>
-        <DashboardBuilder
-          apiBaseUrl="https://your-api.example.com"
-          useSampleData={false}
-        />
+    <div className="custom-dashboard-page">
+      <Suspense fallback={
+        <div className="custom-dashboard-loading">
+          <div className="custom-dashboard-spinner" />
+          กำลังโหลด...
+        </div>
+      }>
+        <DashboardBuilder apiBaseUrl={API_BASE_URL} />
       </Suspense>
     </div>
   );
 }
+```
+
+**`CustomDashboardPage.css`**
+
+```css
+.custom-dashboard-page {
+  width: 100%;
+  background: #f8f8f9;
+}
+
+/* ── Topbar: เลื่อนลงใต้ nav ของ host ── */
+.custom-dashboard-page .topbar {
+  position: fixed !important;
+  top: var(--cd-topbar-top, 122px) !important;  /* fallback = nav 110px + 12px */
+  left: 0 !important;
+  right: 0 !important;
+  width: auto !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  z-index: 950 !important;
+}
+
+/* ซ่อน brand zone — host มี nav ของตัวเองอยู่แล้ว */
+.custom-dashboard-page .topbar-brand {
+  display: none !important;
+}
+
+/* เว้นพื้นที่ให้ topbar */
+.custom-dashboard-page .app-shell {
+  padding-top: 88px !important;
+}
+
+/* ── Widget Palette sidebar ── */
+.custom-dashboard-page .palette {
+  top: var(--cd-palette-top, 198px) !important;
+  max-height: var(--cd-palette-maxh, calc(100vh - 218px)) !important;
+  z-index: 1000 !important;
+}
+
+/* ── Loading fallback ── */
+.custom-dashboard-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 400px;
+  color: #64748b;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.custom-dashboard-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #DBE7F5;
+  border-top-color: #1B61AA;
+  border-radius: 50%;
+  animation: cd-spin 0.7s linear infinite;
+}
+
+@keyframes cd-spin {
+  to { transform: rotate(360deg); }
+}
+```
+
+### 5. เพิ่ม Route
+
+```jsx
+// App.js / router config
+import CustomDashboardPage from './pages/CustomDashboard/CustomDashboardPage';
+
+<Route path="/custom-dashboard" element={<CustomDashboardPage />} />
+```
+
+### 6. Restart dev server
+
+```bash
+npm start
 ```
 
 ---
@@ -70,61 +203,14 @@ function MyPage() {
 
 ## การตั้งค่า API URL
 
-Package อ่าน API URL จากหลายแหล่ง โดยมี **priority** ดังนี้:
+Package อ่าน API URL จาก priority ดังนี้:
 
 ```
 1. window.__DASHBOARD_API_BASE_URL__         ← runtime override (สูงสุด)
 2. VITE_API_BASE_URL                         ← Vite .env (ใช้ตอน dev standalone)
-3. REACT_APP_CUSTOM_DASHBOARD_API_URL        ← CRA/webpack .env (tceb-web ใช้อันนี้)
+3. REACT_APP_CUSTOM_DASHBOARD_API_URL        ← CRA/webpack .env  ← แนะนำสำหรับ tceb-web
 4. 'https://localhost:7139'                  ← hardcoded fallback
 ```
-
-### วิธีที่ 1 — `.env` file (แนะนำสำหรับ CRA / webpack)
-
-ค่าถูก bake เข้า bundle ตอน build — เหมาะกับ environment ที่แน่นอน
-
-**.env.development**
-```env
-REACT_APP_CUSTOM_DASHBOARD_API_URL=https://localhost:7139
-```
-
-**.env.production**
-```env
-REACT_APP_CUSTOM_DASHBOARD_API_URL=https://your-api.example.com
-```
-
-ส่งผ่าน prop ใน Page component:
-
-```jsx
-const API_BASE_URL = process.env.REACT_APP_CUSTOM_DASHBOARD_API_URL;
-
-<DashboardBuilder apiBaseUrl={API_BASE_URL} />
-```
-
-### วิธีที่ 2 — `window` global (runtime, ไม่ต้อง rebuild)
-
-เหมาะกับ deploy หลาย environment โดยไม่ต้อง build ใหม่
-
-```html
-<!-- index.html หรือ server-rendered HTML -->
-<script>
-  window.__DASHBOARD_API_BASE_URL__ = "https://your-api.example.com";
-  window.__DASHBOARD_USE_SAMPLE_DATA__ = false;
-</script>
-```
-
-หรือสร้าง `/public/config.js` แยกต่อ environment แล้ว include ใน `index.html`:
-
-```html
-<script src="/config.js"></script>
-```
-
-```js
-// config.js (สร้างต่างกันต่อ environment โดย CI/CD)
-window.__DASHBOARD_API_BASE_URL__ = "https://prod-api.example.com";
-```
-
-### ตัวแปรทั้งหมดที่ config ได้
 
 | ค่า | `.env` (CRA) | `window` global | Default |
 |-----|-------------|-----------------|---------|
@@ -132,153 +218,36 @@ window.__DASHBOARD_API_BASE_URL__ = "https://prod-api.example.com";
 | ใช้ sample data | `REACT_APP_CUSTOM_DASHBOARD_SAMPLE_DATA=true` | `window.__DASHBOARD_USE_SAMPLE_DATA__ = true` | `false` |
 | Spark concurrency | `REACT_APP_SPARK_CONCURRENCY=2` | — | `2` |
 
+**Runtime override** (ไม่ต้อง rebuild) — ใส่ใน `public/config.js` แล้ว include ใน `index.html`:
+
+```html
+<script src="/config.js"></script>
+```
+```js
+// public/config.js  (สร้างต่างกันต่อ environment โดย CI/CD)
+window.__DASHBOARD_API_BASE_URL__ = "https://prod-api.example.com";
+```
+
 ---
 
-## การตั้งค่า CSS
+## การตั้งค่า CSS และ Layout Offset
 
-Dashboard Builder มี **topbar** และ **Widget Palette sidebar** เป็น `position: fixed` ซึ่งอาจทับกับ nav ของ host app หากไม่ได้ตั้งค่า offset
+Dashboard Builder มี **topbar** และ **Widget Palette** เป็น `position: fixed` — ต้องปรับ offset ให้ต่ำกว่า nav ของ host app
 
-### กรณีที่ 1 — ไม่มี nav (standalone / full-page)
-
-ไม่ต้อง config CSS เพิ่มเติม — dashboard ใช้ค่า default ของตัวเองทั้งหมด
-
-### กรณีที่ 2 — Host app มี nav ความสูงคงที่
-
-แก้ `top` ของ topbar และ palette ให้เลื่อนลงมาต่ำกว่า nav:
-
-```css
-/* wrapper ของหน้า dashboard */
-.my-dashboard-page .topbar {
-  position: fixed !important;
-  top: 122px !important;    /* NAV_HEIGHT (110) + 12px = 122px  ← ปรับตาม nav จริง */
-  left: 0 !important;
-  right: 0 !important;
-  width: auto !important;
-  margin: 0 !important;
-  border-radius: 0 !important;
-  z-index: 950 !important;  /* ต่ำกว่า nav ของ host */
-}
-
-/* ซ่อน brand/logo ของ dashboard (host มี nav ของตัวเองอยู่แล้ว) */
-.my-dashboard-page .topbar-brand {
-  display: none !important;
-}
-
-/* เว้นพื้นที่ให้ topbar */
-.my-dashboard-page .app-shell {
-  padding-top: 88px !important;
-}
-
-/* Widget Palette sidebar */
-.my-dashboard-page .palette {
-  top: 198px !important;            /* NAV_HEIGHT (110) + 88px = 198px  ← ปรับตาม nav จริง */
-  max-height: calc(100vh - 218px) !important;
-  z-index: 1000 !important;
-}
-```
-
-**สูตรคำนวณ:**
+**สูตรคำนวณ offset:**
 
 ```
-topbar top  = NAV_HEIGHT + 12
-palette top = NAV_HEIGHT + 88
+topbar top  = NAV_HEIGHT + 12px
+palette top = NAV_HEIGHT + 88px
 ```
 
-### กรณีที่ 3 — Nav เลื่อนตาม scroll (dynamic offset)
+`useDashboardOffset()` hook ใน Page component จะคำนวณและ set CSS variables อัตโนมัติทุก scroll frame โดยอ่านจาก `nav.getBoundingClientRect().bottom` — ใช้งานได้ทั้ง nav แบบ sticky และ nav ที่ scroll หายไป
 
-เมื่อ nav ไม่ได้ fixed ตลอดเวลา ให้ใช้ JavaScript hook คำนวณ offset แบบ real-time
-และตรวจ footer ด้วยเพื่อไม่ให้ sidebar ทับ:
+**ตัวอย่าง behavior (nav สูง 110px):**
 
-**CSS (ใช้ CSS variables):**
-
-```css
-.my-dashboard-page .topbar {
-  position: fixed !important;
-  top: var(--cd-topbar-top, 122px) !important;  /* fallback = nav เต็มสูง */
-  left: 0 !important;
-  right: 0 !important;
-  width: auto !important;
-  margin: 0 !important;
-  border-radius: 0 !important;
-  z-index: 950 !important;
-}
-
-.my-dashboard-page .topbar-brand { display: none !important; }
-
-.my-dashboard-page .app-shell { padding-top: 88px !important; }
-
-.my-dashboard-page .palette {
-  top: var(--cd-palette-top, 198px) !important;
-  max-height: var(--cd-palette-maxh, calc(100vh - 218px)) !important;
-  z-index: 1000 !important;
-}
-```
-
-**JavaScript hook (ใส่ใน Page component):**
-
-```jsx
-import { useEffect } from 'react';
-
-const NAV_SELECTOR    = '.your-nav-class';     // ← selector ของ nav host app
-const FOOTER_SELECTOR = '.your-footer-class';  // ← selector ของ footer host app
-
-function useDashboardOffset() {
-  useEffect(() => {
-    let rafId = null;
-
-    const update = () => {
-      const nav    = document.querySelector(NAV_SELECTOR);
-      const footer = document.querySelector(FOOTER_SELECTOR);
-      const root   = document.documentElement;
-
-      // nav bottom: 0 ถ้า scroll พ้นจอแล้ว
-      const navBottom  = nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 0;
-
-      // palette หยุดก่อนถึง footer 16px เสมอ
-      const footerTop  = footer ? footer.getBoundingClientRect().top : window.innerHeight;
-      const paletteTop = navBottom + 88;
-      const paletteMaxH = Math.max(
-        120,
-        Math.min(window.innerHeight - 16, footerTop - 16) - paletteTop
-      );
-
-      root.style.setProperty('--cd-topbar-top',   `${navBottom + 12}px`);
-      root.style.setProperty('--cd-palette-top',  `${paletteTop}px`);
-      root.style.setProperty('--cd-palette-maxh', `${paletteMaxH}px`);
-    };
-
-    const onScroll = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(update);
-    };
-
-    window.addEventListener('scroll', onScroll, { passive: true });
-    update(); // initial
-    return () => {
-      window.removeEventListener('scroll', onScroll);
-      if (rafId) cancelAnimationFrame(rafId);
-    };
-  }, []);
-}
-
-// ใช้งาน
-function MyDashboardPage() {
-  useDashboardOffset();
-  return (
-    <div className="my-dashboard-page">
-      <Suspense fallback={<div>Loading...</div>}>
-        <DashboardBuilder apiBaseUrl={API_BASE_URL} />
-      </Suspense>
-    </div>
-  );
-}
-```
-
-**ตัวอย่าง behavior:**
-
-| สถานะ scroll | navBottom | topbar top | palette top |
+| สถานะ scroll | navBottom | `--cd-topbar-top` | `--cd-palette-top` |
 |---|---|---|---|
-| ไม่ได้ scroll (nav เต็ม 110px) | 110px | 122px | 198px |
+| nav เต็มสูง | 110px | 122px | 198px |
 | scroll ลงครึ่งทาง (nav เหลือ 55px) | 55px | 67px | 143px |
 | scroll พ้น nav แล้ว | 0px | 12px | 88px |
 

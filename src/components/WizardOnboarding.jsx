@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useLang } from '../i18n';
 
 const STORAGE_KEY = 'bi-dashboard.wizard-done.v1';
 
+// แต่ละ step ใช้ i18n key prefix (wizard.s1.*, wizard.s2.*, ...) — เนื้อหา (topic/title/subtitle/bullets)
+// ดึงจาก dict ตอน render; illustration ยังอยู่ที่นี่ (ไม่มีข้อความให้แปล)
 const STEPS = [
   {
     id: 'welcome',
-    topic: 'Overview',
-    title: 'Dashboard Builder',
-    subtitle: 'Build your own MICE data dashboard — no coding needed',
-    bullets: [
-      'Drag widgets from the palette onto the canvas',
-      'Resize and rearrange freely',
-      'Filter all widgets at once with the global filter panel',
-    ],
+    key: 's1',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* canvas background */}
@@ -69,14 +66,8 @@ const STEPS = [
   },
   {
     id: 'palette',
-    topic: 'Step 1 — Widget Palette',
-    title: 'Find a Widget',
-    subtitle: 'The left panel organises widgets into groups',
-    bullets: [
-      'Click a folder to expand it and see available widgets',
-      'Ready-to-use widgets (MICE data) are pre-configured',
-      'Configurable widgets let you choose your own fields',
-    ],
+    key: 's2',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -140,14 +131,8 @@ const STEPS = [
   },
   {
     id: 'drag',
-    topic: 'Step 2 — Drag to Canvas',
-    title: 'Drag & Drop',
-    subtitle: 'Place a widget anywhere on the canvas',
-    bullets: [
-      'Click and hold on any widget in the palette',
-      'Drag it over the canvas — a blue ghost shows where it will land',
-      'Release the mouse to drop the widget',
-    ],
+    key: 's3',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
@@ -197,14 +182,8 @@ const STEPS = [
   },
   {
     id: 'resize',
-    topic: 'Step 3 — Resize & Move',
-    title: 'Arrange Your Canvas',
-    subtitle: 'Widgets snap to a grid — resize and reposition freely',
-    bullets: [
-      'Drag the widget header to move it to a new position',
-      'Drag the ↔ handle at the bottom-right corner to resize',
-      'Use Auto Arrange (toolbar) to pack widgets without gaps',
-    ],
+    key: 's4',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* canvas */}
@@ -246,14 +225,8 @@ const STEPS = [
   },
   {
     id: 'filters',
-    topic: 'Step 4 — Global Filters',
-    title: 'Filter All Widgets at Once',
-    subtitle: 'The Filter Panel at the top controls every widget simultaneously',
-    bullets: [
-      'Select Market (International / Domestic / All)',
-      'Choose Year, Quarter(s), and Industry',
-      'All widgets refresh instantly when you change a filter',
-    ],
+    key: 's5',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* filter panel */}
@@ -317,14 +290,8 @@ const STEPS = [
   },
   {
     id: 'configure',
-    topic: 'Step 5 — Widget Settings',
-    title: 'Configure a Widget',
-    subtitle: 'Hover over any widget, then click ⚙ to open its settings',
-    bullets: [
-      'Set the chart type (bar, line, pie…) and axis fields',
-      'For configurable widgets: map your dataset fields',
-      'Ready-to-use MICE widgets have built-in settings (metric variant)',
-    ],
+    key: 's6',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* widget */}
@@ -375,19 +342,13 @@ const STEPS = [
   },
   {
     id: 'preview',
-    topic: 'Step 6 — Preview & Export',
-    title: 'Preview, Save & Export',
-    subtitle: 'Switch between Edit and Preview mode at any time',
-    bullets: [
-      'Click ◐ (top-right) to enter Preview — hides edit controls',
-      'Click ✎ to return to Edit mode and keep arranging',
-      'Export as PDF or JSON using the toolbar buttons',
-    ],
+    key: 's7',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         {/* toolbar strip */}
         <rect x="14" y="14" width="232" height="28" rx="8" fill="#111111"/>
-        <text x="22" y="32" fontSize="8" fill="white">Data Hub Dashboard Builder</text>
+        <text x="22" y="32" fontSize="8" fill="white">Data Hub สร้างแดชบอร์ด</text>
         {/* toolbar buttons right */}
         <rect x="190" y="19" width="20" height="18" rx="5" fill="white" opacity="0.15"/>
         <text x="194" y="31" fontSize="10" fill="white">📄</text>
@@ -420,14 +381,8 @@ const STEPS = [
   },
   {
     id: 'ready',
-    topic: 'Ready',
-    title: "You're all set!",
-    subtitle: 'Start building your first dashboard now',
-    bullets: [
-      'Click ✎ (top-right) to enter Edit mode',
-      'Open the palette, pick a widget, and drag it on',
-      'Questions? Click the ? button anytime to reopen this guide',
-    ],
+    key: 's8',
+    bulletCount: 3,
     illustration: (
       <svg viewBox="0 0 260 160" fill="none" xmlns="http://www.w3.org/2000/svg">
         <text x="95" y="95" fontSize="56">🚀</text>
@@ -450,6 +405,7 @@ const STEPS = [
 ];
 
 export default function WizardOnboarding({ onClose }) {
+  const { t } = useLang();
   const [step, setStep] = useState(0);
   const [exiting, setExiting] = useState(false);
   const [direction, setDirection] = useState('next');
@@ -457,6 +413,7 @@ export default function WizardOnboarding({ onClose }) {
   const total = STEPS.length;
   const current = STEPS[step];
   const isLast = step === total - 1;
+  const bullets = Array.from({ length: current.bulletCount }, (_, i) => t(`wizard.${current.key}.b${i + 1}`));
 
   const goTo = (nextStep, dir = 'next') => {
     setDirection(dir);
@@ -496,7 +453,7 @@ export default function WizardOnboarding({ onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Topic badge */}
-        <div className="wizard-topic-badge">{current.topic}</div>
+        <div className="wizard-topic-badge">{t(`wizard.${current.key}.topic`)}</div>
 
         {/* Progress dots */}
         <div className="wizard-dots">
@@ -505,7 +462,7 @@ export default function WizardOnboarding({ onClose }) {
               key={s.id}
               className={`wizard-dot ${i === step ? 'active' : i < step ? 'done' : ''}`}
               onClick={() => goTo(i, i > step ? 'next' : 'back')}
-              aria-label={`Go to step ${i + 1}`}
+              aria-label={t('wizard.goStep', { n: i + 1 })}
             />
           ))}
         </div>
@@ -529,12 +486,12 @@ export default function WizardOnboarding({ onClose }) {
         </div>
 
         {/* Title */}
-        <h2 className="wizard-title">{current.title}</h2>
-        <p className="wizard-subtitle">{current.subtitle}</p>
+        <h2 className="wizard-title">{t(`wizard.${current.key}.title`)}</h2>
+        <p className="wizard-subtitle">{t(`wizard.${current.key}.subtitle`)}</p>
 
         {/* Bullet list */}
         <ul className="wizard-bullets">
-          {current.bullets.map((b, i) => (
+          {bullets.map((b, i) => (
             <li key={i}>{b}</li>
           ))}
         </ul>
@@ -542,16 +499,16 @@ export default function WizardOnboarding({ onClose }) {
         {/* Navigation */}
         <div className="wizard-nav">
           <button className="wizard-btn-skip" onClick={handleSkip}>
-            Skip
+            {t('wizard.skip')}
           </button>
           <div className="wizard-nav-right">
             {step > 0 && (
               <button className="wizard-btn-back" onClick={handleBack}>
-                ← Back
+                {t('wizard.back')}
               </button>
             )}
             <button className="wizard-btn-next" onClick={handleNext}>
-              {isLast ? '🚀 Get Started!' : 'Next →'}
+              {isLast ? t('wizard.done') : t('wizard.next')}
             </button>
           </div>
         </div>

@@ -40,3 +40,8 @@ Thumbs.db
 # Package manager artifacts
 .npm/
 .pnpm-store/
+.env.trello
+
+# Standalone SPA build output + npm pack tarballs (artifacts)
+dist-app/
+tceb-dashboard-builder-*.tgz

@@ -758,7 +758,7 @@ export const widgetCatalog = [
     metric: 'events',
     defaultW: 3,
     defaultH: 3,
-    label: 'MICE Events (KPI)',
+    label: 'จำนวนงาน MICE (KPI)',
     dataset: 'miceStatistics',
     title: 'MICE Events',
     description: 'จำนวนงาน MICE Events รวม'
@@ -771,7 +771,7 @@ export const widgetCatalog = [
     metric: 'visitors',
     defaultW: 3,
     defaultH: 3,
-    label: 'MICE Inter Visitors (KPI)',
+    label: 'นักเดินทาง MICE ต่างชาติ (KPI)',
     dataset: 'miceStatistics',
     title: 'MICE Inter Visitors',
     description: 'จำนวนนักเดินทาง MICE International รวม'
@@ -784,7 +784,7 @@ export const widgetCatalog = [
     metric: 'topNationality',
     defaultW: 3,
     defaultH: 3,
-    label: 'Top Nationality (KPI)',
+    label: 'สัญชาติสูงสุด (KPI)',
     dataset: 'miceStatistics',
     title: 'Top Nationality',
     description: 'สัญชาตินักเดินทาง MICE สูงสุด'
@@ -797,7 +797,7 @@ export const widgetCatalog = [
     metric: 'topIndustry',
     defaultW: 3,
     defaultH: 3,
-    label: 'Top Industry (KPI)',
+    label: 'อุตสาหกรรมสูงสุด (KPI)',
     dataset: 'miceStatistics',
     title: 'Top Industry',
     description: 'ประเภทงาน MICE ที่มีนักเดินทางสูงสุด'
@@ -808,7 +808,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 7,
-    label: 'MICE Events Performance Over Time',
+    label: 'ผลการดำเนินงาน MICE Events รายเวลา',
     dataset: 'miceStatistics',
     title: 'MICE Events Performance Over Time',
     description: 'จำนวนงาน MICE แยกรายไตรมาส เปรียบเทียบ This Year vs Last Year พร้อม %YoY'
@@ -819,7 +819,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 7,
-    label: 'MICE International Visitors Performance Over Time',
+    label: 'ผลการดำเนินงาน MICE Visitors ต่างชาติรายเวลา',
     dataset: 'miceStatistics',
     title: 'MICE International Visitors Performance Over Time',
     description: 'จำนวนนักเดินทาง MICE International แยกรายไตรมาส เปรียบเทียบ This Year vs Last Year พร้อม %YoY'
@@ -830,7 +830,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 6,
-    label: 'MICE Events Chart',
+    label: 'แผนภูมิ MICE Events',
     dataset: 'miceStatistics',
     title: 'จำนวนงานไมซ์ที่เกิดขึ้น (MICE Events)',
     description: 'แนวโน้มจำนวนงาน Meetings · Incentives · Conventions · Exhibitions รายปี แยก International/Domestic'
@@ -841,7 +841,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 6,
-    label: 'MICE Revenue Chart',
+    label: 'แผนภูมิรายได้ MICE',
     dataset: 'miceStatistics',
     title: 'รายได้จากการจัดงานไมซ์ (MICE Revenue Generated)',
     description: 'รายได้รวมจากอุตสาหกรรม MICE ทั้ง 4 ประเภท แสดงแนวโน้มและ %YoY'
@@ -852,7 +852,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 6,
-    label: 'MICE Visitors Chart',
+    label: 'แผนภูมิ MICE Visitors',
     dataset: 'miceStatistics',
     title: 'จำนวนนักเดินทางไมซ์ (MICE Visitors)',
     description: 'นักเดินทางที่เข้าร่วมงาน Meetings, Incentive Travel, Conventions & Exhibitions'
@@ -863,7 +863,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 6,
-    label: 'Average Staying Period',
+    label: 'ระยะเวลาพำนักเฉลี่ย',
     dataset: 'miceStatistics',
     title: 'จำนวนวันพำนักเฉลี่ย (Average Staying Period)',
     description: 'จำนวนวันพำนักเฉลี่ยต่อทริปของผู้เดินทาง MICE รายปี (Fiscal Year)'
@@ -874,7 +874,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 6,
-    label: 'Spending per Head per Day',
+    label: 'ค่าใช้จ่ายต่อหัวต่อวัน',
     dataset: 'miceStatistics',
     title: 'ค่าใช้จ่ายเฉลี่ยต่อคนต่อวัน (Spending per Head per Day)',
     description: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อวันของผู้เดินทาง MICE (บาท/คน/วัน) — Fiscal Year'
@@ -885,7 +885,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 6,
-    label: 'Spending per Head per Trip',
+    label: 'ค่าใช้จ่ายต่อหัวต่อทริป',
     dataset: 'miceStatistics',
     title: 'ค่าใช้จ่ายเฉลี่ยต่อคนต่อทริป (Spending per Head per Trip)',
     description: 'ค่าใช้จ่ายเฉลี่ยต่อหัวต่อทริปของผู้เดินทาง MICE (บาท/คน/ทริป) — Fiscal Year'
@@ -896,7 +896,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 8,
-    label: 'Nationality Performance',
+    label: 'ผลการดำเนินงานตามสัญชาติ',
     dataset: 'miceStatistics',
     title: 'Nationality Performance',
     description: 'จำนวน MICE Visitors แยกสัญชาติ เปรียบเทียบปีปัจจุบันกับปีก่อน'
@@ -907,7 +907,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 8,
-    label: 'Industry Matrix',
+    label: 'เมทริกซ์อุตสาหกรรม',
     dataset: 'miceStatistics',
     title: 'Nationality by MICE Industry',
     description: 'Visitors แยกตาม Nationality × ประเภทงาน Meetings · Incentives · Conventions · Exhibitions'
@@ -918,7 +918,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 9,
-    label: 'Nationality Matrix (Industry / Period)',
+    label: 'เมทริกซ์สัญชาติ (อุตสาหกรรม / ไตรมาส)',
     dataset: 'miceStatistics',
     title: 'Nationality by MICE Industry',
     description: 'ตารางสัญชาติ × ประเภทงาน หรือ × ไตรมาส สลับมุมมองได้'
@@ -929,7 +929,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 12,
     defaultH: 12,
-    label: 'MICE Visitors Breakdown',
+    label: 'รายละเอียด MICE Visitors',
     dataset: 'miceStatistics',
     title: 'MICE Visitors Breakdown',
     description: 'Breakdown นักเดินทาง MICE แยก Nationality → Industry → Quarter'
@@ -940,7 +940,7 @@ export const widgetCatalog = [
     fixed: true,
     defaultW: 8,
     defaultH: 10,
-    label: 'MICE Statistics Table',
+    label: 'ตารางสถิติ MICE',
     dataset: 'miceStatistics',
     title: 'MICE Statistics',
     description: 'ตารางสถิติ MICE รายปี: Events, Visitors, Revenue แยกตาม Quarter'
@@ -1166,7 +1166,7 @@ export const widgetCatalog = [
   {
     type: 'chart',
     group: 'configurable',
-    label: 'Chart',
+    label: 'แผนภูมิ',
     dataset: 'miceStatistics',
     title: 'MICE Trend',
     description: 'สลับรูปแบบ line, bar, area หรือ stacked bar'
@@ -1174,7 +1174,7 @@ export const widgetCatalog = [
   {
     type: 'kpiCard',
     group: 'configurable',
-    label: 'KPI Card',
+    label: 'การ์ด KPI',
     dataset: 'miceStatistics',
     title: 'MICE KPI',
     description: 'แสดงตัวเลขสำคัญหรือชื่อประเทศตามสัญชาติ'
@@ -1182,7 +1182,7 @@ export const widgetCatalog = [
   {
     type: 'line',
     group: 'configurable',
-    label: 'Line',
+    label: 'เส้น',
     dataset: 'miceStatistics',
     title: 'MICE Trend',
     description: 'แสดงแนวโน้มข้อมูลตามลำดับ'
@@ -1190,7 +1190,7 @@ export const widgetCatalog = [
   {
     type: 'bar',
     group: 'configurable',
-    label: 'Bar',
+    label: 'แท่ง',
     dataset: 'miceStatistics',
     title: 'MICE Comparison',
     description: 'เปรียบเทียบค่าระหว่างหมวดหมู่'
@@ -1198,7 +1198,7 @@ export const widgetCatalog = [
   {
     type: 'pie',
     group: 'configurable',
-    label: 'Pie',
+    label: 'วงกลม',
     dataset: 'miceStatistics',
     title: 'MICE Distribution',
     description: 'แสดงสัดส่วนของแต่ละรายการ'
@@ -1206,7 +1206,7 @@ export const widgetCatalog = [
   {
     type: 'treemap',
     group: 'configurable',
-    label: 'Treemap',
+    label: 'ทรีแมป',
     dataset: 'miceStatistics',
     title: 'MICE Breakdown',
     description: 'แสดงขนาดข้อมูลแบบจัดกลุ่ม'
@@ -1214,7 +1214,7 @@ export const widgetCatalog = [
   {
     type: 'summaryCard',
     group: 'configurable',
-    label: 'Summary Card',
+    label: 'การ์ดสรุป',
     dataset: 'miceStatistics',
     title: 'MICE Summary',
     description: 'สรุปตัวเลขสำคัญแบบการ์ด'
@@ -1222,7 +1222,7 @@ export const widgetCatalog = [
   {
     type: 'rankingList',
     group: 'configurable',
-    label: 'Ranking List',
+    label: 'รายการจัดอันดับ',
     dataset: 'miceStatistics',
     title: 'Top MICE',
     description: 'จัดอันดับรายการตามค่า Top N'
@@ -1230,10 +1230,10 @@ export const widgetCatalog = [
   {
     type: 'table',
     group: 'configurable',
-    label: 'Table',
+    label: 'ตาราง',
     dataset: 'miceStatistics',
     title: 'MICE Records',
     description: 'แสดงข้อมูลเป็นแถวและคอลัมน์'
   },
-  { type: 'textbox', group: 'configurable', label: 'TextBox', dataset: '', title: 'Text Box', description: 'แสดงข้อความและ expression' }
+  { type: 'textbox', group: 'configurable', label: 'กล่องข้อความ', dataset: '', title: 'Text Box', description: 'แสดงข้อความและ expression' }
 ];

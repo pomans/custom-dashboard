@@ -7,6 +7,14 @@ import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog, FALLBACK_COUNTRIES, buildLiveDatasets } from './data/sampleData';
 import { fetchWidgetsOnDashboard, activeMiceWidgetKey, fetchMasterCountries, fetchMasterSectors } from './services/widgetApi';
 import { USE_SAMPLE_DATA } from './config/apiConfig';
+import * as dashboardApi from './services/dashboardApi';
+import { PDF_LOGO_SVG } from './assets/pdf-logo';
+import { useLang } from './i18n';
+
+// Cloud persistence เปิดเมื่อมี Bearer token (อ่านจาก storage ของ host app) และไม่ได้ใช้ sample data
+// Custom dashboard อ่าน/เขียนจาก database 100% — ไม่มี localStorage cache
+// standalone/sample (ไม่มี token) → ทำงานแบบ in-memory ชั่วคราว (ไม่ persist)
+const isCloudEnabled = () => !USE_SAMPLE_DATA && !!dashboardApi.getAuthToken();
 
 const MIN_GRID_COLS = 12;
 const GRID_ROW_HEIGHT = 72;
@@ -23,7 +31,6 @@ const ZOOM_MAX = 2.0;
 const PRINT_PAGE_MARGIN_MM = 12;
 const PX_PER_MM = 96 / 25.4;
 const MM_PER_PX = 25.4 / 96;
-const LOCAL_STORAGE_KEY = 'bi-dashboard.workspace.v1';
 const TEXT_WIDGET_TYPES = ['textbox'];
 const toKebabLabel = (str) => str.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
 // Widget types that filter by continent/country (nationality dimension)
@@ -84,10 +91,10 @@ const WIDGET_GROUP_MAP = {
   miceStatPerfFySectorBar:    'stat-perf',
 };
 const PALETTE_GROUPS = [
-  { id: 'stat-perf',    label: 'MICE Stat Performance' },
-  { id: 'visitors',     label: 'International Visitors' },
-  { id: 'trends',       label: 'Trends' },
-  { id: 'configurable', label: 'Configurable' },
+  { id: 'stat-perf',    label: 'ประสิทธิภาพสถิติ MICE' },
+  { id: 'visitors',     label: 'นักท่องเที่ยวต่างชาติ' },
+  { id: 'trends',       label: 'แนวโน้ม' },
+  { id: 'configurable', label: 'แบบกำหนดเอง' },
 ];
 const CHROMELESS_PREVIEW_TYPES = ['textbox', 'summaryCard', 'kpiCard'];
 const MICE_FILTER_DEFAULTS = {
@@ -884,7 +891,7 @@ const normalizeImportedDashboard = (value) => {
     name:
       typeof dashboardValue.name === 'string' && dashboardValue.name.trim()
         ? dashboardValue.name.trim()
-        : 'Imported Dashboard',
+        : 'แดชบอร์ดที่นำเข้า',
     widgets: cloneWidgets(dashboardValue.widgets),
     filters: dashboardValue.filters ? { ...dashboardValue.filters } : undefined,
     filterPanel: dashboardValue.filterPanel ? { ...dashboardValue.filterPanel } : undefined
@@ -916,54 +923,6 @@ const createDefaultWorkspace = () => {
     dashboards: [dashboard],
     activeDashboardId: dashboard.id
   };
-};
-
-const normalizeWorkspace = (value) => {
-  if (Array.isArray(value)) {
-    const dashboard = createDashboard('Dashboard 1', value);
-    return {
-      dashboards: [dashboard],
-      activeDashboardId: dashboard.id
-    };
-  }
-
-  const dashboards = Array.isArray(value?.dashboards)
-    ? value.dashboards
-        .filter(Boolean)
-        .map((dashboard, index) => ({
-          id: typeof dashboard.id === 'string' && dashboard.id ? dashboard.id : crypto.randomUUID(),
-          name:
-            typeof dashboard.name === 'string' && dashboard.name.trim()
-              ? dashboard.name.trim()
-              : `Dashboard ${index + 1}`,
-          widgets: Array.isArray(dashboard.widgets) ? cloneWidgets(dashboard.widgets) : [],
-          filters: dashboard.filters ? { ...dashboard.filters } : undefined,
-          filterPanel: dashboard.filterPanel ? { ...dashboard.filterPanel } : undefined
-        }))
-    : [];
-
-  if (!dashboards.length) return createDefaultWorkspace();
-
-  const activeDashboardId =
-    typeof value?.activeDashboardId === 'string' &&
-    dashboards.some((dashboard) => dashboard.id === value.activeDashboardId)
-      ? value.activeDashboardId
-      : dashboards[0].id;
-
-  return { dashboards, activeDashboardId };
-};
-
-const loadWorkspaceFromStorage = () => {
-  if (typeof window === 'undefined') return createDefaultWorkspace();
-
-  try {
-    const stored = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!stored) return createDefaultWorkspace();
-
-    return normalizeWorkspace(JSON.parse(stored));
-  } catch {
-    return createDefaultWorkspace();
-  }
 };
 
 const hasDatasetTarget = (type) => !TEXT_WIDGET_TYPES.includes(type);
@@ -1016,16 +975,25 @@ const getA4LandscapeFitScale = (contentWidthPx, contentHeightPx) => {
 };
 
 export default function App() {
+  // ── i18n ──────────────────────────────────────────────────────
+  const { t, lang, setLang } = useLang();
+
   // ── Embedded mode: running inside an iframe (e.g. tceb-web) ──
   const isEmbedded = window.self !== window.top;
 
-  const [workspace, setWorkspace] = useState(loadWorkspaceFromStorage);
+  // DB เป็น source เดียว: cloud → เริ่มว่างแล้วให้ bootstrap effect โหลดจาก API
+  //                       standalone/sample → default ชั่วคราว in-memory
+  const [workspace, setWorkspace] = useState(() =>
+    isCloudEnabled() ? { dashboards: [], activeDashboardId: null } : createDefaultWorkspace()
+  );
   const [undoStack, setUndoStack] = useState([]);
   const [redoStack, setRedoStack] = useState([]);
   const [canvasWidth, setCanvasWidth] = useState(1200);
   const [action, setAction] = useState(null);
   const [hoverGrid, setHoverGrid] = useState(null);
   const [readOnly, setReadOnly] = useState(true);
+  // เปิดผ่าน share link → view-only เข้ม: ห้าม import/export/save/เข้า edit mode
+  const [sharedView, setSharedView] = useState(false);
   const [viewMode, setViewMode] = useState('list');
   const [paletteCollapsed, setPaletteCollapsed] = useState(false);
   const [openPaletteGroups, setOpenPaletteGroups] = useState(() => new Set(PALETTE_GROUPS.map((g) => g.id)));
@@ -1049,6 +1017,17 @@ export default function App() {
   const [dashboardListLayout, setDashboardListLayout] = useState('card');
   const [hamburgerOpen, setHamburgerOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
+  const [savingDashboard, setSavingDashboard] = useState(false);
+  const [shareDialog, setShareDialog] = useState(null); // { id, name, loading, url, error, copied }
+  // โหลด list จาก API ตอน bootstrap (cloud) — เริ่ม true ถ้า cloud เพื่อโชว์ loading ทันที
+  const [loadingDashboards, setLoadingDashboards] = useState(() => isCloudEnabled());
+  // unsaved-change guard: ติด true เมื่อ workspace เปลี่ยนหลัง save ล่าสุด; เคลียร์ตอน save สำเร็จ/โหลดใหม่
+  const [isDirty, setIsDirty] = useState(false);
+  // ป้องกัน effect ตรวจ dirty ตอน bootstrap หรือ load shared (state เปลี่ยนเพราะ API ไม่ใช่ user)
+  const skipDirtyOnceRef = useRef(true);
+  // pending leave action — แสดง confirm dialog ก่อนทิ้งงาน
+  const [pendingLeave, setPendingLeave] = useState(null); // () => void
   const { wizardOpen, openWizard, closeWizard } = useWizard();
   const canvasRef = useRef(null);
   const stageWrapRef = useRef(null);
@@ -1334,23 +1313,6 @@ export default function App() {
     };
   };
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    try {
-      window.localStorage.setItem(
-        LOCAL_STORAGE_KEY,
-        JSON.stringify({
-          version: 1,
-          dashboards,
-          activeDashboardId
-        })
-      );
-    } catch {
-      // Ignore quota or storage failures.
-    }
-  }, [dashboards, activeDashboardId]);
-
   const printActiveDashboard = async () => {
     if (!activeDashboard) return;
 
@@ -1387,6 +1349,106 @@ export default function App() {
     }
   };
 
+  // สรุป filter values จาก workspace เป็น key-value รายการสำหรับ PDF (text-only ไม่มีปุ่ม/slider)
+  const buildPdfFilterSummary = (filters) => {
+    const f = filters || {};
+    const items = [];
+    items.push({ label: 'ตลาด', value: f.market === 'Domestic' ? 'ในประเทศ' : 'ต่างชาติ' });
+    items.push({ label: 'ฐานปี', value: f.yearMode === 'fiscal' ? 'งบประมาณ' : 'ปฏิทิน' });
+    if (f.yearMode !== 'quarterly' && (f.yearMin || f.yearMax)) {
+      items.push({ label: 'ช่วงปี', value: `${f.yearMin ?? ''} - ${f.yearMax ?? ''}`.trim() });
+    } else if (f.year) {
+      items.push({ label: 'ปี', value: String(f.year) });
+    }
+    if (f.quarters) {
+      const qs = f.quarters.split(',').filter(Boolean);
+      items.push({ label: 'ไตรมาส', value: qs.length === 4 ? 'ทั้งหมด' : qs.join(', ') });
+    }
+    if (f.industry) {
+      items.push({ label: 'อุตสาหกรรม', value: f.industry === 'all' ? 'ทั้งหมด' : f.industry });
+    }
+    if (f.continent && f.continent !== 'all') items.push({ label: 'ทวีป', value: f.continent });
+    if (f.country && f.country !== 'all') items.push({ label: 'ประเทศ', value: f.country });
+    return items;
+  };
+
+  const renderPdfFilterSummaryCanvas = async (filters) => {
+    const items = buildPdfFilterSummary(filters);
+    if (!items.length) return null;
+    const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const cells = items.map((it) => `
+      <div style="min-width:0;">
+        <div style="font-size:13px;color:#64748b;font-weight:500;margin-bottom:4px;">${escape(it.label)}</div>
+        <div style="font-size:20px;color:#0f172a;font-weight:700;line-height:1.2;word-wrap:break-word;">${escape(it.value)}</div>
+      </div>
+    `).join('');
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'position:fixed',
+      'left:-99999px',
+      'top:0',
+      'width:1200px',
+      'padding:24px 32px',
+      'background:#ffffff',
+      'border:1px solid #e2e8f0',
+      'border-radius:14px',
+      'font-family:Anuphan,Sarabun,"Segoe UI",Tahoma,sans-serif',
+      'box-sizing:border-box',
+    ].join(';');
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(${Math.min(items.length, 4)},1fr);gap:24px;">
+        ${cells}
+      </div>
+    `;
+    document.body.appendChild(el);
+    try {
+      return await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true });
+    } finally {
+      el.remove();
+    }
+  };
+
+  // Render header (dark blue banner) เป็น canvas ผ่าน html2canvas
+  // ใช้ hidden offscreen div + Anuphan font ปกติของ app เพื่อรองรับข้อความไทย (jsPDF default font ไม่รองรับ)
+  const renderPdfHeaderCanvas = async (dashboardName) => {
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'position:fixed',
+      'left:-99999px',
+      'top:0',
+      'width:1200px',
+      'padding:32px 40px',
+      'background:#0f2b4f',
+      'color:#ffffff',
+      'font-family:Anuphan,Sarabun,"Segoe UI",Tahoma,sans-serif',
+      'border-radius:16px',
+      'display:flex',
+      'justify-content:space-between',
+      'align-items:flex-start',
+      'gap:32px',
+      'box-sizing:border-box',
+    ].join(';');
+    const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    el.innerHTML = `
+      <div style="min-width:0;flex:1 1 auto;">
+        <div style="font-size:36px;font-weight:800;line-height:1.1;letter-spacing:-0.02em;">Custom Dashboard</div>
+        <div style="font-size:18px;opacity:0.9;margin-top:6px;">${escape(dashboardName)}</div>
+      </div>
+      <div style="flex:0 0 auto;text-align:right;">
+        ${PDF_LOGO_SVG}
+        <div style="font-size:12px;opacity:0.85;margin-top:12px;line-height:1.4;">© 2569 สำนักงานส่งเสริมการจัดประชุมและนิทรรศการ (องค์การมหาชน)</div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    try {
+      return await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true });
+    } finally {
+      el.remove();
+    }
+  };
+
   const downloadActiveDashboardPdf = async () => {
     if (!canvasRef.current || !activeDashboard) return;
 
@@ -1401,32 +1463,76 @@ export default function App() {
       await document.fonts.ready;
     }
 
+    // หา top ของ widget แรก (ไม่ใช่ filter panel) เพื่อ crop ส่วน filter panel ออกจาก dashboard image
+    // ทำให้ไม่มีช่องว่างใหญ่แทนที่ filter panel เดิม
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const widgetEls = canvasRef.current.querySelectorAll('.widget-card');
+    let cropTopPx = 0;
+    if (widgetEls.length) {
+      const firstWidgetTop = Math.min(
+        ...Array.from(widgetEls).map((el) => el.getBoundingClientRect().top)
+      );
+      cropTopPx = Math.max(0, firstWidgetTop - canvasRect.top);
+    }
+
     try {
-      const canvas = await html2canvas(canvasRef.current, {
-        backgroundColor: '#f8fafc',
-        scale: 2,
-        useCORS: true
-      });
+      const [headerCanvas, filterSummaryCanvas, dashboardCanvas] = await Promise.all([
+        renderPdfHeaderCanvas(activeDashboard.name || ''),
+        renderPdfFilterSummaryCanvas(activeDashboardFilters),
+        html2canvas(canvasRef.current, { backgroundColor: '#ffffff', scale: 2, useCORS: true }),
+      ]);
 
-      const imageData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const usableWidth = pageWidth - PRINT_PAGE_MARGIN_MM * 2;
-      const usableHeight = pageHeight - PRINT_PAGE_MARGIN_MM * 2;
-      const imageWidthMm = canvas.width * MM_PER_PX;
-      const imageHeightMm = canvas.height * MM_PER_PX;
-      const fitScale = Math.min(1, usableWidth / imageWidthMm, usableHeight / imageHeightMm);
-      const finalWidth = imageWidthMm * fitScale;
-      const finalHeight = imageHeightMm * fitScale;
-      const offsetX = (pageWidth - finalWidth) / 2;
-      const offsetY = (pageHeight - finalHeight) / 2;
+      // Crop filter panel section ออก — ให้เหลือแค่ widgets (ไม่มี gap ใหญ่)
+      let croppedDashboardCanvas = dashboardCanvas;
+      if (cropTopPx > 0) {
+        const scale = dashboardCanvas.width / canvasRect.width; // scale of html2canvas
+        const cropY = Math.round(cropTopPx * scale);
+        const cropH = dashboardCanvas.height - cropY;
+        if (cropH > 0 && cropH < dashboardCanvas.height) {
+          const cropped = document.createElement('canvas');
+          cropped.width = dashboardCanvas.width;
+          cropped.height = cropH;
+          cropped.getContext('2d').drawImage(
+            dashboardCanvas,
+            0, cropY, dashboardCanvas.width, cropH,
+            0, 0, dashboardCanvas.width, cropH
+          );
+          croppedDashboardCanvas = cropped;
+        }
+      }
 
-      pdf.addImage(imageData, 'PNG', offsetX, offsetY, finalWidth, finalHeight);
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();   // 210
+      const pageHeight = pdf.internal.pageSize.getHeight(); // 297
+      const margin = 10;
+      const contentW = pageWidth - margin * 2;
+      const gap = 6;
+
+      // Header (dark blue) — fill content width
+      const headerH = contentW * (headerCanvas.height / headerCanvas.width);
+      pdf.addImage(headerCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, headerH);
+
+      let yStart = margin + headerH + gap;
+
+      // Filter summary (text row) — ถ้ามี
+      if (filterSummaryCanvas) {
+        const fsH = contentW * (filterSummaryCanvas.height / filterSummaryCanvas.width);
+        pdf.addImage(filterSummaryCanvas.toDataURL('image/png'), 'PNG', margin, yStart, contentW, fsH);
+        yStart += fsH + gap;
+      }
+
+      // Dashboard — fit remaining page (scale down uniformly if taller than remaining space)
+      const remainH = pageHeight - yStart - margin;
+      const naturalH = contentW * (croppedDashboardCanvas.height / croppedDashboardCanvas.width);
+      let drawW = contentW;
+      let drawH = naturalH;
+      if (drawH > remainH) {
+        drawH = remainH;
+        drawW = drawH * (croppedDashboardCanvas.width / croppedDashboardCanvas.height);
+      }
+      const drawX = margin + (contentW - drawW) / 2;
+      pdf.addImage(croppedDashboardCanvas.toDataURL('image/png'), 'PNG', drawX, yStart, drawW, drawH);
+
       const fileName = `${(activeDashboard.name || 'dashboard').trim().replace(/[^\w\-]+/g, '_') || 'dashboard'}.pdf`;
       pdf.save(fileName);
     } finally {
@@ -1549,6 +1655,23 @@ export default function App() {
   // Keep dashboardsRef current for hashchange handler (avoids stale closure)
   useEffect(() => { dashboardsRef.current = dashboards; }, [dashboards]);
 
+  // Dirty tracking — ติด true เมื่อ user แก้ workspace; skip ตอน bootstrap (load จาก API)
+  useEffect(() => {
+    if (skipDirtyOnceRef.current) {
+      skipDirtyOnceRef.current = false;
+      return;
+    }
+    setIsDirty(true);
+  }, [dashboards, activeDashboardId]);
+
+  // เตือนก่อนปิด tab / reload เมื่อมีงานยังไม่บันทึก
+  useEffect(() => {
+    if (!isDirty) return undefined;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDirty]);
+
   // Track filter panel actual rendered height so canvas can accommodate it
   useEffect(() => {
     const el = filterPanelRef.current;
@@ -1572,6 +1695,73 @@ export default function App() {
       setReadOnly(!isEdit);
       setViewMode('detail');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cloud bootstrap: โหลด dashboard ของ user จาก API + รองรับ share link (?share={slug})
+  // ทำงานเฉพาะเมื่อ isCloudEnabled() — DB เป็น source เดียว (ไม่มี localStorage)
+  useEffect(() => {
+    if (!isCloudEnabled()) return;
+    let cancelled = false;
+
+    // share link ใช้ path variable /share/{slug} (ไม่ใช้ # หรือ query)
+    // fallback: ?share={slug} และลิงก์เก่า #/share/{slug}
+    const shareSlug =
+      window.location.pathname.match(/\/share\/([^/]+)\/?$/)?.[1] ||
+      new URLSearchParams(window.location.search).get('share') ||
+      window.location.hash.match(/^#\/share\/([^/]+)$/)?.[1] ||
+      null;
+
+    (async () => {
+      // 1) share link → โหลดอันเดียวแบบ read-only
+      if (shareSlug) {
+        try {
+          const shared = await dashboardApi.getSharedDashboard(decodeURIComponent(shareSlug));
+          if (cancelled || !shared) return;
+          skipDirtyOnceRef.current = true;
+          setWorkspace({ dashboards: [shared], activeDashboardId: shared.id });
+          setReadOnly(true);
+          setSharedView(true);
+          setViewMode('detail');
+          // เคลียร์ /share/{slug} (+ query) ออกจาก URL กัน re-trigger ตอน reload
+          const cleanPath = window.location.pathname.replace(/\/share\/[^/]+\/?$/, '') || '/';
+          window.history.replaceState(null, '', cleanPath);
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error('load shared dashboard error:', err);
+        } finally {
+          if (!cancelled) setLoadingDashboards(false);
+        }
+        return;
+      }
+
+      // 2) ปกติ → list ของฉัน + ที่ถูกแชร์ แล้วดึง definition เต็มมาทุกอัน
+      try {
+        const list = await dashboardApi.listDashboards();
+        if (cancelled || !Array.isArray(list)) return;
+
+        const full = await Promise.all(
+          list.map((item) =>
+            dashboardApi.getDashboard(item.id).catch(() => null))
+        );
+        if (cancelled) return;
+        const dashboards = full.filter(Boolean);
+
+        // DB เป็น source เดียว — DB ว่าง = list ว่าง (ไม่ fallback default ในเครื่อง)
+        skipDirtyOnceRef.current = true;
+        setWorkspace({
+          dashboards,
+          activeDashboardId: dashboards[0]?.id ?? null,
+        });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('cloud bootstrap error:', err);
+      } finally {
+        if (!cancelled) setLoadingDashboards(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -2170,7 +2360,7 @@ export default function App() {
   const renderTextWidgetControls = (widget) => (
     <div className="mapping-grid text-widget-config">
       <label>
-        <span>Widget Title</span>
+        <span>ชื่อวิดเจ็ต</span>
         <input
           type="text"
           value={widget.title}
@@ -2179,8 +2369,8 @@ export default function App() {
       </label>
 
       <div className="text-format-toolbar" aria-label="Text formatting">
-        <label className="font-size-control" title="Font size">
-          <span>Size</span>
+        <label className="font-size-control" title="ขนาดตัวอักษร">
+          <span>ขนาด</span>
           <input
             type="number"
             min="10"
@@ -2192,8 +2382,8 @@ export default function App() {
         <button
           type="button"
           className={widget.textStyle?.fontWeight === 700 ? 'active' : ''}
-          aria-label="Bold text"
-          title="Bold"
+          aria-label="ตัวหนา"
+          title="หนา"
           onClick={() =>
             updateWidgetTextStyle(widget.id, {
               fontWeight: widget.textStyle?.fontWeight === 700 ? 600 : 700
@@ -2205,8 +2395,8 @@ export default function App() {
         <button
           type="button"
           className={widget.textStyle?.fontWeight === 300 ? 'active' : ''}
-          aria-label="Thin text"
-          title="Thin"
+          aria-label="ตัวบาง"
+          title="บาง"
           onClick={() =>
             updateWidgetTextStyle(widget.id, {
               fontWeight: widget.textStyle?.fontWeight === 300 ? 600 : 300
@@ -2218,8 +2408,8 @@ export default function App() {
         <button
           type="button"
           className={widget.textStyle?.fontStyle === 'italic' ? 'active' : ''}
-          aria-label="Italic text"
-          title="Italic"
+          aria-label="ตัวเอียง"
+          title="เอียง"
           onClick={() =>
             updateWidgetTextStyle(widget.id, {
               fontStyle: widget.textStyle?.fontStyle === 'italic' ? 'normal' : 'italic'
@@ -2231,8 +2421,8 @@ export default function App() {
         <button
           type="button"
           className={widget.textStyle?.textDecoration === 'underline' ? 'active' : ''}
-          aria-label="Underline text"
-          title="Underline"
+          aria-label="ขีดเส้นใต้"
+          title="ขีดเส้นใต้"
           onClick={() =>
             updateWidgetTextStyle(widget.id, {
               textDecoration: widget.textStyle?.textDecoration === 'underline' ? 'none' : 'underline'
@@ -2241,12 +2431,12 @@ export default function App() {
           >
             U
           </button>
-        <div className="text-align-group" aria-label="Text alignment">
+        <div className="text-align-group" aria-label="การจัดแนวข้อความ">
           <button
             type="button"
             className={widget.textAlign === 'left' ? 'active' : ''}
-            aria-label="Align text left"
-            title="Align left"
+            aria-label="จัดซ้าย"
+            title="จัดซ้าย"
             onClick={() => updateWidgetTextAlign(widget.id, 'left')}
           >
             <ToolbarIcon name="align-left" />
@@ -2254,8 +2444,8 @@ export default function App() {
           <button
             type="button"
             className={widget.textAlign === 'center' ? 'active' : ''}
-            aria-label="Align text center"
-            title="Align center"
+            aria-label="จัดกลาง"
+            title="จัดกลาง"
             onClick={() => updateWidgetTextAlign(widget.id, 'center')}
           >
             <ToolbarIcon name="align-center" />
@@ -2263,8 +2453,8 @@ export default function App() {
           <button
             type="button"
             className={widget.textAlign === 'right' ? 'active' : ''}
-            aria-label="Align text right"
-            title="Align right"
+            aria-label="จัดขวา"
+            title="จัดขวา"
             onClick={() => updateWidgetTextAlign(widget.id, 'right')}
           >
             <ToolbarIcon name="align-right" />
@@ -2273,7 +2463,7 @@ export default function App() {
       </div>
 
       <label>
-        <span>Text Expression</span>
+        <span>นิพจน์ข้อความ</span>
         <textarea
           rows="2"
           value={widget.expression || ''}
@@ -2294,14 +2484,14 @@ export default function App() {
       </label>
 
       <div className="expression-hints">
-        <span>Functions:</span>
+        <span>ฟังก์ชัน:</span>
         {EXPRESSION_SNIPPETS.map((snippet) => (
           <button
             key={snippet}
             type="button"
             className="expression-chip"
             draggable
-            title="Drag into the editor"
+            title="ลากใส่ตัวแก้ไข"
             onClick={() => insertWidgetExpressionSnippet(widget.id, snippet)}
             onDragStart={(event) => {
               event.dataTransfer.setData('text/expression-snippet', snippet);
@@ -2369,8 +2559,16 @@ export default function App() {
   };
 
   const openDashboardList = () => {
-    clearTransientSelectionState();
-    setViewMode('list');
+    const proceed = () => {
+      clearTransientSelectionState();
+      setViewMode('list');
+      setIsDirty(false);
+    };
+    if (isDirty && !sharedView) {
+      setPendingLeave(() => proceed);
+      return;
+    }
+    proceed();
   };
 
   const renameActiveDashboard = (name) => {
@@ -2396,27 +2594,88 @@ export default function App() {
     toastTimerRef.current = setTimeout(() => setToastMsg(null), 3500);
   };
 
-  const saveDashboard = () => {
-    try {
-      window.localStorage.setItem(
-        LOCAL_STORAGE_KEY,
-        JSON.stringify({ version: 1, dashboards, activeDashboardId })
-      );
-      showToast('Dashboard saved');
-    } catch {
-      showToast('Failed to save dashboard');
+  const saveDashboard = async () => {
+    if (!activeDashboard) {
+      showToast(t('toast.saveFailed'));
+      return;
     }
+
+    // standalone/sample (ไม่มี backend) → คงไว้ใน memory เท่านั้น (ไม่ persist, ไม่มี localStorage)
+    if (!isCloudEnabled()) {
+      setIsDirty(false);
+      showToast(t('toast.saved'));
+      return;
+    }
+
+    try {
+      const saved = await dashboardApi.saveDashboard(activeDashboard);
+      // server gen id ใหม่ตอน create → sync กลับเข้า workspace
+      if (saved?.id && saved.id !== activeDashboard.id) {
+        const oldId = activeDashboard.id;
+        skipDirtyOnceRef.current = true;
+        updateWorkspace((prev) => ({
+          dashboards: prev.dashboards.map((d) =>
+            d.id === oldId ? { ...d, id: saved.id } : d),
+          activeDashboardId: saved.id,
+        }));
+      }
+      setIsDirty(false);
+      showToast(t('toast.saved'));
+    } catch (err) {
+      showToast(t('toast.saveFailed'));
+      // eslint-disable-next-line no-console
+      console.error('saveDashboard error:', err);
+    }
+  };
+
+  // เปิด dialog แชร์ — cloud: persist ก่อน (เผื่อยังไม่อยู่ DB) → สร้าง public link; standalone: local hash link
+  const openShareDialog = async (dashboard) => {
+    const real = dashboards.find((d) => d.id === dashboard.id) || dashboard;
+    setShareDialog({ id: real.id, name: real.name, loading: true, url: null, error: null, copied: false });
+
+    try {
+      if (isCloudEnabled()) {
+        const saved = await dashboardApi.saveDashboard(real);
+        if (saved?.id && saved.id !== real.id) {
+          const oldId = real.id;
+          updateWorkspace((prev) => ({
+            dashboards: prev.dashboards.map((d) => (d.id === oldId ? { ...d, id: saved.id } : d)),
+            activeDashboardId: prev.activeDashboardId === oldId ? saved.id : prev.activeDashboardId,
+          }));
+        }
+        const { url } = await dashboardApi.createShareLink(saved?.id || real.id);
+        setShareDialog((s) => (s ? { ...s, loading: false, url } : s));
+      } else {
+        const url = window.location.origin + window.location.pathname + '#/' + encodeURIComponent(real.id);
+        setShareDialog((s) => (s ? { ...s, loading: false, url } : s));
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('share error:', err);
+      setShareDialog((s) => (s ? { ...s, loading: false, error: 'สร้างลิงก์แชร์ไม่สำเร็จ' } : s));
+    }
+  };
+
+  const copyShareUrl = async () => {
+    const url = shareDialog?.url;
+    if (!url) return;
+    try {
+      await navigator.clipboard?.writeText(url);
+      setShareDialog((s) => (s ? { ...s, copied: true } : s));
+      setTimeout(() => setShareDialog((s) => (s ? { ...s, copied: false } : s)), 2000);
+    } catch { /* clipboard ไม่รองรับ — ผู้ใช้ copy เองจาก input */ }
   };
 
   const activeIsEmpty = !activeDashboard || (activeDashboard.widgets || []).length === 0;
 
   const createNewDashboard = () => {
     if (readOnly) return;
-    if (activeIsEmpty) {
-      showToast('Cannot create a new Dashboard — please add at least one widget to the current canvas first.');
+    // บล็อกเฉพาะตอนมี dashboard อยู่แล้วแต่ยังว่าง (กันสร้างซ้อนเปล่าๆ) — ถ้ายังไม่มีเลยให้สร้างตัวแรกได้
+    if (dashboards.length > 0 && activeIsEmpty) {
+      showToast(t('toast.needWidget'));
       return;
     }
-    const newDashboard = createDashboard(`Dashboard ${dashboards.length + 1}`, []);
+    const newDashboard = createDashboard(`แดชบอร์ด ${dashboards.length + 1}`, []);
     updateWorkspace((prev) => ({
       dashboards: [...prev.dashboards, newDashboard],
       activeDashboardId: newDashboard.id
@@ -2427,16 +2686,17 @@ export default function App() {
   };
 
   const openNewDashboardDialog = () => {
-    if (activeIsEmpty) {
-      showToast('Cannot create a new Dashboard — please add at least one widget to the current canvas first.');
+    // บล็อกเฉพาะตอนมี dashboard อยู่แล้วแต่ยังว่าง — ถ้ายังไม่มีเลยให้เปิด dialog สร้างตัวแรกได้
+    if (dashboards.length > 0 && activeIsEmpty) {
+      showToast(t('toast.needWidget'));
       return;
     }
-    setNewDashboardDraftName(`Dashboard ${dashboards.length + 1}`);
+    setNewDashboardDraftName(`แดชบอร์ด ${dashboards.length + 1}`);
     setNewDashboardDialog(true);
   };
 
   const confirmNewDashboard = () => {
-    const name = newDashboardDraftName.trim() || `Dashboard ${dashboards.length + 1}`;
+    const name = newDashboardDraftName.trim() || `แดชบอร์ด ${dashboards.length + 1}`;
     const newDb = createDashboard(name, []);
     updateWorkspace((prev) => ({
       dashboards: [...prev.dashboards, newDb],
@@ -2462,17 +2722,37 @@ export default function App() {
     setViewMode('detail');
   };
 
-  const deleteDashboard = (dashboardId) => {
-    if (dashboards.length <= 1) return;
-
+  const removeFromWorkspace = (dashboardId) => {
     updateWorkspace((prev) => {
       const remainingDashboards = prev.dashboards.filter((d) => d.id !== dashboardId);
       const nextActiveId = prev.activeDashboardId === dashboardId
-        ? remainingDashboards[0].id
+        ? remainingDashboards[0]?.id ?? null
         : prev.activeDashboardId;
       return { dashboards: remainingDashboards, activeDashboardId: nextActiveId };
     });
     clearTransientSelectionState();
+  };
+
+  const deleteDashboard = async (dashboardId) => {
+    const target = dashboards.find((d) => d.id === dashboardId);
+    const isShared = target?.isOwner === false;
+
+    if (!isCloudEnabled()) {
+      removeFromWorkspace(dashboardId);
+      return;
+    }
+
+    // owner → soft-delete dashboard; shared → ลบเฉพาะ view ของฉัน (ไม่กระทบ dashboard เจ้าของ)
+    const api = isShared ? dashboardApi.removeSelfShare : dashboardApi.deleteDashboard;
+    try {
+      await api(dashboardId);
+      removeFromWorkspace(dashboardId);
+      showToast(isShared ? t('toast.removed') : t('toast.deleted'));
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('deleteDashboard cloud error:', err);
+      showToast(isShared ? t('toast.removeFailed') : t('toast.deleteFailed'));
+    }
   };
 
   const deleteActiveDashboard = () => {
@@ -2523,7 +2803,7 @@ export default function App() {
       .filter((ds) => isDatasetCompatible(ds, widget.type));
     const datasetPicker = (
       <label className="dataset-picker">
-        <span>Data Source</span>
+        <span>แหล่งข้อมูล</span>
         <select
           value={widget.dataset || ''}
           onChange={(event) => {
@@ -2555,21 +2835,21 @@ export default function App() {
           {datasetPicker}
           {widget.type === 'chart' ? (
             <label>
-              <span>Chart Type</span>
+              <span>ประเภทแผนภูมิ</span>
               <select
                 value={widget.mapping?.chartKind || 'line'}
                 onChange={(event) => updateWidgetMapping(widget.id, { chartKind: event.target.value })}
               >
-                <option value="line">Line</option>
-                <option value="bar">Bar</option>
-                <option value="area">Area</option>
-                <option value="stackedBar">Stacked Bar</option>
+                <option value="line">เส้น</option>
+                <option value="bar">แท่ง</option>
+                <option value="area">พื้นที่</option>
+                <option value="stackedBar">แท่งสะสม</option>
               </select>
             </label>
           ) : null}
 
           <label>
-            <span>X-Axis</span>
+            <span>แกน X</span>
             <select
               value={widget.mapping?.xField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { xField: event.target.value })}
@@ -2584,10 +2864,10 @@ export default function App() {
 
           <div className="mapping-group">
             <div className="mapping-group-header">
-              <span>Y-Axis Series</span>
-              <small>{selectedSeriesCount} selected</small>
+              <span>ชุดข้อมูลแกน Y</span>
+              <small>เลือก {selectedSeriesCount} รายการ</small>
             </div>
-            <p className="mapping-group-note">Choose one or more measures to plot on the same chart.</p>
+            <p className="mapping-group-note">เลือกหนึ่งหรือหลายค่าเพื่อแสดงในแผนภูมิเดียวกัน</p>
             <div className="checkbox-list">
               {numericFields.map((field) => {
                 const checked = yFields.includes(field.key);
@@ -2622,7 +2902,7 @@ export default function App() {
         <div className="mapping-grid">
           {datasetPicker}
           <label>
-            <span>Label Field</span>
+            <span>ฟิลด์ป้ายกำกับ</span>
             <select
               value={widget.mapping?.labelField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { labelField: event.target.value })}
@@ -2636,7 +2916,7 @@ export default function App() {
           </label>
 
           <label>
-            <span>Value Field</span>
+            <span>ฟิลด์ค่า</span>
             <select
               value={widget.mapping?.valueField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
@@ -2650,16 +2930,16 @@ export default function App() {
           </label>
 
           <label>
-            <span>Aggregation</span>
+            <span>การรวมข้อมูล</span>
             <select
               value={widget.mapping?.aggregation || 'sum'}
               onChange={(event) => updateWidgetMapping(widget.id, { aggregation: event.target.value })}
             >
-              <option value="sum">Sum</option>
-              <option value="avg">Average</option>
-              <option value="min">Minimum</option>
-              <option value="max">Maximum</option>
-              <option value="count">Count Rows</option>
+              <option value="sum">ผลรวม</option>
+              <option value="avg">ค่าเฉลี่ย</option>
+              <option value="min">ค่าต่ำสุด</option>
+              <option value="max">ค่าสูงสุด</option>
+              <option value="count">นับแถว</option>
             </select>
           </label>
         </div>
@@ -2671,12 +2951,12 @@ export default function App() {
         <div className="mapping-grid">
           {datasetPicker}
           <label>
-            <span>Group Field</span>
+            <span>ฟิลด์กลุ่ม</span>
             <select
               value={widget.mapping?.groupField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { groupField: event.target.value })}
             >
-              <option value="">No Group</option>
+              <option value="">ไม่จัดกลุ่ม</option>
               {dimensionFields.map((field) => (
                 <option key={field.key} value={field.key}>
                   {field.label}
@@ -2686,7 +2966,7 @@ export default function App() {
           </label>
 
           <label>
-            <span>Label Field</span>
+            <span>ฟิลด์ป้ายกำกับ</span>
             <select
               value={widget.mapping?.labelField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { labelField: event.target.value })}
@@ -2700,7 +2980,7 @@ export default function App() {
           </label>
 
           <label>
-            <span>Value Field</span>
+            <span>ฟิลด์ค่า</span>
             <select
               value={widget.mapping?.valueField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
@@ -2721,7 +3001,7 @@ export default function App() {
         <div className="mapping-grid">
           {datasetPicker}
           <label>
-            <span>Metric Field</span>
+            <span>ฟิลด์เมตริก</span>
             <select
               value={widget.mapping?.metricField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { metricField: event.target.value })}
@@ -2735,26 +3015,26 @@ export default function App() {
           </label>
 
           <label>
-            <span>Aggregation</span>
+            <span>การรวมข้อมูล</span>
             <select
               value={widget.mapping?.aggregation || 'sum'}
               onChange={(event) => updateWidgetMapping(widget.id, { aggregation: event.target.value })}
             >
-              <option value="sum">Sum</option>
-              <option value="avg">Average</option>
-              <option value="min">Minimum</option>
-              <option value="max">Maximum</option>
-              <option value="count">Count Rows</option>
+              <option value="sum">ผลรวม</option>
+              <option value="avg">ค่าเฉลี่ย</option>
+              <option value="min">ค่าต่ำสุด</option>
+              <option value="max">ค่าสูงสุด</option>
+              <option value="count">นับแถว</option>
             </select>
           </label>
 
           <label>
-            <span>Comparison Field</span>
+            <span>ฟิลด์เปรียบเทียบ</span>
             <select
               value={widget.mapping?.comparisonField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { comparisonField: event.target.value })}
             >
-              <option value="">No Comparison</option>
+              <option value="">ไม่เปรียบเทียบ</option>
               {numericFields.map((field) => (
                 <option key={field.key} value={field.key}>
                   {field.label}
@@ -2764,7 +3044,7 @@ export default function App() {
           </label>
 
           <label>
-            <span>Helper Text</span>
+            <span>ข้อความช่วยเหลือ</span>
             <input
               type="text"
               value={widget.mapping?.helperText || ''}
@@ -2773,19 +3053,19 @@ export default function App() {
           </label>
 
           <label>
-            <span>Color Theme</span>
+            <span>ธีมสี</span>
             <select
               value={widget.mapping?.colorTheme || 'auto'}
               onChange={(event) => updateWidgetMapping(widget.id, { colorTheme: event.target.value })}
             >
-              <option value="auto">Auto by Trend</option>
-              <option value="emerald">Emerald</option>
-              <option value="blue">Blue</option>
-              <option value="cyan">Cyan</option>
-              <option value="violet">Violet</option>
-              <option value="amber">Amber</option>
-              <option value="rose">Rose</option>
-              <option value="slate">Slate</option>
+              <option value="auto">อัตโนมัติตามแนวโน้ม</option>
+              <option value="emerald">เขียวมรกต</option>
+              <option value="blue">น้ำเงิน</option>
+              <option value="cyan">ฟ้า</option>
+              <option value="violet">ม่วง</option>
+              <option value="amber">เหลืองอำพัน</option>
+              <option value="rose">ชมพู</option>
+              <option value="slate">เทา</option>
             </select>
           </label>
         </div>
@@ -2797,20 +3077,20 @@ export default function App() {
         <div className="mapping-grid">
           {datasetPicker}
           <label>
-            <span>Display Mode</span>
+            <span>โหมดแสดงผล</span>
             <select
               value={widget.mapping?.displayMode || 'metric'}
               onChange={(event) => updateWidgetMapping(widget.id, { displayMode: event.target.value })}
             >
-              <option value="metric">Metric</option>
-              <option value="label">Top Label</option>
+              <option value="metric">เมตริก</option>
+              <option value="label">ป้ายกำกับอันดับต้น</option>
             </select>
           </label>
 
           {widget.mapping?.displayMode === 'label' ? (
             <>
               <label>
-                <span>Group Field</span>
+                <span>ฟิลด์กลุ่ม</span>
                 <select
                   value={widget.mapping?.groupField || ''}
                   onChange={(event) => updateWidgetMapping(widget.id, { groupField: event.target.value })}
@@ -2824,7 +3104,7 @@ export default function App() {
               </label>
 
               <label>
-                <span>Value Field</span>
+                <span>ฟิลด์ค่า</span>
                 <select
                   value={widget.mapping?.valueField || ''}
                   onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
@@ -2838,7 +3118,7 @@ export default function App() {
               </label>
 
               <label>
-                <span>Top N</span>
+                <span>อันดับ N แรก</span>
                 <input
                   type="number"
                   min="1"
@@ -2855,7 +3135,7 @@ export default function App() {
           ) : (
             <>
               <label>
-                <span>Metric Field</span>
+                <span>ฟิลด์เมตริก</span>
                 <select
                   value={widget.mapping?.metricField || ''}
                   onChange={(event) => updateWidgetMapping(widget.id, { metricField: event.target.value })}
@@ -2869,23 +3149,23 @@ export default function App() {
               </label>
 
               <label>
-                <span>Aggregation</span>
+                <span>การรวมข้อมูล</span>
                 <select
                   value={widget.mapping?.aggregation || 'sum'}
                   onChange={(event) => updateWidgetMapping(widget.id, { aggregation: event.target.value })}
                 >
-                  <option value="sum">Sum</option>
-                  <option value="avg">Average</option>
-                  <option value="min">Minimum</option>
-                  <option value="max">Maximum</option>
-                  <option value="count">Count Rows</option>
+                  <option value="sum">ผลรวม</option>
+                  <option value="avg">ค่าเฉลี่ย</option>
+                  <option value="min">ค่าต่ำสุด</option>
+                  <option value="max">ค่าสูงสุด</option>
+                  <option value="count">นับแถว</option>
                 </select>
               </label>
             </>
           )}
 
           <label>
-            <span>Helper Text</span>
+            <span>ข้อความช่วยเหลือ</span>
             <input
               type="text"
               value={widget.mapping?.helperText || ''}
@@ -2894,19 +3174,19 @@ export default function App() {
           </label>
 
           <label>
-            <span>Color Theme</span>
+            <span>ธีมสี</span>
             <select
               value={widget.mapping?.colorTheme || 'auto'}
               onChange={(event) => updateWidgetMapping(widget.id, { colorTheme: event.target.value })}
             >
-              <option value="auto">Auto by Trend</option>
-              <option value="emerald">Emerald</option>
-              <option value="blue">Blue</option>
-              <option value="cyan">Cyan</option>
-              <option value="violet">Violet</option>
-              <option value="amber">Amber</option>
-              <option value="rose">Rose</option>
-              <option value="slate">Slate</option>
+              <option value="auto">อัตโนมัติตามแนวโน้ม</option>
+              <option value="emerald">เขียวมรกต</option>
+              <option value="blue">น้ำเงิน</option>
+              <option value="cyan">ฟ้า</option>
+              <option value="violet">ม่วง</option>
+              <option value="amber">เหลืองอำพัน</option>
+              <option value="rose">ชมพู</option>
+              <option value="slate">เทา</option>
             </select>
           </label>
         </div>
@@ -2918,7 +3198,7 @@ export default function App() {
         <div className="mapping-grid">
           {datasetPicker}
           <label>
-            <span>Label Field</span>
+            <span>ฟิลด์ป้ายกำกับ</span>
             <select
               value={widget.mapping?.labelField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { labelField: event.target.value })}
@@ -2932,7 +3212,7 @@ export default function App() {
           </label>
 
           <label>
-            <span>Value Field</span>
+            <span>ฟิลด์ค่า</span>
             <select
               value={widget.mapping?.valueField || ''}
               onChange={(event) => updateWidgetMapping(widget.id, { valueField: event.target.value })}
@@ -2946,18 +3226,18 @@ export default function App() {
           </label>
 
           <label>
-            <span>Sort</span>
+            <span>เรียงลำดับ</span>
             <select
               value={widget.mapping?.sortDirection || 'desc'}
               onChange={(event) => updateWidgetMapping(widget.id, { sortDirection: event.target.value })}
             >
-              <option value="desc">Highest First</option>
-              <option value="asc">Lowest First</option>
+              <option value="desc">มากที่สุดก่อน</option>
+              <option value="asc">น้อยที่สุดก่อน</option>
             </select>
           </label>
 
           <label>
-            <span>Top N</span>
+            <span>อันดับ N แรก</span>
             <input
               type="number"
               min="1"
@@ -2982,10 +3262,10 @@ export default function App() {
           {datasetPicker}
           <div className="mapping-group">
             <div className="mapping-group-header">
-              <span>Visible Columns</span>
-              <small>{visibleColumns.length} selected</small>
+              <span>คอลัมน์ที่แสดง</span>
+              <small>เลือก {visibleColumns.length} คอลัมน์</small>
             </div>
-            <p className="mapping-group-note">Pick the columns you want to show in the table.</p>
+            <p className="mapping-group-note">เลือกคอลัมน์ที่ต้องการแสดงในตาราง</p>
             <div className="checkbox-list">
               {dataset.fields.map((field) => {
                 const checked = visibleColumns.includes(field.key);
@@ -3023,23 +3303,32 @@ export default function App() {
       {/* ── Page Header ── */}
       <header className="dl-page-header">
         <div className="dl-page-header-left">
-          <h1 className="dl-page-title">Custom Dashboard</h1>
-          <p className="dl-page-subtitle">เลือก dashboard เพื่อดูหรือแก้ไข</p>
+          <h1 className="dl-page-title">{t('list.title')}</h1>
+          <p className="dl-page-subtitle">{t('list.subtitle')}</p>
         </div>
         <div className="dl-page-header-right">
+          <button
+            type="button"
+            className="lang-toggle-btn"
+            onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
+            aria-label={t('toolbar.lang')}
+            title={t('toolbar.lang')}
+          >
+            {lang === 'th' ? 'TH' : 'EN'}
+          </button>
           <button type="button" className="dl-btn-import" onClick={() => listImportRef.current?.click()}>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14" style={{flexShrink:0}}>
               <path d="M13 3H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.5"/>
               <path d="M10 7v4M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            Import
+            {t('list.import')}
           </button>
           <input ref={listImportRef} type="file" accept="application/json,.json" style={{display:'none'}} onChange={importDashboardFile} />
           <button type="button" className="dl-btn-new" onClick={openNewDashboardDialog}>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14" style={{flexShrink:0}}>
               <path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
             </svg>
-            New Dashboard
+            {t('list.newDashboard')}
           </button>
         </div>
       </header>
@@ -3047,14 +3336,14 @@ export default function App() {
       <main className="dashboard-list-content">
         {/* ── Toolbar strip ── */}
         <div className="dl-toolbar">
-          <strong className="dl-toolbar-count">{dashboards.length} Dashboards</strong>
+          <strong className="dl-toolbar-count">{dashboards.length} {t('list.count')}</strong>
           <div className="dashboard-list-layout-toggle">
             <button
               type="button"
               className={`layout-toggle-btn${dashboardListLayout === 'card' ? ' active' : ''}`}
               onClick={() => setDashboardListLayout('card')}
-              aria-label="Card view"
-              title="Card view"
+              aria-label="มุมมองการ์ด"
+              title="มุมมองการ์ด"
             >
               <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="1" y="1" width="6" height="6" rx="1.5" fill="currentColor"/>
@@ -3067,8 +3356,8 @@ export default function App() {
               type="button"
               className={`layout-toggle-btn${dashboardListLayout === 'list' ? ' active' : ''}`}
               onClick={() => setDashboardListLayout('list')}
-              aria-label="List view"
-              title="List view"
+              aria-label="มุมมองรายการ"
+              title="มุมมองรายการ"
             >
               <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="1" y="2" width="14" height="3" rx="1.5" fill="currentColor"/>
@@ -3079,7 +3368,79 @@ export default function App() {
           </div>
         </div>
 
-        {/* ── Cards / Rows ── */}
+        {/* ── Loading (เรียก list API) ── */}
+        {loadingDashboards ? (
+          <div className="dl-loading">
+            <div className="dl-loading-spinner" aria-hidden="true" />
+            <p className="dl-loading-text">{t('list.loading')}</p>
+          </div>
+        ) : dashboardCards.length === 0 ? (
+          <div className="dl-empty">
+            <div className="dl-empty-art" aria-hidden="true">
+              <svg width="216" height="215" viewBox="0 0 216 215" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="107.38" cy="107.38" r="107.38" fill="#F5F6FA"/>
+                <path d="M215.657 107.38C215.657 138.791 201.971 166.836 180.208 186.131H5.87896C3.63535 186.131 1.84045 184.336 1.84045 182.093V36.2574C1.84045 34.0138 3.63535 32.2189 5.87896 32.2189H183.573C203.317 50.8409 215.657 77.7643 215.657 107.38Z" fill="#F5F6FA"/>
+                <path d="M179.984 185.907H180.208C183.125 183.214 185.817 180.522 188.51 177.605C186.042 180.746 183.125 183.439 179.984 185.907Z" fill="#F5F6FA"/>
+                <path d="M78.3479 122.637H8.34701C7.22521 122.637 6.32776 121.739 6.32776 120.617V70.3603C6.32776 69.2385 7.22521 68.3411 8.34701 68.3411H78.3479C79.4697 68.3411 80.3671 69.2385 80.3671 70.3603V120.617C80.3671 121.515 79.4697 122.637 78.3479 122.637Z" fill="white"/>
+                <path d="M206.234 64.0782H8.34701C7.22521 64.0782 6.32776 63.1807 6.32776 62.0589V38.2766C6.32776 37.1548 7.22521 36.2573 8.34701 36.2573H187.836C190.529 39.174 192.997 42.3151 195.465 45.4562C197.933 48.8216 200.401 52.6357 202.42 56.2255C203.766 58.9179 205.112 61.3858 206.234 64.0782Z" fill="white"/>
+                <path d="M202.42 56.4499H171.458C170.785 56.4499 170.336 56.0012 170.336 55.3281V46.8024C170.336 46.1293 170.785 45.6805 171.458 45.6805H195.24C197.933 49.046 200.176 52.6358 202.42 56.4499Z" fill="#989FB0"/>
+                <path d="M197.035 52.187H178.189C177.516 52.187 177.067 51.7383 177.067 51.0652C177.067 50.3921 177.516 49.9434 178.189 49.9434H197.035C197.708 49.9434 198.157 50.3921 198.157 51.0652C198.157 51.5139 197.708 52.187 197.035 52.187Z" fill="white"/>
+                <path d="M155.977 122.637H85.976C84.8542 122.637 83.9568 121.739 83.9568 120.617V70.3603C83.9568 69.2385 84.8542 68.3411 85.976 68.3411H155.977C157.099 68.3411 157.996 69.2385 157.996 70.3603V120.617C158.221 121.515 157.323 122.637 155.977 122.637Z" fill="white"/>
+                <path d="M214.311 91.0016C212.965 82.9246 210.946 75.2963 208.029 68.1167H163.83C162.708 68.1167 161.81 69.0141 161.81 70.136V120.393C161.81 121.515 162.708 122.412 163.83 122.412H214.535C215.208 117.476 215.657 112.316 215.657 107.38C215.657 102.893 215.433 98.4055 214.76 93.9183L214.311 91.0016Z" fill="white"/>
+                <path d="M78.3479 180.971H8.34701C7.22521 180.971 6.32776 180.073 6.32776 178.951V128.694C6.32776 127.572 7.22521 126.675 8.34701 126.675H78.3479C79.4697 126.675 80.3671 127.572 80.3671 128.694V178.951C80.3671 180.073 79.4697 180.971 78.3479 180.971Z" fill="white"/>
+                <path d="M155.977 180.971H85.976C84.8542 180.971 83.9568 180.073 83.9568 178.951V128.694C83.9568 127.572 84.8542 126.675 85.976 126.675H155.977C157.099 126.675 157.996 127.572 157.996 128.694V178.951C158.221 180.073 157.323 180.971 155.977 180.971Z" fill="white"/>
+                <path d="M213.862 126.675C213.414 129.367 212.741 131.835 212.068 134.303C211.843 135.201 211.619 135.874 211.394 136.771C210.721 139.239 209.824 141.707 208.927 144.175C208.253 145.97 207.356 147.989 206.683 149.784C206.01 151.13 205.337 152.477 204.664 153.823C204.439 154.496 203.991 155.169 203.542 155.842C202.196 158.31 200.849 160.778 199.279 163.246C198.83 163.919 198.382 164.817 197.708 165.49C196.138 167.733 194.567 169.977 192.997 172.22C192.324 173.118 191.651 173.791 190.978 174.688C189.183 176.932 187.163 179.176 185.144 181.195H163.381C162.259 181.195 161.362 180.298 161.362 179.176V128.694C161.362 127.572 162.259 126.675 163.381 126.675H213.862Z" fill="white"/>
+                <path d="M52.3219 156.515C52.3219 156.739 52.3219 156.964 52.0976 157.188C51.8732 157.637 51.8732 158.086 51.8732 158.534C51.6489 158.759 51.6489 158.983 51.6489 159.207C51.4245 159.656 51.4245 160.105 51.2001 160.329V160.554C50.9758 160.778 50.9758 161.002 50.9758 161.002C50.7514 161.227 50.7514 161.451 50.5271 161.451L54.5656 165.041C54.7899 164.816 54.7899 164.592 55.0143 164.368C55.463 163.695 55.9117 163.022 56.1361 162.349C56.3605 162.124 56.3605 161.9 56.3605 161.675C56.5848 161.002 56.8092 160.329 57.2579 159.656C57.2579 159.432 57.4823 159.207 57.4823 159.207C57.7066 158.759 57.7066 158.31 57.7066 158.086C57.7066 157.861 57.931 157.637 57.931 157.637C57.931 157.413 57.931 157.188 58.1553 157.188V156.964C58.1553 156.739 58.1553 156.515 58.1553 156.515H52.3219ZM40.8795 166.611C34.5974 166.611 29.2127 161.451 29.2127 155.169C29.2127 149.111 33.6999 144.4 39.309 143.726V138.342C30.7832 139.015 23.828 146.419 23.828 155.393C23.828 164.816 31.4563 172.445 40.8795 172.445C45.5911 172.445 49.854 170.65 52.7707 167.509L48.7322 163.695C46.7129 165.714 43.7962 166.611 40.8795 166.611ZM42.2257 138.117V143.502C47.6103 144.175 51.6489 148.214 52.3219 153.374H57.931C57.2579 145.297 50.527 138.791 42.2257 138.117Z" fill="#D5DAE5"/>
+                <path d="M57.9309 153.598H52.5462C51.8731 148.214 47.6103 144.175 42.45 143.726V138.342C50.527 138.79 57.2578 145.297 57.9309 153.598Z" fill="#989FB0"/>
+                <path d="M57.9309 156.515C57.9309 156.739 57.9309 156.964 57.9309 156.964V157.188C57.9309 157.413 57.9309 157.637 57.7066 157.637C57.7066 157.861 57.7066 158.086 57.4822 158.086C57.2578 158.534 57.2578 158.983 57.2578 159.207C57.2578 159.432 57.0335 159.656 57.0335 159.656C56.8091 160.329 56.5847 161.002 56.136 161.675C55.9117 161.9 55.9117 162.124 55.9117 162.349C55.6873 163.022 55.2386 163.695 54.7899 164.368C54.5655 164.592 54.5655 164.817 54.3411 165.041L50.527 161.451C50.7513 161.227 50.7513 161.002 50.9757 161.002C51.2001 160.778 51.2001 160.554 51.2001 160.554V160.329C51.4244 159.881 51.6488 159.432 51.6488 159.207C51.8731 158.983 51.8731 158.759 51.8731 158.534C52.0975 158.086 52.0975 157.637 52.0975 157.188C52.0975 156.964 52.3219 156.739 52.3219 156.515H57.9309Z" fill="#989FB0"/>
+                <path d="M214.76 93.9182C214.76 93.0208 214.535 92.1233 214.311 91.0015L202.42 102.893C201.971 102.668 201.298 102.444 200.849 102.444C200.401 102.444 199.728 102.668 199.279 102.893L188.509 92.1233C188.734 91.6746 188.734 91.4503 188.734 90.7772C188.734 88.7579 187.163 87.4117 185.368 87.4117C183.574 87.4117 182.003 88.9823 182.003 90.7772C182.003 91.2259 182.003 91.6746 182.227 92.1233L173.029 100.873C172.58 100.649 172.131 100.649 171.682 100.649C169.663 100.649 168.317 102.22 168.317 104.015C168.317 105.809 169.887 107.38 171.682 107.38C173.477 107.38 175.048 105.809 175.048 104.015C175.048 103.566 174.823 103.117 174.599 102.668L183.349 93.6939C184.022 93.9182 184.247 94.1426 184.695 94.1426C185.144 94.1426 185.817 93.9182 186.041 93.6939L196.811 104.463C196.586 104.912 196.586 105.136 196.586 105.585C196.586 107.604 198.157 108.95 199.952 108.95C201.971 108.95 203.317 107.38 203.317 105.585C203.317 105.136 203.317 104.912 203.093 104.463L214.76 93.9182ZM171.907 106.034C171.009 106.034 170.336 105.361 170.336 104.463C170.336 103.566 171.009 102.893 171.907 102.893C172.804 102.893 173.477 103.566 173.477 104.463C173.477 105.136 172.804 106.034 171.907 106.034ZM185.368 92.3477C184.471 92.3477 183.798 91.6746 183.798 90.7772C183.798 89.8797 184.471 89.2066 185.368 89.2066C186.266 89.2066 186.939 89.8797 186.939 90.7772C186.939 91.6746 186.49 92.3477 185.368 92.3477ZM201.074 107.604C200.176 107.604 199.503 106.931 199.503 106.034C199.503 105.136 200.176 104.463 201.074 104.463C201.971 104.463 202.644 105.136 202.644 106.034C202.869 106.931 202.196 107.604 201.074 107.604Z" fill="url(#paint0_linear_13250_102061)"/>
+                <path d="M97.4186 104.688H94.2776C94.0532 104.688 93.6045 104.239 93.6045 104.014V86.963C93.6045 86.5143 93.8289 86.2899 94.2776 86.2899H97.4186C97.643 86.2899 98.0917 86.7386 98.0917 86.963V104.014C97.8674 104.239 97.643 104.688 97.4186 104.688Z" fill="#989FB0"/>
+                <path d="M99.2136 104.688H95.6238C95.3994 104.688 95.175 104.463 95.175 104.239V96.3862C95.175 95.9375 95.3994 95.9375 95.6238 95.9375H99.2136C99.4379 95.9375 99.6623 96.1619 99.6623 96.3862V104.239C99.6623 104.463 99.4379 104.688 99.2136 104.688Z" fill="#D5DAE5"/>
+                <path d="M105.496 104.688H102.354C102.13 104.688 101.681 104.239 101.681 104.014V92.1233C101.681 91.6746 101.906 91.4502 102.354 91.4502H105.496C105.72 91.4502 106.169 91.8989 106.169 92.1233V104.014C106.169 104.239 105.72 104.688 105.496 104.688Z" fill="#989FB0"/>
+                <path d="M113.573 104.688H110.432C110.207 104.688 109.759 104.239 109.759 104.015V96.3862C109.759 95.9375 109.983 95.7131 110.432 95.7131H113.573C113.797 95.7131 114.246 96.1619 114.246 96.3862V103.79C114.246 104.239 113.797 104.688 113.573 104.688Z" fill="#989FB0"/>
+                <path d="M121.65 104.688H118.509C118.284 104.688 117.835 104.239 117.835 104.015V89.8797C117.835 89.431 118.06 89.2067 118.509 89.2067H121.65C121.874 89.2067 122.323 89.6554 122.323 89.8797V104.015C122.323 104.239 122.098 104.688 121.65 104.688Z" fill="#989FB0"/>
+                <path d="M129.951 104.688H126.81C126.586 104.688 126.137 104.239 126.137 104.015V95.4888C126.137 95.04 126.361 94.8157 126.81 94.8157H129.951C130.175 94.8157 130.624 95.2644 130.624 95.4888V104.015C130.624 104.239 130.4 104.688 129.951 104.688Z" fill="#989FB0"/>
+                <path d="M138.028 104.688H134.887C134.663 104.688 134.214 104.239 134.214 104.014V92.1233C134.214 91.6746 134.438 91.4502 134.887 91.4502H138.028C138.253 91.4502 138.701 91.8989 138.701 92.1233V104.014C138.701 104.239 138.477 104.688 138.028 104.688Z" fill="#989FB0"/>
+                <path d="M146.33 104.688H143.188C142.964 104.688 142.515 104.239 142.515 104.015V96.3862C142.515 95.9375 142.74 95.7131 143.188 95.7131H146.33C146.554 95.7131 147.003 96.1619 147.003 96.3862V103.79C146.778 104.239 146.554 104.688 146.33 104.688Z" fill="#989FB0"/>
+                <path d="M107.291 104.688H103.477C103.252 104.688 103.252 104.463 103.252 104.239V99.5273C103.252 99.303 103.477 99.0786 103.477 99.0786H107.291C107.515 99.0786 107.515 99.303 107.515 99.5273V104.239C107.739 104.463 107.515 104.688 107.291 104.688Z" fill="#D5DAE5"/>
+                <path d="M115.592 104.688H111.778C111.553 104.688 111.553 104.463 111.553 104.239V101.995C111.553 101.771 111.778 101.547 111.778 101.547H115.592C115.816 101.547 115.816 101.771 115.816 101.995V104.239C115.816 104.463 115.816 104.688 115.592 104.688Z" fill="#D5DAE5"/>
+                <path d="M123.669 104.688H119.855C119.63 104.688 119.63 104.463 119.63 104.239V100.873C119.63 100.649 119.855 100.425 119.855 100.425H123.669C123.893 100.425 123.893 100.649 123.893 100.873V104.239C124.118 104.463 124.118 104.688 123.669 104.688Z" fill="#D5DAE5"/>
+                <path d="M131.97 104.688H128.381C128.156 104.688 128.156 104.463 128.156 104.239V98.181C128.156 97.9567 128.381 97.7323 128.381 97.7323H131.97C132.195 97.7323 132.195 97.9567 132.195 98.181V104.239C132.419 104.463 132.195 104.688 131.97 104.688Z" fill="#D5DAE5"/>
+                <path d="M140.496 104.688H136.458C136.233 104.688 136.233 104.688 136.233 104.463V103.341C136.233 103.117 136.233 103.117 136.458 103.117H140.496C140.72 103.117 140.72 103.117 140.72 103.341V104.239C140.72 104.463 140.72 104.688 140.496 104.688Z" fill="#D5DAE5"/>
+                <path d="M148.573 104.688H144.535C144.535 104.688 144.31 104.688 144.31 104.463V104.015C144.31 104.015 144.31 103.79 144.535 103.79H148.573C148.573 103.79 148.798 103.79 148.798 104.015L148.573 104.688C148.798 104.463 148.573 104.688 148.573 104.688Z" fill="#D5DAE5"/>
+                <path d="M152.163 133.855H90.0146V142.156H152.163V133.855Z" fill="#F5F6FA"/>
+                <path d="M126.137 136.547H109.085V139.015H126.137V136.547Z" fill="#D5DAE5"/>
+                <path d="M147.676 136.547H141.618V139.015H147.676V136.547Z" fill="#D5DAE5"/>
+                <path d="M152.163 149.56H90.0146V157.861H152.163V149.56Z" fill="#F5F6FA"/>
+                <path d="M120.977 152.701H109.085V155.169H120.977V152.701Z" fill="#D5DAE5"/>
+                <path d="M147.676 152.701H137.131V155.169H147.676V152.701Z" fill="#D5DAE5"/>
+                <path d="M152.163 165.49H90.0146V173.791H152.163V165.49Z" fill="#F5F6FA"/>
+                <path d="M128.829 168.406H109.085V170.874H128.829V168.406Z" fill="#D5DAE5"/>
+                <path d="M147.676 168.406H144.31V170.874H147.676V168.406Z" fill="#D5DAE5"/>
+                <path d="M22.9306 47.2509H13.5074C12.8343 47.2509 12.3856 46.5778 12.3856 46.1291V45.0073C12.3856 44.3342 13.0587 43.8855 13.5074 43.8855H22.9306C23.6037 43.8855 24.0524 44.5586 24.0524 45.0073V46.1291C24.0524 46.5778 23.6037 47.2509 22.9306 47.2509Z" fill="#D5DAE5"/>
+                <path d="M87.7711 47.2509H32.1294C31.4563 47.2509 31.0076 46.5778 31.0076 46.1291V45.0073C31.0076 44.3342 31.6807 43.8855 32.1294 43.8855H87.7711C88.4442 43.8855 88.8929 44.5586 88.8929 45.0073V46.1291C88.8929 46.5778 88.4442 47.2509 87.7711 47.2509Z" fill="#D5DAE5"/>
+                <path d="M22.9306 56.4499H13.5074C12.8343 56.4499 12.3856 55.7768 12.3856 55.3281V54.2063C12.3856 53.5332 13.0587 53.0845 13.5074 53.0845H22.9306C23.6037 53.0845 24.0524 53.7576 24.0524 54.2063V55.3281C24.0524 56.0012 23.6037 56.4499 22.9306 56.4499Z" fill="#D5DAE5"/>
+                <path d="M61.9695 55.3281C61.9695 56.0012 61.2964 56.4499 60.8477 56.4499H32.1294C31.4563 56.4499 31.0076 55.7768 31.0076 55.3281V54.2063C31.0076 53.5332 31.6807 53.0845 32.1294 53.0845H60.8477C61.5208 53.0845 61.9695 53.7576 61.9695 54.2063V55.3281Z" fill="#D5DAE5"/>
+                <path d="M72.5146 116.13H12.3856V78.6616C15.5267 78.886 18.6677 79.1103 21.5845 80.0078C22.9306 80.4565 23.8281 80.9052 24.7255 81.8027C25.1742 82.2514 25.1742 82.4758 25.1742 82.7001C25.623 83.8219 26.5204 84.495 28.0909 84.7194L29.4371 84.9438C32.1295 85.1681 34.1487 86.7386 34.3731 88.5335L34.8218 91.6746C37.7385 92.3477 37.9629 92.3477 40.6552 93.0208C41.1039 93.2451 41.1039 93.0208 41.3283 92.7964C41.5526 92.5721 41.777 92.5721 42.0014 92.5721C42.4501 92.5721 42.4501 92.5721 42.8988 92.3477C43.3475 92.1233 43.7963 92.1233 44.0206 92.5721C45.1424 94.1426 47.3861 95.04 48.7322 96.3862C50.3028 97.9567 52.9951 97.7324 54.79 97.7324C55.2387 97.7324 55.9118 97.9567 56.3605 98.1811C58.6041 99.7516 62.1939 104.912 65.1106 104.912C66.2324 104.912 67.1299 105.361 67.803 105.809C70.2709 109.399 71.8415 112.316 72.5146 116.13Z" fill="#F5F6FA"/>
+                <path d="M70.9439 116.354C70.2708 112.989 68.7003 110.297 66.2323 107.38C66.008 107.156 65.3349 106.931 64.6618 106.931C61.9694 106.931 59.7258 104.463 57.4822 102.22C56.5848 101.322 55.6873 100.425 55.0142 99.9761C54.7899 99.7517 54.3411 99.7517 54.3411 99.7517C53.8924 99.7517 53.6681 99.7517 53.2193 99.7517C51.4244 99.7517 48.9565 99.5274 47.1616 97.9568C46.7129 97.2837 46.0398 96.835 45.1423 96.3863C44.2449 95.7132 43.3474 95.2645 42.6743 94.367C42.45 94.367 42.0013 94.367 41.7769 94.367C41.5525 94.5914 40.6551 95.0401 39.5333 94.5914L38.1871 94.1427C36.8409 93.9183 36.1678 93.6939 33.9242 93.2452H33.2511L32.8024 88.9824C32.8024 87.8605 31.2319 86.9631 29.437 86.7387L28.0908 86.5144C26.0716 86.29 24.2767 85.1682 23.828 83.3733V83.1489C23.1549 82.4759 22.4818 82.0271 21.5843 81.8028C18.892 80.9053 15.7509 80.681 12.8342 80.4566L13.0586 77.0912C16.1997 77.3155 19.5651 77.5399 22.7061 78.6617C24.2767 79.1104 25.6228 80.0079 26.5203 81.1297C26.7447 81.3541 27.1934 82.0271 27.4177 82.9246C27.6421 83.3733 28.0908 83.5977 28.7639 83.5977L30.1101 83.822C33.6999 84.0464 36.1678 86.29 36.6166 88.9824L36.8409 90.7773C38.1871 91.0016 38.8602 91.226 39.982 91.4503L41.3282 91.6747C41.7769 91.4503 42.2256 91.226 42.6743 91.226C42.8987 91.226 42.8987 91.226 43.1231 91.226C44.2449 90.7773 45.591 91.226 46.2641 92.1234C46.7128 92.5721 47.6103 93.2452 48.2834 93.694C49.1808 94.367 50.0783 94.8158 50.7514 95.7132C51.4244 96.3863 52.995 96.3863 54.5655 96.6107C55.0142 96.6107 55.2386 96.6107 55.6873 96.6107C56.5848 96.6107 57.2579 97.0594 57.9309 97.2837L58.1553 97.5081C59.0527 98.1812 60.1746 99.0786 61.072 100.2C62.4182 101.771 64.6618 103.79 65.7836 103.79C67.1298 103.79 68.4759 104.239 69.5977 105.136C72.7388 108.502 74.5337 111.867 75.2068 115.906L70.9439 116.354Z" fill="#989FB0"/>
+                <path d="M70.0465 93.2452H43.5719C42.4501 93.2452 41.5526 92.3477 41.5526 91.2259V81.8027C41.5526 80.6809 42.4501 79.7834 43.5719 79.7834H70.0465C71.1684 79.7834 72.0658 80.6809 72.0658 81.8027V91.2259C72.0658 92.3477 71.1684 93.2452 70.0465 93.2452Z" fill="#989FB0"/>
+                <path d="M66.6811 83.5977H47.1616C46.7129 83.5977 46.4885 84.0464 46.4885 84.2707C46.4885 84.4951 46.7129 85.1682 46.9373 85.1682H66.4567C66.9054 85.1682 67.1298 84.7195 67.1298 84.4951C67.1298 84.2707 66.9054 83.5977 66.6811 83.5977Z" fill="white"/>
+                <path d="M57.4822 88.0848H46.9372C46.4885 88.0848 46.2642 88.5336 46.2642 88.7579C46.2642 89.2066 46.7129 89.431 46.9372 89.431H57.4822C57.931 89.431 58.1553 88.9823 58.1553 88.7579C58.1553 88.5336 57.7066 88.0848 57.4822 88.0848Z" fill="white"/>
+                <path d="M187.836 153.599H170.112V146.195H187.836V153.599ZM170.336 155.842H188.061V163.246H170.336V155.842ZM171.682 136.771H188.061V144.4H170.336V138.342C170.336 137.22 171.009 136.771 171.682 136.771ZM170.336 170.874V165.49H188.061V172.221H171.682C171.009 172.221 170.336 171.548 170.336 170.874ZM211.394 136.771C211.619 135.874 211.843 135.201 212.067 134.303H171.682C169.663 134.303 168.317 136.098 168.317 138.118V170.65C168.317 172.669 169.887 174.464 171.682 174.464H191.426C192.099 173.567 192.772 172.894 193.445 171.996H190.304V165.265H198.157C198.606 164.592 199.054 163.695 199.728 163.022H190.304V155.618H203.766C204.215 154.945 204.439 154.272 204.888 153.599H190.304V146.195H206.907V149.336C207.805 147.541 208.478 145.522 209.151 143.727H208.926V136.771H211.394ZM206.683 144.4H190.304V136.771H206.907V144.4H206.683Z" fill="#D5DAE5"/>
+                <path d="M183.573 31.7701C182.003 30.1995 180.208 28.629 178.413 27.2828V31.5457C179.311 32.4432 180.432 33.3406 181.33 34.2381C200.401 52.6357 212.516 78.6617 212.516 107.38C212.516 137.444 199.503 164.592 178.637 183.214V187.477C179.086 187.028 179.759 186.58 180.208 186.131C201.971 166.836 215.657 138.791 215.657 107.38C215.657 77.7642 203.317 50.8408 183.573 31.7701Z" fill="#F5F6FA"/>
+                <defs>
+                  <linearGradient id="paint0_linear_13250_102061" x1="191.523" y1="86.9135" x2="191.523" y2="109.183" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#FDFEFF"/>
+                    <stop offset="0.9964" stopColor="#ECF0F5"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <h3 className="dl-empty-title">{t('list.emptyTitle')}</h3>
+            <p className="dl-empty-subtitle">{t('list.emptySubtitle')}</p>
+          </div>
+        ) : (
+        /* ── Cards / Rows ── */
         <div className={`dl-grid${dashboardListLayout === 'list' ? ' dl-list' : ''}`}>
           {dashboardCards.map((dashboard) => (
             <div
@@ -3098,50 +3459,66 @@ export default function App() {
               {/* Body */}
               <div className="dl-card-body">
                 <div className="dl-card-info">
-                  <strong className="dl-card-name">{dashboard.name}</strong>
-                  <span className="dl-card-meta">มี {dashboard.widgetCount} ชุดข้อมูล</span>
+                  <div className="dl-card-name-row">
+                    <strong className="dl-card-name">{dashboard.name}</strong>
+                    {dashboard.isOwner === false && (
+                      <span className="dl-card-badge shared" title={t('list.sharedWithMe')}>
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="10" height="10">
+                          <circle cx="13" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                          <circle cx="3" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                          <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                          <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        {t('list.sharedWithMe')}
+                      </span>
+                    )}
+                  </div>
+                  <span className="dl-card-meta">
+                    {t('list.datasetCount', { n: dashboard.widgetCount })}
+                    {dashboard.isOwner !== false && dashboard.shareCount > 0 && (
+                      <> · {t('list.sharedCount', { n: dashboard.shareCount })}</>
+                    )}
+                  </span>
                   <div className="dl-card-actions" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       className="dl-action-btn"
                       onClick={() => saveDashboardFile(dashboard)}
-                      title="Download JSON"
+                      title={t('toolbar.exportJson')}
                     >
                       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
                         <path d="M13 3H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z" stroke="currentColor" strokeWidth="1.5"/>
                         <path d="M10 7v4M8 9l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      Download
+                      {t('list.download')}
                     </button>
                     <button
                       type="button"
                       className="dl-action-btn danger"
                       onClick={() => setConfirmDeleteId(dashboard.id)}
-                      disabled={dashboards.length <= 1}
-                      title="Delete Dashboard"
+                      title={dashboard.isOwner === false ? t('delete.shared.title') : t('delete.title')}
                     >
                       <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
                         <path d="M3 4h10M6 4V3h4v1M5 4v8a1 1 0 001 1h4a1 1 0 001-1V4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
-                      Delete
+                      {t('list.delete')}
                     </button>
-                    <button
-                      type="button"
-                      className="dl-action-btn"
-                      title="Share"
-                      onClick={() => {
-                        const url = window.location.origin + window.location.pathname + '#/' + encodeURIComponent(dashboard.id);
-                        navigator.clipboard?.writeText(url);
-                      }}
-                    >
-                      <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
-                        <circle cx="13" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                        <circle cx="3" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                        <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
-                        <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                      </svg>
-                      Share
-                    </button>
+                    {dashboard.isOwner !== false && (
+                      <button
+                        type="button"
+                        className="dl-action-btn"
+                        title={t('list.share')}
+                        onClick={() => openShareDialog(dashboard)}
+                      >
+                        <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
+                          <circle cx="13" cy="3" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                          <circle cx="3" cy="8" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                          <circle cx="13" cy="13" r="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                          <path d="M4.5 7l7-3.5M4.5 9l7 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                        </svg>
+                        {t('list.share')}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {/* Chevron — list view only */}
@@ -3149,7 +3526,7 @@ export default function App() {
                   type="button"
                   className="dl-card-chevron"
                   onClick={(e) => { e.stopPropagation(); openDashboardDetail(dashboard.id); }}
-                  aria-label="Open dashboard"
+                  aria-label="เปิดแดชบอร์ด"
                 >
                   <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="16" height="16">
                     <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -3160,61 +3537,68 @@ export default function App() {
           ))}
 
         </div>
+        )}
       </main>
 
       {/* New Dashboard Dialog */}
-      {newDashboardDialog && (
+      {newDashboardDialog && (() => {
+        const trimmed = newDashboardDraftName.trim();
+        let nameError = null;
+        if (!trimmed) nameError = t('newDash.err.required');
+        else if (trimmed.length < 2) nameError = t('newDash.err.tooShort');
+        else if (trimmed.length > 80) nameError = t('newDash.err.tooLong');
+        else if (dashboards.some((d) => d.name.trim().toLowerCase() === trimmed.toLowerCase()))
+          nameError = t('newDash.err.duplicate');
+        const canSubmit = !nameError;
+        return (
         <div className="new-dashboard-overlay" onClick={() => setNewDashboardDialog(false)}>
           <div className="new-dashboard-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="new-dashboard-dialog-header">
-              <div className="new-dashboard-dialog-icon" aria-hidden="true">
-                <svg viewBox="0 0 28 28" fill="none">
-                  <rect x="2" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.9"/>
-                  <rect x="16" y="2" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
-                  <rect x="2" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.6"/>
-                  <rect x="16" y="16" width="10" height="10" rx="2.5" fill="currentColor" opacity="0.3"/>
-                </svg>
-              </div>
               <div>
-                <h2>New Dashboard</h2>
-                <p>Give your new dashboard a name</p>
+                <h2>{t('newDash.title')}</h2>
+                <p>{t('newDash.subtitle')}</p>
               </div>
-              <button type="button" className="new-dashboard-dialog-close" onClick={() => setNewDashboardDialog(false)} aria-label="Close">✕</button>
+              <button type="button" className="new-dashboard-dialog-close" onClick={() => setNewDashboardDialog(false)} aria-label={t('dialog.close')}>✕</button>
             </div>
 
             <div className="new-dashboard-dialog-body">
               <label className="new-dashboard-name-label">
-                <span>Dashboard Name</span>
+                <span>{t('newDash.nameLabel')} <span className="new-dashboard-required">*</span></span>
                 <input
                   type="text"
-                  className="new-dashboard-name-input"
+                  className={`new-dashboard-name-input${nameError && newDashboardDraftName ? ' has-error' : ''}`}
                   value={newDashboardDraftName}
                   onChange={(e) => setNewDashboardDraftName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') confirmNewDashboard(); if (e.key === 'Escape') setNewDashboardDialog(false); }}
-                  placeholder="Dashboard name…"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) confirmNewDashboard(); if (e.key === 'Escape') setNewDashboardDialog(false); }}
+                  placeholder={t('newDash.namePlaceholder')}
                   autoFocus
                   maxLength={80}
                 />
+                {nameError && newDashboardDraftName && (
+                  <small className="new-dashboard-name-error">{nameError}</small>
+                )}
               </label>
             </div>
 
             <div className="new-dashboard-dialog-footer">
-              <button type="button" className="dashboard-action" onClick={() => setNewDashboardDialog(false)}>Cancel</button>
+              <button type="button" className="dashboard-action" onClick={() => setNewDashboardDialog(false)}>{t('dialog.cancel')}</button>
               <button
                 type="button"
                 className="dashboard-action primary"
                 onClick={confirmNewDashboard}
-                disabled={!newDashboardDraftName.trim()}
+                disabled={!canSubmit}
               >
-                Create Dashboard
+                {t('newDash.submit')}
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {confirmDeleteId && (() => {
         const target = dashboards.find((d) => d.id === confirmDeleteId);
+        const isShared = target?.isOwner === false;
         return (
           <div className="new-dashboard-overlay" onClick={() => setConfirmDeleteId(null)}>
             <div className="confirm-delete-dialog" onClick={(e) => e.stopPropagation()}>
@@ -3226,23 +3610,62 @@ export default function App() {
                 </svg>
               </div>
               <div className="confirm-delete-body">
-                <h3>Remove Dashboard</h3>
-                <p>Remove <strong>"{target?.name}"</strong>? This action cannot be undone.</p>
+                <h3>{isShared ? t('delete.shared.title') : t('delete.title')}</h3>
+                <p>{isShared
+                  ? t('delete.shared.confirm', { name: target?.name || '' })
+                  : t('delete.confirm', { name: target?.name || '' })}</p>
               </div>
               <div className="confirm-delete-footer">
-                <button type="button" className="dashboard-action" onClick={() => setConfirmDeleteId(null)}>Cancel</button>
+                <button type="button" className="dashboard-action" onClick={() => setConfirmDeleteId(null)}>{t('dialog.cancel')}</button>
                 <button
                   type="button"
                   className="dashboard-action danger"
                   onClick={() => { deleteDashboard(confirmDeleteId); setConfirmDeleteId(null); }}
                 >
-                  Remove
+                  {isShared ? t('dialog.remove') : t('dialog.delete')}
                 </button>
               </div>
             </div>
           </div>
         );
       })()}
+
+      {/* Share Dialog */}
+      {shareDialog && (
+        <div className="new-dashboard-overlay" onClick={() => setShareDialog(null)}>
+          <div className="share-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="share-dialog-header">
+              <div>
+                <h2>{t('share.title')}</h2>
+                <p>{t('share.subtitle', { name: shareDialog.name || '' })}</p>
+              </div>
+              <button type="button" className="new-dashboard-dialog-close" onClick={() => setShareDialog(null)} aria-label={t('dialog.close')}>✕</button>
+            </div>
+
+            <div className="share-dialog-body">
+              {shareDialog.loading ? (
+                <div className="share-loading">{t('share.loading')}</div>
+              ) : shareDialog.error ? (
+                <div className="share-error">{t('share.error')}</div>
+              ) : (
+                <div className="share-link-row">
+                  <input
+                    type="text"
+                    className="share-link-input"
+                    value={shareDialog.url || ''}
+                    readOnly
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button type="button" className="dashboard-action primary share-copy-btn" onClick={copyShareUrl}>
+                    {shareDialog.copied ? t('share.copied') : t('share.copy')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 
@@ -3260,15 +3683,16 @@ export default function App() {
             type="button"
             className="topbar-back-btn"
             onClick={openDashboardList}
-            aria-label="Back to Dashboard List"
-            data-tooltip="Dashboard List"
+            aria-label={t('toolbar.back')}
+            data-tooltip={t('toolbar.back')}
             data-tooltip-dir="down"
+            data-tooltip-align="start"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
-          <span className="topbar-brand-name">Dashboard Builder</span>
+          <span className="topbar-brand-name">{t('toolbar.brand')}</span>
         </div>
 
         <div className="topbar-divider" />
@@ -3279,8 +3703,8 @@ export default function App() {
             className="dashboard-switcher"
             value={activeDashboardId}
             onChange={(event) => selectDashboard(event.target.value)}
-            aria-label="Select Dashboard"
-            data-tooltip="Select Dashboard"
+            aria-label={t('toolbar.selectDashboard')}
+            data-tooltip={t('toolbar.selectDashboard')}
             data-tooltip-dir="down"
           >
             {dashboards.map((dashboard) => (
@@ -3293,9 +3717,9 @@ export default function App() {
             className="dashboard-name-input"
             type="text"
             value={editingName}
-            placeholder="Dashboard name…"
-            aria-label="Dashboard Name"
-            data-tooltip="Edit Dashboard Name"
+            placeholder={t('toolbar.namePlaceholder')}
+            aria-label={t('newDash.nameLabel')}
+            data-tooltip={t('toolbar.editName')}
             data-tooltip-dir="down"
             onChange={(event) => setEditingName(event.target.value)}
             onBlur={commitDashboardName}
@@ -3313,37 +3737,39 @@ export default function App() {
 
         {/* ── Zone 3: Action Button Groups ── */}
         <div className="topbar-zone3">
-          {/* Hamburger button — visible only at narrow viewport */}
+          {/* Hamburger button — edit mode only (menu items เป็น edit actions) */}
+          {!readOnly && !sharedView && (
           <button
             type="button"
             className={`topbar-hamburger${hamburgerOpen ? ' open' : ''}`}
             onClick={() => setHamburgerOpen((v) => !v)}
-            aria-label="Menu"
+            aria-label={t('toolbar.menu')}
             aria-expanded={hamburgerOpen}
           >
             <span /><span /><span />
           </button>
+          )}
 
           {/* Dropdown menu — shown when hamburger open (narrow) */}
           {hamburgerOpen && (
             <div className="topbar-hamburger-menu" onClick={() => setHamburgerOpen(false)}>
               <div className="hamburger-menu-group">
-                <span className="hamburger-menu-label">Dashboard</span>
-                <button type="button" className="hamburger-menu-item" onClick={createNewDashboard}><ToolbarIcon name="plus" /> New</button>
-                <button type="button" className="hamburger-menu-item" onClick={duplicateActiveDashboard}><ToolbarIcon name="copy" /> Duplicate</button>
-                <button type="button" className="hamburger-menu-item danger" onClick={deleteActiveDashboard} disabled={dashboards.length <= 1}><ToolbarIcon name="trash" /> Delete Dashboard</button>
+                <span className="hamburger-menu-label">{t('toolbar.dashboardGroup')}</span>
+                <button type="button" className="hamburger-menu-item" onClick={createNewDashboard}><ToolbarIcon name="plus" /> {t('toolbar.newDashboard')}</button>
+                <button type="button" className="hamburger-menu-item" onClick={duplicateActiveDashboard}><ToolbarIcon name="copy" /> {t('toolbar.duplicate')}</button>
+                <button type="button" className="hamburger-menu-item danger" onClick={deleteActiveDashboard} disabled={dashboards.length <= 1}><ToolbarIcon name="trash" /> {t('toolbar.deleteDashboard')}</button>
               </div>
               <div className="hamburger-menu-divider" />
               <div className="hamburger-menu-group">
-                <span className="hamburger-menu-label">File</span>
-                <button type="button" className="hamburger-menu-item" onClick={saveActiveDashboardFile}><ToolbarIcon name="save" /> Export JSON</button>
-                <button type="button" className="hamburger-menu-item" onClick={openDashboardImportPicker}><ToolbarIcon name="upload" /> Import JSON</button>
+                <span className="hamburger-menu-label">{t('toolbar.fileGroup')}</span>
+                <button type="button" className="hamburger-menu-item" onClick={saveActiveDashboardFile}><ToolbarIcon name="save" /> {t('toolbar.exportJson')}</button>
+                <button type="button" className="hamburger-menu-item" onClick={openDashboardImportPicker}><ToolbarIcon name="upload" /> {t('toolbar.importJson')}</button>
               </div>
               <div className="hamburger-menu-divider" />
               <div className="hamburger-menu-group">
-                <span className="hamburger-menu-label">Export</span>
-                <button type="button" className="hamburger-menu-item" onClick={printActiveDashboard}><ToolbarIcon name="print" /> Print</button>
-                <button type="button" className="hamburger-menu-item" onClick={downloadActiveDashboardPdf}><ToolbarIcon name="download" /> Download PDF</button>
+                <span className="hamburger-menu-label">{t('toolbar.exportGroup')}</span>
+                <button type="button" className="hamburger-menu-item" onClick={printActiveDashboard}><ToolbarIcon name="print" /> {t('toolbar.print')}</button>
+                <button type="button" className="hamburger-menu-item" onClick={downloadActiveDashboardPdf}><ToolbarIcon name="download" /> {t('toolbar.downloadPdf')}</button>
               </div>
             </div>
           )}
@@ -3352,10 +3778,10 @@ export default function App() {
           <div className="topbar-btn-groups">
             {/* Group A: Manage */}
             <div className="topbar-btn-group">
-              <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label="New Dashboard" data-tooltip="New" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={createNewDashboard} aria-label={t('list.newDashboard')} data-tooltip={t('toolbar.newDashboard')} data-tooltip-dir="down">
                 <ToolbarIcon name="plus" />
               </button>
-              <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label="Duplicate" data-tooltip="Duplicate" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={duplicateActiveDashboard} aria-label={t('toolbar.duplicate')} data-tooltip={t('toolbar.duplicate')} data-tooltip-dir="down">
                 <ToolbarIcon name="copy" />
               </button>
               <button
@@ -3363,8 +3789,8 @@ export default function App() {
                 className="dashboard-action danger icon-only"
                 onClick={deleteActiveDashboard}
                 disabled={dashboards.length <= 1}
-                aria-label="Delete Dashboard"
-                data-tooltip="Delete Dashboard"
+                aria-label={t('toolbar.deleteDashboard')}
+                data-tooltip={t('toolbar.deleteDashboard')}
                 data-tooltip-dir="down"
               >
                 <ToolbarIcon name="trash" />
@@ -3375,10 +3801,10 @@ export default function App() {
 
             {/* Group B: File I/O */}
             <div className="topbar-btn-group">
-              <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label="Export JSON" data-tooltip="Export JSON" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label={t('toolbar.exportJson')} data-tooltip={t('toolbar.exportJson')} data-tooltip-dir="down">
                 <ToolbarIcon name="save" />
               </button>
-              <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label="Import JSON" data-tooltip="Import JSON" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label={t('toolbar.importJson')} data-tooltip={t('toolbar.importJson')} data-tooltip-dir="down">
                 <ToolbarIcon name="upload" />
               </button>
               <input ref={importFileInputRef} className="dashboard-file-input" type="file" accept="application/json,.json" onChange={importDashboardFile} />
@@ -3388,10 +3814,10 @@ export default function App() {
 
             {/* Group C: Output */}
             <div className="topbar-btn-group">
-              <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label="Print" data-tooltip="Print" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label={t('toolbar.print')} data-tooltip={t('toolbar.print')} data-tooltip-dir="down">
                 <ToolbarIcon name="print" />
               </button>
-              <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="Download PDF" data-tooltip="Download PDF" data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label={t('toolbar.downloadPdf')} data-tooltip={t('toolbar.downloadPdf')} data-tooltip-dir="down">
                 <ToolbarIcon name="download" />
               </button>
             </div>
@@ -3400,17 +3826,17 @@ export default function App() {
 
         {/* ── Zone 4: View Controls (right) ── */}
         <div className="topbar-view-controls">
-          {readOnly && (
+          {readOnly && !sharedView && (
             <>
               <div className="topbar-btn-group">
-                <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label="Export JSON" data-tooltip="Export JSON" data-tooltip-dir="down">
+                <button type="button" className="dashboard-action icon-only" onClick={saveActiveDashboardFile} aria-label={t('toolbar.exportJson')} data-tooltip={t('toolbar.exportJson')} data-tooltip-dir="down">
                   <ToolbarIcon name="save" />
                 </button>
-                <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label="Import JSON" data-tooltip="Import JSON" data-tooltip-dir="down">
+                <button type="button" className="dashboard-action icon-only" onClick={openDashboardImportPicker} aria-label={t('toolbar.importJson')} data-tooltip={t('toolbar.importJson')} data-tooltip-dir="down">
                   <ToolbarIcon name="upload" />
                 </button>
                 <input ref={importFileInputRef} className="dashboard-file-input" type="file" accept="application/json,.json" onChange={importDashboardFile} />
-                <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label="Save as PDF" data-tooltip="Save as PDF" data-tooltip-dir="down">
+                <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label={t('toolbar.savePdf')} data-tooltip={t('toolbar.savePdf')} data-tooltip-dir="down">
                   <ToolbarIcon name="download" />
                 </button>
               </div>
@@ -3425,14 +3851,14 @@ export default function App() {
                   className="zoom-btn"
                   onClick={() => setCanvasZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 4) / 4))}
                   disabled={canvasZoom <= ZOOM_MIN}
-                  aria-label="Zoom out"
+                  aria-label={t('toolbar.zoomOut')}
                 >−</button>
                 <button
                   type="button"
                   className="zoom-level"
                   onClick={() => setCanvasZoom(1)}
-                  aria-label="Reset zoom"
-                  data-tooltip="Click to reset to 100%"
+                  aria-label={t('toolbar.resetZoom')}
+                  data-tooltip={t('toolbar.resetZoom')}
                   data-tooltip-dir="down"
                 >{Math.round(canvasZoom * 100)}%</button>
                 <button
@@ -3440,100 +3866,119 @@ export default function App() {
                   className="zoom-btn"
                   onClick={() => setCanvasZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 4) / 4))}
                   disabled={canvasZoom >= ZOOM_MAX}
-                  aria-label="Zoom in"
+                  aria-label={t('toolbar.zoomIn')}
                 >+</button>
               </div>
               <button
                 type="button"
                 className="zoom-btn fit-screen-btn"
                 onClick={fitToScreen}
-                aria-label="Fit to Screen"
-                data-tooltip="Fit to Screen"
+                aria-label={t('toolbar.fitScreen')}
+                data-tooltip={t('toolbar.fitScreen')}
                 data-tooltip-dir="down"
               >
                 <ToolbarIcon name="fitScreen" />
               </button>
-              {/* Auto Resize */}
-              <button
-                type="button"
-                className="zoom-btn fit-screen-btn layout-tool-btn"
-                onClick={autoResize}
-                aria-label="Auto Resize"
-                data-tooltip="Auto Resize — fit widgets to screen width"
-                data-tooltip-dir="down"
-                disabled={readOnly}
-              >
-                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="7" height="7" rx="1.5"/>
-                  <rect x="11" y="2" width="7" height="7" rx="1.5"/>
-                  <rect x="2" y="11" width="7" height="7" rx="1.5"/>
-                  <rect x="11" y="11" width="7" height="7" rx="1.5"/>
-                  <path d="M5.5 5.5h1M13.5 5.5h1M5.5 14.5h1M13.5 14.5h1" strokeWidth="2"/>
-                </svg>
-              </button>
-              {/* Auto Arrange */}
-              <button
-                type="button"
-                className="zoom-btn fit-screen-btn layout-tool-btn"
-                onClick={autoArrange}
-                aria-label="Auto Arrange"
-                data-tooltip="Auto Arrange — pack widgets without overlap"
-                data-tooltip-dir="down"
-                disabled={readOnly}
-              >
-                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="2" width="7" height="4" rx="1"/>
-                  <rect x="11" y="2" width="7" height="4" rx="1"/>
-                  <rect x="2" y="8" width="16" height="4" rx="1"/>
-                  <rect x="2" y="14" width="10" height="4" rx="1"/>
-                  <rect x="14" y="14" width="4" height="4" rx="1"/>
-                </svg>
-              </button>
+              {/* Auto Resize — edit mode only */}
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="zoom-btn fit-screen-btn layout-tool-btn"
+                  onClick={autoResize}
+                  aria-label={t('toolbar.autoResize').split(' — ')[0]}
+                  data-tooltip={t('toolbar.autoResize')}
+                  data-tooltip-dir="down"
+                >
+                  <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="7" height="7" rx="1.5"/>
+                    <rect x="11" y="2" width="7" height="7" rx="1.5"/>
+                    <rect x="2" y="11" width="7" height="7" rx="1.5"/>
+                    <rect x="11" y="11" width="7" height="7" rx="1.5"/>
+                    <path d="M5.5 5.5h1M13.5 5.5h1M5.5 14.5h1M13.5 14.5h1" strokeWidth="2"/>
+                  </svg>
+                </button>
+              )}
+              {/* Auto Arrange — edit mode only */}
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="zoom-btn fit-screen-btn layout-tool-btn"
+                  onClick={autoArrange}
+                  aria-label={t('toolbar.autoArrange').split(' — ')[0]}
+                  data-tooltip={t('toolbar.autoArrange')}
+                  data-tooltip-dir="down"
+                >
+                  <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="7" height="4" rx="1"/>
+                    <rect x="11" y="2" width="7" height="4" rx="1"/>
+                    <rect x="2" y="8" width="16" height="4" rx="1"/>
+                    <rect x="2" y="14" width="10" height="4" rx="1"/>
+                    <rect x="14" y="14" width="4" height="4" rx="1"/>
+                  </svg>
+                </button>
+              )}
               <div className="topbar-divider" />
             </>
           )}
+          {/* Sidebar toggle — edit mode only (palette ใช้ตอนแก้ dashboard) */}
+          {!readOnly && (
+            <button
+              type="button"
+              className="sidebar-toggle icon-only"
+              onClick={() => setSidebarHidden((prev) => !prev)}
+              aria-label={sidebarHidden ? t('toolbar.showSidebar') : t('toolbar.hideSidebar')}
+              data-tooltip={sidebarHidden ? t('toolbar.showSidebar') : t('toolbar.hideSidebar')}
+              data-tooltip-dir="down"
+            >
+              <ToolbarIcon name="sidebar" />
+            </button>
+          )}
+          {!sharedView && (
+            <button
+              type="button"
+              className={`mode-toggle icon-only ${readOnly ? '' : 'active-edit'}`}
+              onClick={() => {
+                const goingToEdit = readOnly;
+                setReadOnly((prev) => !prev);
+                if (goingToEdit && window.innerWidth <= 768) setSidebarHidden(true);
+              }}
+              aria-label={readOnly ? t('toolbar.enterEdit') : t('toolbar.exitEdit')}
+              data-tooltip={readOnly ? t('toolbar.enterEdit') : t('toolbar.exitEdit')}
+              data-tooltip-dir="down"
+            >
+              <ToolbarIcon name={readOnly ? 'edit' : 'preview'} />
+            </button>
+          )}
+          {!sharedView && (
+            <button
+              type="button"
+              className="topbar-save-btn"
+              onClick={() => setSaveConfirmOpen(true)}
+              aria-label={t('toolbar.save')}
+              data-tooltip={t('toolbar.saveTooltip')}
+              data-tooltip-dir="down"
+            >
+              <ToolbarIcon name="save" />
+              <span>{t('toolbar.save')}</span>
+            </button>
+          )}
+          {/* Language toggle — TH ↔ EN, บันทึกลง localStorage อัตโนมัติ */}
           <button
             type="button"
-            className="sidebar-toggle icon-only"
-            onClick={() => setSidebarHidden((prev) => !prev)}
-            aria-label={sidebarHidden ? 'Show Palette' : 'Hide Palette'}
-            data-tooltip={sidebarHidden ? 'Show Palette' : 'Hide Palette'}
-            data-tooltip-dir="down"
-            disabled={readOnly}
-          >
-            <ToolbarIcon name="sidebar" />
-          </button>
-          <button
-            type="button"
-            className={`mode-toggle icon-only ${readOnly ? '' : 'active-edit'}`}
-            onClick={() => {
-              const goingToEdit = readOnly;
-              setReadOnly((prev) => !prev);
-              if (goingToEdit && window.innerWidth <= 768) setSidebarHidden(true);
-            }}
-            aria-label={readOnly ? 'Enter Edit Mode' : 'Preview'}
-            data-tooltip={readOnly ? 'Enter Edit Mode' : 'Preview'}
+            className="lang-toggle-btn"
+            onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
+            aria-label={t('toolbar.lang')}
+            data-tooltip={t('toolbar.lang')}
             data-tooltip-dir="down"
           >
-            <ToolbarIcon name={readOnly ? 'edit' : 'preview'} />
-          </button>
-          <button
-            type="button"
-            className="topbar-save-btn"
-            onClick={saveDashboard}
-            aria-label="Save"
-            data-tooltip="Save dashboard"
-            data-tooltip-dir="down"
-          >
-            <ToolbarIcon name="save" />
-            <span>Save</span>
+            {lang === 'th' ? 'TH' : 'EN'}
           </button>
           <button
             type="button"
             className="wizard-help-btn"
             onClick={openWizard}
-            aria-label="User Guide"
-            data-tooltip="User Guide"
+            aria-label={t('toolbar.help')}
+            data-tooltip={t('toolbar.help')}
             data-tooltip-dir="down"
           >
             <ToolbarIcon name="help" />
@@ -3549,15 +3994,15 @@ export default function App() {
           <section className={`palette-section ${paletteCollapsed ? 'collapsed' : ''}`}>
             <div className="palette-section-header">
               <div>
-                <h3>Widget Palette</h3>
-                {!paletteCollapsed ? <p>Drag a ready-to-use or configurable widget onto the canvas</p> : null}
+                <h3>แผงวิดเจ็ต</h3>
+                {!paletteCollapsed ? <p>ลากวิดเจ็ตสำเร็จรูปหรือแบบกำหนดเองลงบนพื้นที่</p> : null}
               </div>
               <button
                 type="button"
                 className="section-toggle"
                 onClick={() => setPaletteCollapsed((prev) => !prev)}
               >
-                {paletteCollapsed ? 'Expand' : 'Collapse'}
+                {paletteCollapsed ? 'ขยาย' : 'ย่อ'}
               </button>
             </div>
             {!paletteCollapsed ? (
@@ -3601,7 +4046,7 @@ export default function App() {
                                 disabled={readOnly}
                                 onDragStart={(event) => onPaletteDragStart(event, item.paletteKey || item.type)}
                                 onClick={() => addWidgetFromPalette(item.paletteKey || item.type)}
-                                title="Click or drag onto the canvas"
+                                title="คลิกหรือลากลงพื้นที่"
                               >
                                 <span className="palette-item-thumb" aria-hidden="true">
                                   <PaletteWidgetThumbnail type={item.type} />
@@ -3875,8 +4320,8 @@ export default function App() {
                       <button
                         type="button"
                         className={`icon-button align-toggle ${(widget.textAlign || 'left') === 'left' ? 'active' : ''}`}
-                        aria-label="Align left"
-                        title="Align left"
+                        aria-label="จัดซ้าย"
+                        title="จัดซ้าย"
                         onClick={(e) => { e.stopPropagation(); updateWidgetTextAlign(widget.id, 'left'); }}
                       >
                         <ToolbarIcon name="align-left" />
@@ -3884,8 +4329,8 @@ export default function App() {
                       <button
                         type="button"
                         className={`icon-button align-toggle ${widget.textAlign === 'center' ? 'active' : ''}`}
-                        aria-label="Align center"
-                        title="Align center"
+                        aria-label="จัดกลาง"
+                        title="จัดกลาง"
                         onClick={(e) => { e.stopPropagation(); updateWidgetTextAlign(widget.id, 'center'); }}
                       >
                         <ToolbarIcon name="align-center" />
@@ -3893,8 +4338,8 @@ export default function App() {
                       <button
                         type="button"
                         className={`icon-button align-toggle ${widget.textAlign === 'right' ? 'active' : ''}`}
-                        aria-label="Align right"
-                        title="Align right"
+                        aria-label="จัดขวา"
+                        title="จัดขวา"
                         onClick={(e) => { e.stopPropagation(); updateWidgetTextAlign(widget.id, 'right'); }}
                       >
                         <ToolbarIcon name="align-right" />
@@ -3902,8 +4347,8 @@ export default function App() {
                       <button
                         type="button"
                         className="icon-button config-toggle"
-                        aria-label="Widget settings"
-                        title="Settings"
+                        aria-label="การตั้งค่าวิดเจ็ต"
+                        title="ตั้งค่า"
                         onClick={() => setActiveConfigWidgetId(widget.id)}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:16,height:16}}>
@@ -3916,8 +4361,8 @@ export default function App() {
                     <button
                       type="button"
                       className="icon-button config-toggle"
-                      aria-label="Widget settings"
-                      title="Settings"
+                      aria-label="การตั้งค่าวิดเจ็ต"
+                      title="ตั้งค่า"
                       onClick={() => setActiveConfigWidgetId(widget.id)}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:16,height:16}}>
@@ -3929,8 +4374,8 @@ export default function App() {
                   <button
                     type="button"
                     className="icon-button remove-toggle"
-                    aria-label="Remove widget"
-                    title="Remove"
+                    aria-label="ลบวิดเจ็ต"
+                    title="ลบ"
                     onClick={() => removeWidget(widget.id)}
                   >
                     ×
@@ -4019,8 +4464,8 @@ export default function App() {
                       <button
                         type="button"
                         className="icon-button"
-                        aria-label="Edit text"
-                        title="Edit text (double-click)"
+                        aria-label="แก้ไขข้อความ"
+                        title="แก้ไขข้อความ (ดับเบิลคลิก)"
                         onClick={() => setActiveConfigWidgetId(widget.id)}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{width:14,height:14}}>
@@ -4031,8 +4476,8 @@ export default function App() {
                       <button
                         type="button"
                         className="icon-button remove-toggle"
-                        aria-label="Remove widget"
-                        title="Remove"
+                        aria-label="ลบวิดเจ็ต"
+                        title="ลบ"
                         onClick={() => removeWidget(widget.id)}
                       >×</button>
                     </div>
@@ -4043,8 +4488,8 @@ export default function App() {
                   <button
                     type="button"
                     className="preview-edit-floating"
-                    aria-label="Edit widget"
-                    title="Edit"
+                    aria-label="แก้ไขวิดเจ็ต"
+                    title="แก้ไข"
                     onClick={() => toggleWidgetPreview(widget.id)}
                   >
                     ✎
@@ -4145,13 +4590,13 @@ export default function App() {
                     }}
                   >
                     <div className="filter-drag-handle-text">
-                      <strong>Filters</strong>
-                      <span>Controls all widgets — market, year, quarter, industry &amp; geography</span>
+                      <strong>{t('filter.title')}</strong>
+                      <span>{t('filter.subtitle')}</span>
                     </div>
                     <button
                       type="button"
                       className="filter-orientation-btn"
-                      title={fpOrientation === 'horizontal' ? 'Switch to vertical' : 'Switch to horizontal'}
+                      title={fpOrientation === 'horizontal' ? 'สลับเป็นแนวตั้ง' : 'สลับเป็นแนวนอน'}
                       onClick={(event) => {
                         event.stopPropagation();
                         updateActiveDashboard((dash) => ({
@@ -4177,15 +4622,15 @@ export default function App() {
                 ) : (
                   <div className="dashboard-filters-header">
                     <div className="filter-header-label">
-                      <strong>Filters</strong>
-                      <span>Controls all widgets — market, year, quarter, industry &amp; geography</span>
+                      <strong>{t('filter.title')}</strong>
+                      <span>{t('filter.subtitle')}</span>
                     </div>
                     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                       {/* Reload — ⟳ */}
                       <button
                         type="button"
                         className="filter-icon-btn"
-                        title="Reload widget data (bypass cache)"
+                        title="โหลดข้อมูลวิดเจ็ตใหม่ (ข้ามแคช)"
                         onClick={() => {
                           setMiceApiFixedProfile(null);
                           setRefreshKey((k) => k + 1);
@@ -4200,7 +4645,7 @@ export default function App() {
                       <button
                         type="button"
                         className="filter-icon-btn"
-                        title="Clear filters"
+                        title="ล้างตัวกรอง"
                         onClick={clearActiveDashboardFilters}
                       >
                         <svg viewBox="0 0 20 20" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -4216,21 +4661,21 @@ export default function App() {
                   {/* Market + Year Basis — side by side 2 columns */}
                   <div className="filter-row-two-col">
                     <div className="filter-button-group">
-                      <span>Market</span>
+                      <span>{t('filter.market')}</span>
                       <div className="filter-toggle-row">
-                        {['International', 'Domestic'].map((option) => {
+                        {[{ value: 'International', label: t('filter.marketIntl') }, { value: 'Domestic', label: t('filter.marketDomestic') }].map((option) => {
                           const cur = activeDashboardFilters.market;
-                          const isActive = cur === option || cur === 'all';
+                          const isActive = cur === option.value || cur === 'all';
                           return (
                             <button
-                              key={option}
+                              key={option.value}
                               type="button"
                               className={isActive ? 'active' : ''}
                               onClick={() => {
                                 if (cur === 'all') {
                                   // ยกเลิก option นี้ → เหลืออีกตัว
-                                  updateActiveDashboardFilters({ market: option === 'International' ? 'Domestic' : 'International' });
-                                } else if (cur === option) {
+                                  updateActiveDashboardFilters({ market: option.value === 'International' ? 'Domestic' : 'International' });
+                                } else if (cur === option.value) {
                                   // คลิกซ้ำตัวเดิม → เลือกทั้งคู่ (all)
                                   updateActiveDashboardFilters({ market: 'all' });
                                 } else {
@@ -4239,18 +4684,18 @@ export default function App() {
                                 }
                               }}
                             >
-                              {option}
+                              {option.label}
                             </button>
                           );
                         })}
                       </div>
                     </div>
                     <div className="filter-button-group">
-                      <span>Year Basis</span>
+                      <span>{t('filter.yearBasis')}</span>
                       <div className="filter-toggle-row">
                         {[
-                          { value: 'calendar', label: 'Calendar' },
-                          { value: 'fiscal', label: 'Fiscal' }
+                          { value: 'calendar', label: t('filter.yearCalendar') },
+                          { value: 'fiscal', label: t('filter.yearFiscal') }
                         ].map((option) => (
                           <button
                             key={option.value}
@@ -4278,7 +4723,7 @@ export default function App() {
                       return (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-                            <span>Year</span>
+                            <span>{t('filter.year')}</span>
                             <div className="filter-toggle-row" style={{ marginLeft: 'auto' }}>
                               <button
                                 type="button"
@@ -4288,7 +4733,7 @@ export default function App() {
                                   yearMin: curMax,
                                   yearMax: curMax,
                                 })}
-                              >Single</button>
+                              >{t('filter.yearSingle')}</button>
                               <button
                                 type="button"
                                 className={mode === 'range' ? 'active' : ''}
@@ -4297,7 +4742,7 @@ export default function App() {
                                   yearMin: minY,
                                   yearMax: maxY,
                                 })}
-                              >Range</button>
+                              >{t('filter.yearRange')}</button>
                             </div>
                           </div>
                           {mode === 'single' ? (
@@ -4357,7 +4802,7 @@ export default function App() {
                     <>
                     <div className="filter-row-full">
                       <div className="filter-chip-group">
-                        <span className="filter-chip-label">Quarter</span>
+                        <span className="filter-chip-label">{t('filter.quarter')}</span>
                         <div className="filter-chip-row">
                           {['Q1','Q2','Q3','Q4'].map(q => (
                             <button key={q} type="button"
@@ -4370,7 +4815,7 @@ export default function App() {
                     </div>
                     <div className="filter-row-full">
                       <div className="filter-chip-group">
-                        <span className="filter-chip-label">Industry</span>
+                        <span className="filter-chip-label">{t('filter.industry')}</span>
                         <div className="filter-chip-row">
                           {masterSectors.map(s => (
                             <button key={s.name} type="button"
@@ -4386,19 +4831,19 @@ export default function App() {
                     {hasGeoFilterWidgets && (
                       <div className="filter-row-full">
                         <div className="filter-chip-group">
-                          <span className="filter-chip-label">Continent</span>
+                          <span className="filter-chip-label">{t('filter.continent')}</span>
                           <select className="fp-select" value={selContinent}
                             onChange={(e) => updateActiveDashboardFilters({ continent: e.target.value, country: 'all' })}>
-                            <option value="all">All</option>
+                            <option value="all">{t('filter.all')}</option>
                             {continentOpts.map(c => <option key={c.continentName} value={c.continentName}>{c.continentName}</option>)}
                           </select>
                         </div>
                         <div className="filter-row-sep" />
                         <div className="filter-chip-group">
-                          <span className="filter-chip-label">Country / Nationality</span>
+                          <span className="filter-chip-label">{t('filter.country')}</span>
                           <select className="fp-select" value={selCountry}
                             onChange={(e) => updateActiveDashboardFilters({ country: e.target.value })}>
-                            <option value="all">All</option>
+                            <option value="all">{t('filter.all')}</option>
                             {countryOpts.map(c => <option key={c.countryCode} value={c.countryName}>{c.countryName}</option>)}
                           </select>
                         </div>
@@ -4410,7 +4855,7 @@ export default function App() {
                 {!readOnly ? (<>
                   <button
                     type="button"
-                    aria-label="Resize filter panel width"
+                    aria-label="ปรับความกว้างแผงตัวกรอง"
                     className="resize-handle filter-resize-e"
                     onPointerDown={(event) => {
                       event.preventDefault();
@@ -4427,7 +4872,7 @@ export default function App() {
                   />
                   <button
                     type="button"
-                    aria-label="Resize filter panel height"
+                    aria-label="ปรับความสูงแผงตัวกรอง"
                     className="resize-handle filter-resize-s"
                     onPointerDown={(event) => {
                       event.preventDefault();
@@ -4457,13 +4902,10 @@ export default function App() {
           <div className="config-modal" onClick={(event) => event.stopPropagation()}>
             <div className="config-modal-header">
               <div>
-                <h2>Widget Settings</h2>
+                <h2>การตั้งค่าวิดเจ็ต</h2>
                 {!TEXT_WIDGET_TYPES.includes(activeConfigWidget.type) && activeConfigDataset ? (
                   <div className="config-modal-meta">
                     <span className="config-modal-badge">{activeConfigDataset.label}</span>
-                    <span className="config-modal-caption">
-                      {activeConfigDataset.records.length} rows / {activeConfigDataset.fields.length} fields
-                    </span>
                   </div>
                 ) : null}
               </div>
@@ -4478,7 +4920,7 @@ export default function App() {
               ) : (
                 <>
                   <div className="config-title-row">
-                    <label className="config-title-label" htmlFor="cfg-widget-title">Widget Name</label>
+                    <label className="config-title-label" htmlFor="cfg-widget-title">ชื่อวิดเจ็ต</label>
                     <input
                       id="cfg-widget-title"
                       type="text"
@@ -4495,6 +4937,79 @@ export default function App() {
           </div>
         </div>
       ) : null}
+
+      {/* ── Confirm Save Dialog ── */}
+      {saveConfirmOpen && (
+        <div className="new-dashboard-overlay" onClick={() => !savingDashboard && setSaveConfirmOpen(false)}>
+          <div className="confirm-save-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-save-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="20" fill="#DBE7F5"/>
+                <path d="M14 13h9l5 5v9a1 1 0 01-1 1H14a1 1 0 01-1-1V14a1 1 0 011-1z" stroke="#1B61AA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M16 13v5h7M17 24h6" stroke="#1B61AA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="confirm-save-body">
+              <h3>{t('save.title')}</h3>
+              <p>{t('save.confirm', { name: activeDashboard?.name || '' })}</p>
+            </div>
+            <div className="confirm-save-footer">
+              <button
+                type="button"
+                className="dashboard-action"
+                onClick={() => setSaveConfirmOpen(false)}
+                disabled={savingDashboard}
+              >
+                {t('dialog.cancel')}
+              </button>
+              <button
+                type="button"
+                className="dashboard-action primary"
+                disabled={savingDashboard}
+                onClick={async () => {
+                  setSavingDashboard(true);
+                  try {
+                    await saveDashboard();
+                  } finally {
+                    setSavingDashboard(false);
+                    setSaveConfirmOpen(false);
+                  }
+                }}
+              >
+                {savingDashboard ? t('save.saving') : t('dialog.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Unsaved-change guard dialog ── */}
+      {pendingLeave && (
+        <div className="new-dashboard-overlay" onClick={() => setPendingLeave(null)}>
+          <div className="confirm-delete-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-delete-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="20" fill="#fef3c7"/>
+                <path d="M20 13v8M20 25v.5" stroke="#d97706" strokeWidth="2.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <div className="confirm-delete-body">
+              <h3>{t('unsaved.title')}</h3>
+              <p>{t('unsaved.confirm')}</p>
+            </div>
+            <div className="confirm-delete-footer">
+              <button type="button" className="dashboard-action" onClick={() => setPendingLeave(null)}>{t('dialog.backToEdit')}</button>
+              <button
+                type="button"
+                className="dashboard-action danger"
+                onClick={() => { const fn = pendingLeave; setPendingLeave(null); if (fn) fn(); }}
+              >
+                {t('unsaved.leave')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast notification ── */}
       {toastMsg && (
