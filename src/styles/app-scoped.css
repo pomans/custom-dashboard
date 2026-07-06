@@ -823,8 +823,9 @@
   width: 100%;
   height: auto;
   object-fit: cover;
+  position: relative;
+  z-index: 1;
 }
-
 
 /* Card body */
 .dashboard-builder-root .dl-card-body {
@@ -5368,23 +5369,29 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 42px;
-  height: 38px;
-  padding: 0 10px;
-  border-radius: 10px;
-  border: 1px solid #d1d5db;
+  gap: 8px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 50px;
+  border: 1px solid #e2e8f0;
   background: #ffffff;
-  color: #111111;
+  color: #0f172a;
   cursor: pointer;
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.04em;
-  transition: background 0.15s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   flex-shrink: 0;
 }
 
+.dashboard-builder-root .lang-toggle-btn svg {
+  flex-shrink: 0;
+  color: #475569;
+}
+
 .dashboard-builder-root .lang-toggle-btn:hover {
-  background: #f1f5f9;
+  background: #f8fafc;
+  border-color: #cbd5e1;
   box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.06);
 }
 

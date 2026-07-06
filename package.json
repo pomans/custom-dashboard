@@ -1,6 +1,6 @@
 {
   "name": "tceb-dashboard-builder",
-  "version": "1.0.31",
+  "version": "1.0.40",
   "description": "MICE Data Hub Dashboard Builder — embeddable React component",
   "type": "module",
   "main": "./dist/dashboard-builder.cjs.js",

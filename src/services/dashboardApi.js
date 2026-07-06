@@ -83,6 +83,7 @@ function fromApi(dto) {
     shareSlug: dto.shareSlug,
     widgetCount: dto.widgetCount,
     shareCount: dto.shareCount,
+    ownerName: dto.ownerName,
     isOwner: dto.isOwner,
     permission: dto.permission,
     updatedDate: dto.updatedDate,

@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import placeholderSvg from './assets/placeholder.svg';
+import placeholderSvg1 from './assets/placeholder-1.svg';
+import placeholderSvg2 from './assets/placeholder-2.svg';
+import placeholderSvg3 from './assets/placeholder-3.svg';
 import WidgetRenderer from './components/WidgetRenderer';
 import WizardOnboarding, { useWizard } from './components/WizardOnboarding';
 import { datasetLibrary, widgetCatalog, FALLBACK_COUNTRIES, buildLiveDatasets } from './data/sampleData';
@@ -121,6 +124,11 @@ const EXPRESSION_SNIPPETS = [
   '${format_date(current_date)}',
   '${year(current_date) + 543}'
 ];
+
+// Thumbnail cover ของ dashboard card — accent band ฝังอยู่ในภาพเอง (ไม่ใช่ CSS overlay)
+// เพราะ "หน้าจอสีขาวที่ซ้อนกัน" ในภาพต้องทับอยู่หน้า accent เสมอ ซึ่งทำได้เฉพาะถ้า
+// accent เป็นส่วนหนึ่งของภาพ — 4 ไฟล์นี้เหมือนกันทุกอย่างยกเว้นสี gradient ของ accent band
+const CARD_THUMBS = [placeholderSvg, placeholderSvg1, placeholderSvg2, placeholderSvg3];
 
 const ToolbarIcon = ({ name }) => {
   const c = { fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' };
@@ -1019,6 +1027,8 @@ export default function App() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [savingDashboard, setSavingDashboard] = useState(false);
+  const [pdfConfirmOpen, setPdfConfirmOpen] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   const [shareDialog, setShareDialog] = useState(null); // { id, name, loading, url, error, copied }
   // โหลด list จาก API ตอน bootstrap (cloud) — เริ่ม true ถ้า cloud เพื่อโชว์ loading ทันที
   const [loadingDashboards, setLoadingDashboards] = useState(() => isCloudEnabled());
@@ -1350,25 +1360,27 @@ export default function App() {
   };
 
   // สรุป filter values จาก workspace เป็น key-value รายการสำหรับ PDF (text-only ไม่มีปุ่ม/slider)
+  // PDF ทั้งฉบับ (header/filter summary/disclaimer) ใช้ภาษาอังกฤษเท่านั้น
+  // ไม่แปลตามภาษา UI — user ตกลงผ่าน confirm dialog "PDF is English only"
   const buildPdfFilterSummary = (filters) => {
     const f = filters || {};
     const items = [];
-    items.push({ label: 'ตลาด', value: f.market === 'Domestic' ? 'ในประเทศ' : 'ต่างชาติ' });
-    items.push({ label: 'ฐานปี', value: f.yearMode === 'fiscal' ? 'งบประมาณ' : 'ปฏิทิน' });
+    items.push({ label: 'Market', value: f.market === 'Domestic' ? 'Domestic' : 'International' });
+    items.push({ label: 'Year Basis', value: f.yearMode === 'fiscal' ? 'Fiscal Year' : 'Calendar Year' });
     if (f.yearMode !== 'quarterly' && (f.yearMin || f.yearMax)) {
-      items.push({ label: 'ช่วงปี', value: `${f.yearMin ?? ''} - ${f.yearMax ?? ''}`.trim() });
+      items.push({ label: 'Year Range', value: `${f.yearMin ?? ''} - ${f.yearMax ?? ''}`.trim() });
     } else if (f.year) {
-      items.push({ label: 'ปี', value: String(f.year) });
+      items.push({ label: 'Year', value: String(f.year) });
     }
     if (f.quarters) {
       const qs = f.quarters.split(',').filter(Boolean);
-      items.push({ label: 'ไตรมาส', value: qs.length === 4 ? 'ทั้งหมด' : qs.join(', ') });
+      items.push({ label: 'Quarter', value: qs.length === 4 ? 'All' : qs.join(', ') });
     }
     if (f.industry) {
-      items.push({ label: 'อุตสาหกรรม', value: f.industry === 'all' ? 'ทั้งหมด' : f.industry });
+      items.push({ label: 'Industry', value: f.industry === 'all' ? 'All' : f.industry });
     }
-    if (f.continent && f.continent !== 'all') items.push({ label: 'ทวีป', value: f.continent });
-    if (f.country && f.country !== 'all') items.push({ label: 'ประเทศ', value: f.country });
+    if (f.continent && f.continent !== 'all') items.push({ label: 'Continent', value: f.continent });
+    if (f.country && f.country !== 'all') items.push({ label: 'Country', value: f.country });
     return items;
   };
 
@@ -1377,8 +1389,8 @@ export default function App() {
     if (!items.length) return null;
     const escape = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const cells = items.map((it) => `
-      <div style="min-width:0;">
+    const cells = items.map((it, i) => `
+      <div style="min-width:0;flex:1 1 0;padding:0 24px;${i > 0 ? 'border-left:1px solid #e2e8f0;' : ''}">
         <div style="font-size:13px;color:#64748b;font-weight:500;margin-bottom:4px;">${escape(it.label)}</div>
         <div style="font-size:20px;color:#0f172a;font-weight:700;line-height:1.2;word-wrap:break-word;">${escape(it.value)}</div>
       </div>
@@ -1389,7 +1401,7 @@ export default function App() {
       'left:-99999px',
       'top:0',
       'width:1200px',
-      'padding:24px 32px',
+      'padding:24px 8px',
       'background:#ffffff',
       'border:1px solid #e2e8f0',
       'border-radius:14px',
@@ -1397,7 +1409,7 @@ export default function App() {
       'box-sizing:border-box',
     ].join(';');
     el.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(${Math.min(items.length, 4)},1fr);gap:24px;">
+      <div style="display:flex;flex-wrap:nowrap;align-items:stretch;">
         ${cells}
       </div>
     `;
@@ -1409,20 +1421,21 @@ export default function App() {
     }
   };
 
-  // Render header (dark blue banner) เป็น canvas ผ่าน html2canvas
-  // ใช้ hidden offscreen div + Anuphan font ปกติของ app เพื่อรองรับข้อความไทย (jsPDF default font ไม่รองรับ)
-  const renderPdfHeaderCanvas = async (dashboardName) => {
+  // Header — gradient dark→light blue พร้อม title / created-by / logo / copyright (English only)
+  // ownerName = ชื่อผู้สร้าง dashboard (จาก API); fallback เป็น "-" ถ้าไม่มี (เช่น standalone/sample data)
+  const renderPdfHeaderCanvas = async (ownerName) => {
     const el = document.createElement('div');
     el.style.cssText = [
       'position:fixed',
       'left:-99999px',
       'top:0',
       'width:1200px',
-      'padding:32px 40px',
-      'background:#0f2b4f',
+      'padding:36px 44px',
+      // Gradient blue เหมือน mockup (dark navy → medium blue)
+      'background:linear-gradient(90deg,#0b2a52 0%,#12447f 55%,#1a5aa8 100%)',
       'color:#ffffff',
-      'font-family:Anuphan,Sarabun,"Segoe UI",Tahoma,sans-serif',
-      'border-radius:16px',
+      'font-family:Anuphan,Sarabun,"Segoe UI",Tahoma,Arial,sans-serif',
+      'border-radius:18px',
       'display:flex',
       'justify-content:space-between',
       'align-items:flex-start',
@@ -1433,12 +1446,48 @@ export default function App() {
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     el.innerHTML = `
       <div style="min-width:0;flex:1 1 auto;">
-        <div style="font-size:36px;font-weight:800;line-height:1.1;letter-spacing:-0.02em;">Custom Dashboard</div>
-        <div style="font-size:18px;opacity:0.9;margin-top:6px;">${escape(dashboardName)}</div>
+        <div style="font-size:38px;font-weight:800;line-height:1.1;letter-spacing:-0.02em;">Custom Dashboard</div>
+        <div style="font-size:16px;opacity:0.9;margin-top:10px;">Created by : ${escape(ownerName || '-')}</div>
       </div>
-      <div style="flex:0 0 auto;text-align:right;">
+      <div style="flex:0 0 auto;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:14px;">
         ${PDF_LOGO_SVG}
-        <div style="font-size:12px;opacity:0.85;margin-top:12px;line-height:1.4;">© 2569 สำนักงานส่งเสริมการจัดประชุมและนิทรรศการ (องค์การมหาชน)</div>
+        <div style="font-size:12px;opacity:0.9;line-height:1.4;">© 2026 Thailand Convention and Exhibition Bureau</div>
+      </div>
+    `;
+    document.body.appendChild(el);
+    try {
+      return await html2canvas(el, { backgroundColor: null, scale: 2, useCORS: true });
+    } finally {
+      el.remove();
+    }
+  };
+
+  // Disclaimer — light blue box ด้านล่าง PDF (English only)
+  const renderPdfDisclaimerCanvas = async () => {
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'position:fixed',
+      'left:-99999px',
+      'top:0',
+      'width:1200px',
+      'padding:22px 32px',
+      'background:#eef4fb',
+      'border-top:3px solid #1a5aa8',
+      'border-radius:12px',
+      'font-family:Anuphan,Sarabun,"Segoe UI",Tahoma,Arial,sans-serif',
+      'color:#0f172a',
+      'box-sizing:border-box',
+    ].join(';');
+    el.innerHTML = `
+      <div style="font-size:13px;font-weight:800;letter-spacing:0.08em;color:#0b2a52;margin-bottom:8px;">DISCLAIMER</div>
+      <div style="font-size:12px;color:#334155;line-height:1.6;">
+        The information contained in this dashboard is for general information purposes only.
+        The information is provided by Thailand Convention and Exhibition Bureau and while we
+        endeavour to keep the information up to date and correct, we make no representations
+        or warranties of any kind, express or implied, about the completeness, accuracy,
+        reliability, suitability or availability with respect to the website or the information,
+        products, services, or related graphics contained on the website for any purpose. Any
+        reliance you place on such information is therefore strictly at your own risk.
       </div>
     `;
     document.body.appendChild(el);
@@ -1476,10 +1525,11 @@ export default function App() {
     }
 
     try {
-      const [headerCanvas, filterSummaryCanvas, dashboardCanvas] = await Promise.all([
-        renderPdfHeaderCanvas(activeDashboard.name || ''),
+      const [headerCanvas, filterSummaryCanvas, dashboardCanvas, disclaimerCanvas] = await Promise.all([
+        renderPdfHeaderCanvas(activeDashboard.ownerName || ''),
         renderPdfFilterSummaryCanvas(activeDashboardFilters),
         html2canvas(canvasRef.current, { backgroundColor: '#ffffff', scale: 2, useCORS: true }),
+        renderPdfDisclaimerCanvas(),
       ]);
 
       // Crop filter panel section ออก — ให้เหลือแค่ widgets (ไม่มี gap ใหญ่)
@@ -1521,8 +1571,12 @@ export default function App() {
         yStart += fsH + gap;
       }
 
-      // Dashboard — fit remaining page (scale down uniformly if taller than remaining space)
-      const remainH = pageHeight - yStart - margin;
+      // Disclaimer — เว้นพื้นที่ให้ก่อน แล้วค่อยวาง dashboard ให้พอดี (ห้าม dashboard ทับ disclaimer)
+      const disclaimerH = contentW * (disclaimerCanvas.height / disclaimerCanvas.width);
+      const disclaimerY = pageHeight - margin - disclaimerH;
+
+      // Dashboard — fit remaining space ระหว่าง yStart ↔ disclaimerY (มี gap ก่อน disclaimer)
+      const remainH = disclaimerY - yStart - gap;
       const naturalH = contentW * (croppedDashboardCanvas.height / croppedDashboardCanvas.width);
       let drawW = contentW;
       let drawH = naturalH;
@@ -1533,7 +1587,12 @@ export default function App() {
       const drawX = margin + (contentW - drawW) / 2;
       pdf.addImage(croppedDashboardCanvas.toDataURL('image/png'), 'PNG', drawX, yStart, drawW, drawH);
 
-      const fileName = `${(activeDashboard.name || 'dashboard').trim().replace(/[^\w\-]+/g, '_') || 'dashboard'}.pdf`;
+      // Disclaimer (bottom, full width)
+      pdf.addImage(disclaimerCanvas.toDataURL('image/png'), 'PNG', margin, disclaimerY, contentW, disclaimerH);
+
+      // \w ไม่ match อักษรไทย/unicode อื่น — เก็บตัวอักษร/ตัวเลข unicode ไว้ (\p{L}\p{N}) แทน [A-Za-z0-9_]
+      const safeName = (activeDashboard.name || 'dashboard').trim().replace(/[^\p{L}\p{N}\-]+/gu, '_');
+      const fileName = `${safeName || 'dashboard'}.pdf`;
       pdf.save(fileName);
     } finally {
       if (shouldRestoreReadOnly) {
@@ -3314,7 +3373,12 @@ export default function App() {
             aria-label={t('toolbar.lang')}
             title={t('toolbar.lang')}
           >
-            {lang === 'th' ? 'TH' : 'EN'}
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="10" cy="10" r="8"/>
+              <ellipse cx="10" cy="10" rx="4" ry="8"/>
+              <line x1="2" y1="10" x2="18" y2="10"/>
+            </svg>
+            <span>{lang === 'th' ? 'TH' : 'EN'}</span>
           </button>
           <button type="button" className="dl-btn-import" onClick={() => listImportRef.current?.click()}>
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14" style={{flexShrink:0}}>
@@ -3442,7 +3506,7 @@ export default function App() {
         ) : (
         /* ── Cards / Rows ── */
         <div className={`dl-grid${dashboardListLayout === 'list' ? ' dl-list' : ''}`}>
-          {dashboardCards.map((dashboard) => (
+          {dashboardCards.map((dashboard, cardIndex) => (
             <div
               key={dashboard.id}
               className={`dl-card${dashboard.id === activeDashboardId ? ' active' : ''}`}
@@ -3451,9 +3515,9 @@ export default function App() {
               tabIndex={0}
               onKeyDown={(e) => e.key === 'Enter' && openDashboardDetail(dashboard.id)}
             >
-              {/* Thumbnail — card view only */}
+              {/* Thumbnail — card view only (accent สีฝังในภาพเอง, สลับ 4 แบบตาม index) */}
               <div className="dl-card-thumb">
-                <img src={placeholderSvg} alt="" className="dl-card-thumb-img" />
+                <img src={CARD_THUMBS[cardIndex % CARD_THUMBS.length]} alt="" className="dl-card-thumb-img" />
               </div>
 
               {/* Body */}
@@ -3769,7 +3833,7 @@ export default function App() {
               <div className="hamburger-menu-group">
                 <span className="hamburger-menu-label">{t('toolbar.exportGroup')}</span>
                 <button type="button" className="hamburger-menu-item" onClick={printActiveDashboard}><ToolbarIcon name="print" /> {t('toolbar.print')}</button>
-                <button type="button" className="hamburger-menu-item" onClick={downloadActiveDashboardPdf}><ToolbarIcon name="download" /> {t('toolbar.downloadPdf')}</button>
+                <button type="button" className="hamburger-menu-item" onClick={() => setPdfConfirmOpen(true)}><ToolbarIcon name="download" /> {t('toolbar.downloadPdf')}</button>
               </div>
             </div>
           )}
@@ -3817,7 +3881,7 @@ export default function App() {
               <button type="button" className="dashboard-action icon-only" onClick={printActiveDashboard} aria-label={t('toolbar.print')} data-tooltip={t('toolbar.print')} data-tooltip-dir="down">
                 <ToolbarIcon name="print" />
               </button>
-              <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label={t('toolbar.downloadPdf')} data-tooltip={t('toolbar.downloadPdf')} data-tooltip-dir="down">
+              <button type="button" className="dashboard-action icon-only" onClick={() => setPdfConfirmOpen(true)} aria-label={t('toolbar.downloadPdf')} data-tooltip={t('toolbar.downloadPdf')} data-tooltip-dir="down">
                 <ToolbarIcon name="download" />
               </button>
             </div>
@@ -3836,7 +3900,7 @@ export default function App() {
                   <ToolbarIcon name="upload" />
                 </button>
                 <input ref={importFileInputRef} className="dashboard-file-input" type="file" accept="application/json,.json" onChange={importDashboardFile} />
-                <button type="button" className="dashboard-action icon-only" onClick={downloadActiveDashboardPdf} aria-label={t('toolbar.savePdf')} data-tooltip={t('toolbar.savePdf')} data-tooltip-dir="down">
+                <button type="button" className="dashboard-action icon-only" onClick={() => setPdfConfirmOpen(true)} aria-label={t('toolbar.savePdf')} data-tooltip={t('toolbar.savePdf')} data-tooltip-dir="down">
                   <ToolbarIcon name="download" />
                 </button>
               </div>
@@ -3971,7 +4035,12 @@ export default function App() {
             data-tooltip={t('toolbar.lang')}
             data-tooltip-dir="down"
           >
-            {lang === 'th' ? 'TH' : 'EN'}
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="10" cy="10" r="8"/>
+              <ellipse cx="10" cy="10" rx="4" ry="8"/>
+              <line x1="2" y1="10" x2="18" y2="10"/>
+            </svg>
+            <span>{lang === 'th' ? 'TH' : 'EN'}</span>
           </button>
           <button
             type="button"
@@ -4977,6 +5046,51 @@ export default function App() {
                 }}
               >
                 {savingDashboard ? t('save.saving') : t('dialog.save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PDF download confirm dialog (แจ้งว่า PDF จะเป็น EN เท่านั้น) ── */}
+      {pdfConfirmOpen && (
+        <div className="new-dashboard-overlay" onClick={() => !pdfGenerating && setPdfConfirmOpen(false)}>
+          <div className="confirm-save-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-save-icon" aria-hidden="true">
+              <svg viewBox="0 0 40 40" fill="none">
+                <circle cx="20" cy="20" r="20" fill="#DBE7F5"/>
+                <path d="M14 12h9l5 5v11a1 1 0 01-1 1H14a1 1 0 01-1-1V13a1 1 0 011-1z" stroke="#1B61AA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M20 20v6M17 23l3 3 3-3" stroke="#1B61AA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <div className="confirm-save-body">
+              <h3>{t('pdf.confirmTitle')}</h3>
+              <p>{t('pdf.confirmMessage')}</p>
+            </div>
+            <div className="confirm-save-footer">
+              <button
+                type="button"
+                className="dashboard-action"
+                onClick={() => setPdfConfirmOpen(false)}
+                disabled={pdfGenerating}
+              >
+                {t('dialog.cancel')}
+              </button>
+              <button
+                type="button"
+                className="dashboard-action primary"
+                disabled={pdfGenerating}
+                onClick={async () => {
+                  setPdfGenerating(true);
+                  try {
+                    await downloadActiveDashboardPdf();
+                  } finally {
+                    setPdfGenerating(false);
+                    setPdfConfirmOpen(false);
+                  }
+                }}
+              >
+                {pdfGenerating ? t('pdf.generating') : t('pdf.download')}
               </button>
             </div>
           </div>

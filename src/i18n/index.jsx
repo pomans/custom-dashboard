@@ -185,6 +185,12 @@ const DICT = {
     'wizard.s8.b1': 'คลิก ✎ (มุมขวาบน) เพื่อเข้าสู่โหมดแก้ไข',
     'wizard.s8.b2': 'เปิดแผงวิดเจ็ต เลือกวิดเจ็ต แล้วลากลงบนพื้นที่',
     'wizard.s8.b3': 'มีข้อสงสัย? คลิกปุ่ม ? เพื่อเปิดคู่มือนี้อีกครั้ง',
+
+    // ── PDF download confirmation ────────────────────────────────
+    'pdf.confirmTitle': 'ดาวโหลด PDF',
+    'pdf.confirmMessage': 'เอกสารในรูปแบบ PDF จัดทำเป็นภาษาอังกฤษเท่านั้น',
+    'pdf.download': 'ดาวน์โหลด',
+    'pdf.generating': 'กำลังสร้าง PDF…',
   },
 
   en: {
@@ -364,6 +370,12 @@ const DICT = {
     'wizard.s8.b1': 'Click ✎ (top right) to enter edit mode',
     'wizard.s8.b2': 'Open the widget panel, pick a widget, drag onto the canvas',
     'wizard.s8.b3': 'Questions? Click the ? button to reopen this guide',
+
+    // ── PDF download confirmation ────────────────────────────────
+    'pdf.confirmTitle': 'Download PDF',
+    'pdf.confirmMessage': 'PDF documents are generated in English only',
+    'pdf.download': 'Download',
+    'pdf.generating': 'Generating PDF…',
   },
 };
 
