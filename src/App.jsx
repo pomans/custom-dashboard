@@ -1590,8 +1590,8 @@ export default function App() {
       // Disclaimer (bottom, full width)
       pdf.addImage(disclaimerCanvas.toDataURL('image/png'), 'PNG', margin, disclaimerY, contentW, disclaimerH);
 
-      // \w ไม่ match อักษรไทย/unicode อื่น — เก็บตัวอักษร/ตัวเลข unicode ไว้ (\p{L}\p{N}) แทน [A-Za-z0-9_]
-      const safeName = (activeDashboard.name || 'dashboard').trim().replace(/[^\p{L}\p{N}\-]+/gu, '_');
+      // \w ไม่ match อักษรไทย/unicode อื่น — เก็บตัวอักษร/ตัวเลข/วรรณยุกต์-สระ unicode ไว้ (\p{L}\p{N}\p{M}) แทน [A-Za-z0-9_]
+      const safeName = (activeDashboard.name || 'dashboard').trim().replace(/[^\p{L}\p{N}\p{M}\-]+/gu, '_');
       const fileName = `${safeName || 'dashboard'}.pdf`;
       pdf.save(fileName);
     } finally {
